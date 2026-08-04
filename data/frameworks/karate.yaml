@@ -1,0 +1,76 @@
+framework_name: "Karate"
+vendor: "OpenSource (Karate Labs)"
+license: "MIT"
+website: "https://karatelabs.github.io/karate/"
+first_release: "2017"
+latest_version: "1.5+"
+languages_supported:
+  - "Karate DSL (Gherkin-like)"
+  - "Java (for extensions)"
+
+architecture_fit:
+  web_spa: "via Karate UI (Playwright-based)"
+  web_mpa: "via Karate UI"
+  native_mobile: "via Appium driver"
+  hybrid_mobile: "via Appium driver"
+  desktop: "via Appium/WinAppDriver"
+  api_testing: true
+  microservices: true
+
+capabilities:
+  shadow_dom: "via Playwright engine"
+  iframe_cross_origin: "via Playwright engine"
+  multi_tab: "limited"
+  multi_domain: true
+  canvas_webgl: false
+  file_upload_download: true
+  network_interception: false
+  visual_regression: false
+  parallel_execution: "native"
+  auto_wait: "partial"
+  test_recorder: false
+  code_generation: false
+  component_testing: false
+  accessibility_testing: false
+  protocol_support:
+    - HTTP/HTTPS
+    - GraphQL
+    - WebSocket
+    - gRPC
+    - SOAP
+
+cicd_integration:
+  docker_support: true
+  github_actions: true
+  jenkins: true
+  gitlab_ci: true
+  azure_devops: true
+  pre_built_docker_images: "community"
+
+cloud_grids:
+  browserstack: "limited"
+  sauce_labs: "limited"
+
+performance:
+  avg_test_execution_speed: "fast (for API)"
+  resource_footprint: "medium (JVM)"
+  startup_time_ms: 3000
+  parallel_overhead: "low"
+
+maintainability:
+  page_object_support: "feature file organization"
+  fixture_support: "Background/hooks"
+  reusable_components: "call/read features"
+  built_in_reporting: true
+  trace_viewer: false
+  debugging_tools: "VS Code plugin"
+
+limitations:
+  - "JVM dependency (Java runtime required)"
+  - "DSL has a learning curve"
+  - "UI testing less mature than dedicated frameworks"
+  - "Not suitable for teams without Java/JVM familiarity"
+  - "Smaller community than Selenium/Playwright"
+  - "IDE support limited to VS Code plugin"
+  - "Not ideal for complex UI interaction scenarios"
+  - "Performance testing capabilities are basic"

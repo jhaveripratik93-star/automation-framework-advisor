@@ -1,0 +1,72 @@
+framework_name: "Playwright"
+vendor: "Microsoft"
+license: "Apache-2.0"
+website: "https://playwright.dev"
+first_release: "2020"
+latest_version: "1.45+"
+languages_supported:
+  - Python
+  - TypeScript
+  - JavaScript
+  - Java
+  - "C#"
+
+architecture_fit:
+  web_spa: true
+  web_mpa: true
+  native_mobile: false
+  hybrid_mobile: false
+  desktop: false
+  api_testing: true
+  microservices: true
+
+capabilities:
+  shadow_dom: true
+  iframe_cross_origin: true
+  multi_tab: true
+  multi_domain: true
+  canvas_webgl: "limited"
+  file_upload_download: true
+  network_interception: true
+  visual_regression: "plugin (playwright-visual)"
+  parallel_execution: "native"
+  auto_wait: true
+  test_recorder: true
+  code_generation: true
+  component_testing: true
+  accessibility_testing: "plugin (@axe-core/playwright)"
+
+cicd_integration:
+  docker_support: true
+  github_actions: true
+  jenkins: true
+  gitlab_ci: true
+  azure_devops: true
+  pre_built_docker_images: true
+
+cloud_grids:
+  browserstack: true
+  sauce_labs: true
+  lambda_test: true
+  microsoft_playwright_testing: true
+
+performance:
+  avg_test_execution_speed: "fast"
+  resource_footprint: "medium"
+  startup_time_ms: 500
+  parallel_overhead: "low"
+
+maintainability:
+  page_object_support: true
+  fixture_support: true
+  reusable_components: true
+  built_in_reporting: true
+  trace_viewer: true
+  debugging_tools: "excellent"
+
+limitations:
+  - "No native mobile app testing (web-only)"
+  - "Canvas/WebGL pixel-level validation is limited"
+  - "Relatively newer community compared to Selenium"
+  - "No built-in load/performance testing capability"
+  - "Learning curve for teams coming from Cypress single-tab model"

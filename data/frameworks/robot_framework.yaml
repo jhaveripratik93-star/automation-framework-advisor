@@ -1,0 +1,71 @@
+framework_name: "Robot Framework"
+vendor: "OpenSource (Robot Framework Foundation)"
+license: "Apache-2.0"
+website: "https://robotframework.org"
+first_release: "2005"
+latest_version: "7.x"
+languages_supported:
+  - "Python (keyword-driven DSL)"
+  - "Custom keywords in Python/Java"
+
+architecture_fit:
+  web_spa: true
+  web_mpa: true
+  native_mobile: "via AppiumLibrary"
+  hybrid_mobile: "via AppiumLibrary"
+  desktop: "via WhiteLibrary/AutoItLibrary"
+  api_testing: true
+  microservices: true
+
+capabilities:
+  shadow_dom: "limited (via SeleniumLibrary workarounds)"
+  iframe_cross_origin: true
+  multi_tab: true
+  multi_domain: true
+  canvas_webgl: false
+  file_upload_download: true
+  network_interception: false
+  visual_regression: "third-party (eyes-robot)"
+  parallel_execution: "via Pabot (parallel executor)"
+  auto_wait: "partial (SeleniumLibrary implicit wait)"
+  test_recorder: false
+  code_generation: false
+  component_testing: false
+  accessibility_testing: "third-party"
+
+cicd_integration:
+  docker_support: true
+  github_actions: true
+  jenkins: true
+  gitlab_ci: true
+  azure_devops: true
+  pre_built_docker_images: "community"
+
+cloud_grids:
+  browserstack: true
+  sauce_labs: true
+  lambda_test: true
+
+performance:
+  avg_test_execution_speed: "moderate"
+  resource_footprint: "medium"
+  startup_time_ms: 2000
+  parallel_overhead: "medium (Pabot overhead)"
+
+maintainability:
+  page_object_support: "keyword-based abstraction"
+  fixture_support: "setup/teardown keywords"
+  reusable_components: true
+  built_in_reporting: true
+  trace_viewer: false
+  debugging_tools: "moderate (log files, listener interface)"
+
+limitations:
+  - "Keyword-driven syntax has a learning curve for developers"
+  - "Slower execution than Playwright/Cypress"
+  - "Shadow DOM support is limited"
+  - "No native network interception"
+  - "Parallel execution requires third-party Pabot tool"
+  - "IDE support less mature than mainstream languages"
+  - "Not suitable for performance/load testing"
+  - "Large test suites can have long startup times"

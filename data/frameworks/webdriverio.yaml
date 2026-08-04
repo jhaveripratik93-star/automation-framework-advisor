@@ -1,0 +1,70 @@
+framework_name: "WebdriverIO"
+vendor: "OpenSource (OpenJS Foundation)"
+license: "MIT"
+website: "https://webdriver.io"
+first_release: "2015"
+latest_version: "8.x"
+languages_supported:
+  - JavaScript
+  - TypeScript
+
+architecture_fit:
+  web_spa: true
+  web_mpa: true
+  native_mobile: true
+  hybrid_mobile: true
+  desktop: "partial (via Electron)"
+  api_testing: true
+  microservices: "partial"
+
+capabilities:
+  shadow_dom: true
+  iframe_cross_origin: true
+  multi_tab: true
+  multi_domain: true
+  canvas_webgl: "limited"
+  file_upload_download: true
+  network_interception: true
+  visual_regression: "plugin (@wdio/visual-service)"
+  parallel_execution: "native (wdio testrunner)"
+  auto_wait: true
+  test_recorder: false
+  code_generation: false
+  component_testing: true
+  accessibility_testing: "plugin (@wdio/axe-service)"
+
+cicd_integration:
+  docker_support: true
+  github_actions: true
+  jenkins: true
+  gitlab_ci: true
+  azure_devops: true
+  pre_built_docker_images: "community"
+
+cloud_grids:
+  browserstack: true
+  sauce_labs: true
+  lambda_test: true
+  perfecto: true
+
+performance:
+  avg_test_execution_speed: "moderate-fast"
+  resource_footprint: "medium"
+  startup_time_ms: 1500
+  parallel_overhead: "low"
+
+maintainability:
+  page_object_support: true
+  fixture_support: true
+  reusable_components: true
+  built_in_reporting: "plugin (allure, spec)"
+  trace_viewer: false
+  debugging_tools: "good (REPL, devtools protocol)"
+
+limitations:
+  - "JavaScript/TypeScript ONLY - no Python/Java support"
+  - "Steeper learning curve for non-JS teams"
+  - "Mobile testing requires Appium setup"
+  - "Less opinionated - more configuration decisions needed"
+  - "Documentation can be inconsistent across plugins"
+  - "Debugging complex async flows can be challenging"

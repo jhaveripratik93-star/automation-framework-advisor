@@ -1,0 +1,80 @@
+framework_name: "Appium"
+vendor: "OpenSource (OpenJS Foundation)"
+license: "Apache-2.0"
+website: "https://appium.io"
+first_release: "2013"
+latest_version: "2.x"
+languages_supported:
+  - Python
+  - Java
+  - JavaScript
+  - "C#"
+  - Ruby
+  - Kotlin
+
+architecture_fit:
+  web_spa: "mobile web only"
+  web_mpa: "mobile web only"
+  native_mobile: true
+  hybrid_mobile: true
+  desktop: "partial (Windows/Mac drivers)"
+  api_testing: false
+  microservices: false
+
+capabilities:
+  shadow_dom: false
+  iframe_cross_origin: false
+  multi_tab: false
+  multi_domain: false
+  canvas_webgl: false
+  file_upload_download: "device-level"
+  network_interception: false
+  visual_regression: "third-party (Applitools)"
+  parallel_execution: "via cloud grids or Selenium Grid"
+  auto_wait: "partial"
+  test_recorder: "Appium Inspector"
+  code_generation: "Appium Inspector export"
+  component_testing: false
+  accessibility_testing: "native platform APIs"
+  gesture_support: true
+  device_farm_support: true
+
+cicd_integration:
+  docker_support: "limited (Android emulators only)"
+  github_actions: true
+  jenkins: true
+  gitlab_ci: true
+  azure_devops: true
+  pre_built_docker_images: "community (Android only)"
+
+cloud_grids:
+  browserstack: true
+  sauce_labs: true
+  lambda_test: true
+  aws_device_farm: true
+  perfecto: true
+
+performance:
+  avg_test_execution_speed: "slow"
+  resource_footprint: "high"
+  startup_time_ms: 5000
+  parallel_overhead: "high (device/emulator startup)"
+
+maintainability:
+  page_object_support: true
+  fixture_support: "via test framework"
+  reusable_components: true
+  built_in_reporting: false
+  trace_viewer: false
+  debugging_tools: "Appium Inspector, logs"
+
+limitations:
+  - "Slow test execution (device startup overhead)"
+  - "Complex environment setup (Android SDK, Xcode)"
+  - "Flaky tests common due to device state"
+  - "iOS testing requires macOS"
+  - "Limited Docker support (no iOS emulators in Docker)"
+  - "Appium 2.x migration from 1.x is non-trivial"
+  - "No built-in reporting"
+  - "Resource-intensive for CI/CD parallel execution"
+  - "Driver compatibility issues across OS versions"

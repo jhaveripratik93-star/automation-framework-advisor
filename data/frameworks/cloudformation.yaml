@@ -1,0 +1,121 @@
+framework_name: "AWS CloudFormation"
+vendor: "Amazon Web Services"
+license: "Proprietary (free service)"
+website: "https://aws.amazon.com/cloudformation/"
+first_release: "2011"
+latest_version: "latest (managed service)"
+category: "cloud_infrastructure"
+languages_supported:
+  - "JSON (templates)"
+  - "YAML (templates)"
+  - "Python (via AWS CDK)"
+  - "TypeScript (via AWS CDK)"
+  - "Java (via AWS CDK)"
+  - "C# (via AWS CDK)"
+  - "Go (via AWS CDK)"
+
+architecture_fit:
+  web_spa: false
+  web_mpa: false
+  native_mobile: false
+  hybrid_mobile: false
+  desktop: false
+  api_testing: false
+  microservices: false
+  cloud_infrastructure: true
+  infrastructure_as_code: true
+  multi_cloud: false
+  hybrid_cloud: "partial (via custom resources)"
+  aws_native: true
+
+capabilities:
+  shadow_dom: false
+  iframe_cross_origin: false
+  multi_tab: false
+  multi_domain: false
+  canvas_webgl: false
+  file_upload_download: false
+  network_interception: false
+  visual_regression: false
+  parallel_execution: "native (dependency-based)"
+  auto_wait: "built-in (waits for resource creation)"
+  test_recorder: false
+  code_generation: "CloudFormation IaC Generator, CDK synth"
+  component_testing: "cfn-lint, taskcat"
+  accessibility_testing: false
+  state_management: "managed by AWS (stack state)"
+  drift_detection: "native (detect stack drift)"
+  rollback: "automatic on failure"
+  change_sets: "preview changes before apply"
+  stacksets: "multi-account/multi-region deployment"
+  nested_stacks: true
+  custom_resources: "Lambda-backed extensions"
+
+cloud_providers:
+  aws: true
+  azure: false
+  gcp: false
+  kubernetes: "partial (EKS integration)"
+
+testing_capabilities:
+  unit_testing: "CDK assertions library"
+  integration_testing: "taskcat (multi-region deployment testing)"
+  compliance_testing: "cfn-guard (policy-as-code), AWS Config rules"
+  template_validation: "aws cloudformation validate-template"
+  linting: "cfn-lint"
+  drift_detection: "native CloudFormation drift detection"
+  contract_testing: "resource type schema validation"
+
+cicd_integration:
+  docker_support: true
+  github_actions: true
+  jenkins: true
+  gitlab_ci: true
+  azure_devops: true
+  pre_built_docker_images: "AWS CLI images"
+  aws_codepipeline: true
+  aws_codebuild: true
+
+cloud_grids:
+  aws_native: true
+  cloudformation_registry: true
+
+performance:
+  avg_test_execution_speed: "slow (API-dependent, sequential resources)"
+  resource_footprint: "none (managed service)"
+  startup_time_ms: 0
+  parallel_overhead: "managed by AWS"
+  stack_limit: "500 resources per stack"
+
+maintainability:
+  page_object_support: false
+  fixture_support: "nested stacks, modules (CDK constructs)"
+  reusable_components: "CDK constructs, CloudFormation modules"
+  built_in_reporting: "CloudFormation console, CloudTrail"
+  trace_viewer: false
+  debugging_tools: "stack events, CloudWatch logs"
+  construct_library: "AWS CDK Construct Hub"
+
+cloud_migration_metrics:
+  resource_coverage: "% of AWS resources in CloudFormation stacks"
+  stack_health: "% of stacks in CREATE_COMPLETE/UPDATE_COMPLETE"
+  drift_percentage: "% of resources drifted from template"
+  deployment_frequency: "Stack updates per day/week"
+  mean_time_to_recovery: "Time to rollback/re-deploy"
+  change_failure_rate: "% of stack updates that rollback"
+  compliance_score: "% passing cfn-guard rules"
+  multi_account_coverage: "% of accounts using StackSets"
+  cost_allocation: "Tagged resource percentage"
+
+limitations:
+  - "NOT a test automation framework for applications"
+  - "AWS ONLY - no multi-cloud support"
+  - "500 resource limit per stack"
+  - "Slow deployments (sequential by default)"
+  - "Complex YAML/JSON syntax without CDK"
+  - "Limited refactoring (resource replacement risks)"
+  - "Rollback can be slow and sometimes gets stuck"
+  - "Custom resources add Lambda dependency"
+  - "No import for all resource types"
+  - "Cannot test application behavior, only infrastructure"
+  - "Vendor lock-in to AWS"

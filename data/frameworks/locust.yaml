@@ -1,0 +1,77 @@
+framework_name: "Locust"
+vendor: "OpenSource"
+license: "MIT"
+website: "https://locust.io"
+first_release: "2011"
+latest_version: "2.x"
+languages_supported:
+  - Python
+
+architecture_fit:
+  web_spa: false
+  web_mpa: false
+  native_mobile: false
+  hybrid_mobile: false
+  desktop: false
+  api_testing: true
+  microservices: true
+  performance_testing: true
+  load_testing: true
+
+capabilities:
+  shadow_dom: false
+  iframe_cross_origin: false
+  multi_tab: false
+  multi_domain: false
+  canvas_webgl: false
+  file_upload_download: false
+  network_interception: false
+  visual_regression: false
+  parallel_execution: "native (distributed workers)"
+  auto_wait: false
+  test_recorder: false
+  code_generation: false
+  component_testing: false
+  accessibility_testing: false
+  protocol_support:
+    - HTTP/HTTPS
+    - WebSocket
+    - "Custom protocols (via user classes)"
+
+cicd_integration:
+  docker_support: true
+  github_actions: true
+  jenkins: true
+  gitlab_ci: true
+  azure_devops: true
+  pre_built_docker_images: true
+
+cloud_grids:
+  standalone: true
+  kubernetes: "native distributed mode"
+
+performance:
+  avg_test_execution_speed: "fast (gevent coroutines)"
+  resource_footprint: "low"
+  startup_time_ms: 500
+  max_virtual_users: "10000+ per worker"
+  distributed_execution: "native master/worker"
+
+maintainability:
+  page_object_support: false
+  fixture_support: "Python classes"
+  reusable_components: "Python inheritance"
+  built_in_reporting: "web UI + CSV"
+  trace_viewer: false
+  debugging_tools: "Python debugging"
+  grafana_integration: "via plugins"
+
+limitations:
+  - "NOT a functional/UI test framework"
+  - "Python only"
+  - "No browser-based testing"
+  - "Web UI is basic compared to commercial tools"
+  - "No built-in distributed coordination (manual setup)"
+  - "Less protocol support than K6 out of the box"
+  - "Reporting requires external tools for enterprise use"
+  - "No record-and-playback capability"

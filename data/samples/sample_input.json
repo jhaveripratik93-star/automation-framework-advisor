@@ -1,0 +1,50 @@
+{
+  "project_name": "E-Commerce Platform Migration",
+  "application_architecture": {
+    "type": "Web SPA",
+    "frontend_framework": "React",
+    "backend": "Python/FastAPI + Microservices",
+    "special_ui": ["Shadow DOM", "iFrames (payment gateway)"],
+    "protocols": ["REST", "GraphQL"]
+  },
+  "team_profile": {
+    "size": 8,
+    "primary_language": "Python",
+    "secondary_languages": ["JavaScript", "TypeScript"],
+    "automation_experience": "intermediate",
+    "current_framework": "Selenium + Pytest",
+    "bdd_experience": false
+  },
+  "execution_environment": {
+    "ci_cd": "Jenkins",
+    "containerized": true,
+    "cloud_grid": "None (on-premise)",
+    "parallel_execution_needed": true,
+    "os_targets": ["Linux (CI)", "Windows (dev)"],
+    "browsers_required": ["Chrome", "Firefox", "Edge"]
+  },
+  "legacy_inventory": {
+    "total_test_scripts": 342,
+    "ui_tests": 180,
+    "api_tests": 120,
+    "integration_tests": 42,
+    "frameworks_used": ["Selenium WebDriver", "Requests", "Pytest"],
+    "avg_execution_time_mins": 45,
+    "flaky_test_percentage": 12
+  },
+  "constraints": {
+    "budget": "open-source preferred",
+    "timeline_weeks": 12,
+    "must_support": [
+      "cross-browser testing",
+      "API testing",
+      "parallel execution",
+      "Docker containerization"
+    ],
+    "nice_to_have": [
+      "visual regression",
+      "mobile web testing",
+      "accessibility testing"
+    ]
+  }
+}

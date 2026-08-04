@@ -1,0 +1,81 @@
+framework_name: "K6"
+vendor: "Grafana Labs"
+license: "AGPL-3.0"
+website: "https://k6.io"
+first_release: "2017"
+latest_version: "0.50+"
+languages_supported:
+  - JavaScript
+  - "TypeScript (via bundler)"
+
+architecture_fit:
+  web_spa: false
+  web_mpa: false
+  native_mobile: false
+  hybrid_mobile: false
+  desktop: false
+  api_testing: true
+  microservices: true
+  performance_testing: true
+  load_testing: true
+
+capabilities:
+  shadow_dom: false
+  iframe_cross_origin: false
+  multi_tab: false
+  multi_domain: false
+  canvas_webgl: false
+  file_upload_download: false
+  network_interception: false
+  visual_regression: false
+  parallel_execution: "native (virtual users)"
+  auto_wait: false
+  test_recorder: "har-to-k6 converter"
+  code_generation: "browser recorder extension"
+  component_testing: false
+  accessibility_testing: false
+  protocol_support:
+    - HTTP/HTTPS
+    - WebSocket
+    - gRPC
+    - "MQTT (extension)"
+  browser_testing: "k6-browser module (experimental)"
+
+cicd_integration:
+  docker_support: true
+  github_actions: true
+  jenkins: true
+  gitlab_ci: true
+  azure_devops: true
+  pre_built_docker_images: true
+
+cloud_grids:
+  grafana_cloud_k6: true
+  standalone: true
+
+performance:
+  avg_test_execution_speed: "very fast (Go runtime)"
+  resource_footprint: "low"
+  startup_time_ms: 200
+  max_virtual_users: "10000+ per instance"
+  distributed_execution: "native (k6-operator for Kubernetes)"
+
+maintainability:
+  page_object_support: false
+  fixture_support: "setup/teardown functions"
+  reusable_components: "modular JS imports"
+  built_in_reporting: "JSON, CSV output"
+  trace_viewer: false
+  debugging_tools: "moderate"
+  grafana_integration: true
+  prometheus_integration: true
+
+limitations:
+  - "NOT a functional/UI test framework"
+  - "JavaScript only for test scripts"
+  - "Limited browser interaction (k6-browser is experimental)"
+  - "No assertion library as rich as pytest/jest"
+  - "AGPL license may concern some enterprises"
+  - "Complex scenarios require JavaScript expertise"
+  - "No built-in UI for test management"
+  - "Extension ecosystem smaller than JMeter"

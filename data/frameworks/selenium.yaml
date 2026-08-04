@@ -1,0 +1,75 @@
+framework_name: "Selenium WebDriver"
+vendor: "OpenSource (Selenium HQ)"
+license: "Apache-2.0"
+website: "https://www.selenium.dev"
+first_release: "2004"
+latest_version: "4.x"
+languages_supported:
+  - Python
+  - Java
+  - JavaScript
+  - "C#"
+  - Ruby
+  - Kotlin
+
+architecture_fit:
+  web_spa: true
+  web_mpa: true
+  native_mobile: false
+  hybrid_mobile: false
+  desktop: false
+  api_testing: false
+  microservices: false
+
+capabilities:
+  shadow_dom: "partial (Selenium 4+)"
+  iframe_cross_origin: true
+  multi_tab: true
+  multi_domain: true
+  canvas_webgl: "limited"
+  file_upload_download: true
+  network_interception: "via CDP (Selenium 4)"
+  visual_regression: "third-party only"
+  parallel_execution: "via Selenium Grid"
+  auto_wait: false
+  test_recorder: "Selenium IDE"
+  code_generation: "Selenium IDE export"
+  component_testing: false
+  accessibility_testing: "third-party"
+
+cicd_integration:
+  docker_support: true
+  github_actions: true
+  jenkins: true
+  gitlab_ci: true
+  azure_devops: true
+  pre_built_docker_images: true
+
+cloud_grids:
+  browserstack: true
+  sauce_labs: true
+  lambda_test: true
+
+performance:
+  avg_test_execution_speed: "moderate"
+  resource_footprint: "high"
+  startup_time_ms: 2000
+  parallel_overhead: "medium (Grid setup)"
+
+maintainability:
+  page_object_support: true
+  fixture_support: "via test framework (pytest/junit)"
+  reusable_components: true
+  built_in_reporting: false
+  trace_viewer: false
+  debugging_tools: "moderate"
+
+limitations:
+  - "No built-in auto-wait (flaky tests common)"
+  - "Requires explicit waits for dynamic content"
+  - "Selenium Grid setup is complex for parallelization"
+  - "Slower execution compared to modern alternatives"
+  - "No native API testing support"
+  - "No built-in reporting - requires Allure/ExtentReports"
+  - "Higher maintenance cost due to synchronization issues"
+  - "Shadow DOM support is limited in older versions"

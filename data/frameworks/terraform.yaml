@@ -1,0 +1,122 @@
+framework_name: "Terraform"
+vendor: "HashiCorp"
+license: "BSL-1.1 (source-available)"
+website: "https://www.terraform.io"
+first_release: "2014"
+latest_version: "1.9+"
+category: "cloud_infrastructure"
+languages_supported:
+  - "HCL (HashiCorp Configuration Language)"
+  - "Python (via CDK for Terraform)"
+  - "TypeScript (via CDK for Terraform)"
+  - "Go (provider development)"
+
+architecture_fit:
+  web_spa: false
+  web_mpa: false
+  native_mobile: false
+  hybrid_mobile: false
+  desktop: false
+  api_testing: false
+  microservices: false
+  cloud_infrastructure: true
+  infrastructure_as_code: true
+  multi_cloud: true
+  hybrid_cloud: true
+
+capabilities:
+  shadow_dom: false
+  iframe_cross_origin: false
+  multi_tab: false
+  multi_domain: false
+  canvas_webgl: false
+  file_upload_download: false
+  network_interception: false
+  visual_regression: false
+  parallel_execution: "native (resource graph parallelism)"
+  auto_wait: false
+  test_recorder: false
+  code_generation: "terraform import, terraform plan"
+  component_testing: "terraform test (native)"
+  accessibility_testing: false
+  state_management: true
+  drift_detection: true
+  plan_and_apply: true
+  module_registry: true
+  provider_ecosystem: "2000+ providers"
+  policy_as_code: "Sentinel / OPA"
+
+cloud_providers:
+  aws: true
+  azure: true
+  gcp: true
+  oracle_cloud: true
+  alibaba_cloud: true
+  ibm_cloud: true
+  digital_ocean: true
+  kubernetes: true
+  openstack: true
+
+testing_capabilities:
+  unit_testing: "terraform test (HCL-native)"
+  integration_testing: "terratest (Go-based)"
+  compliance_testing: "Sentinel, OPA, Checkov, tfsec"
+  plan_validation: "terraform plan + assertions"
+  mock_providers: "terraform test mocks"
+  contract_testing: "module input/output validation"
+
+cicd_integration:
+  docker_support: true
+  github_actions: true
+  jenkins: true
+  gitlab_ci: true
+  azure_devops: true
+  pre_built_docker_images: true
+  terraform_cloud: true
+  atlantis: true
+
+cloud_grids:
+  terraform_cloud: true
+  terraform_enterprise: true
+  spacelift: true
+  env0: true
+  scalr: true
+
+performance:
+  avg_test_execution_speed: "moderate (depends on provider API)"
+  resource_footprint: "low (CLI tool)"
+  startup_time_ms: 500
+  parallel_overhead: "low (DAG-based parallelism)"
+  state_lock: true
+
+maintainability:
+  page_object_support: false
+  fixture_support: "modules and workspaces"
+  reusable_components: "modules (public + private registry)"
+  built_in_reporting: "plan output, state inspection"
+  trace_viewer: false
+  debugging_tools: "TF_LOG, terraform console"
+  module_versioning: true
+  state_backends: "S3, Azure Blob, GCS, Consul, Terraform Cloud"
+
+cloud_migration_metrics:
+  resource_coverage: "% of infrastructure resources managed"
+  drift_detection_rate: "% of drift caught before manual changes"
+  deployment_frequency: "Deployments per day/week"
+  mean_time_to_recovery: "Time to restore from failed apply"
+  change_failure_rate: "% of applies that cause incidents"
+  infrastructure_cost_visibility: true
+  compliance_score: "% of resources passing policy checks"
+  blast_radius_analysis: "Impact scope of plan changes"
+
+limitations:
+  - "NOT a test automation framework for applications"
+  - "HCL has a learning curve for developers"
+  - "State management complexity (locking, drift)"
+  - "BSL license change may concern some organizations"
+  - "Slow feedback for large infrastructure (API rate limits)"
+  - "Provider version compatibility issues"
+  - "Destroy operations are irreversible and dangerous"
+  - "Limited refactoring support (state moves are manual)"
+  - "No built-in secret management (needs Vault integration)"
+  - "Cannot test application behavior, only infrastructure provisioning"

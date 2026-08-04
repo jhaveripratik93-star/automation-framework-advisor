@@ -1,0 +1,123 @@
+framework_name: "Ansible"
+vendor: "Red Hat (IBM)"
+license: "GPL-3.0"
+website: "https://www.ansible.com"
+first_release: "2012"
+latest_version: "2.17+ (core) / 10+ (package)"
+category: "cloud_infrastructure"
+languages_supported:
+  - "YAML (playbooks)"
+  - "Python (modules, plugins, custom logic)"
+  - "Jinja2 (templating)"
+
+architecture_fit:
+  web_spa: false
+  web_mpa: false
+  native_mobile: false
+  hybrid_mobile: false
+  desktop: false
+  api_testing: false
+  microservices: false
+  cloud_infrastructure: true
+  infrastructure_as_code: true
+  configuration_management: true
+  multi_cloud: true
+  hybrid_cloud: true
+  on_premise: true
+
+capabilities:
+  shadow_dom: false
+  iframe_cross_origin: false
+  multi_tab: false
+  multi_domain: false
+  canvas_webgl: false
+  file_upload_download: false
+  network_interception: false
+  visual_regression: false
+  parallel_execution: "native (forks, async)"
+  auto_wait: "partial (wait_for module)"
+  test_recorder: false
+  code_generation: false
+  component_testing: "molecule (role testing)"
+  accessibility_testing: false
+  agentless: true
+  idempotent: true
+  configuration_management: true
+  orchestration: true
+  provisioning: true
+  application_deployment: true
+  collections_ecosystem: "1500+ collections on Galaxy"
+  vault_integration: "ansible-vault (built-in secrets)"
+
+cloud_providers:
+  aws: "amazon.aws collection"
+  azure: "azure.azcollection"
+  gcp: "google.cloud collection"
+  oracle_cloud: "oracle.oci collection"
+  vmware: "community.vmware collection"
+  kubernetes: "kubernetes.core collection"
+  openstack: "openstack.cloud collection"
+  digital_ocean: "community.digitalocean"
+
+testing_capabilities:
+  unit_testing: "molecule (role unit tests)"
+  integration_testing: "molecule + testinfra/ansible-assert"
+  compliance_testing: "ansible-lint, custom assert tasks"
+  idempotency_testing: "molecule idempotence check"
+  dry_run: "ansible-playbook --check --diff"
+  syntax_validation: "ansible-playbook --syntax-check"
+  contract_testing: "argument_specs validation"
+
+cicd_integration:
+  docker_support: true
+  github_actions: true
+  jenkins: true
+  gitlab_ci: true
+  azure_devops: true
+  pre_built_docker_images: true
+  ansible_tower: true
+  awx: true
+
+cloud_grids:
+  ansible_automation_platform: true
+  awx: true
+  semaphore: true
+
+performance:
+  avg_test_execution_speed: "moderate (SSH-based execution)"
+  resource_footprint: "low (agentless, control node only)"
+  startup_time_ms: 1000
+  parallel_overhead: "configurable (forks parameter)"
+  connection_methods: "SSH, WinRM, local, Docker"
+
+maintainability:
+  page_object_support: false
+  fixture_support: "roles, includes, imports"
+  reusable_components: "roles and collections"
+  built_in_reporting: "callback plugins (JSON, JUnit)"
+  trace_viewer: false
+  debugging_tools: "verbosity levels (-v to -vvvv), debugger strategy"
+  role_versioning: true
+  galaxy_registry: true
+
+cloud_migration_metrics:
+  configuration_coverage: "% of servers/services managed by playbooks"
+  configuration_drift: "Hosts deviating from desired state"
+  deployment_frequency: "Playbook runs per day/week"
+  mean_time_to_recovery: "Time to re-run playbook after failure"
+  change_failure_rate: "% of playbook runs with failures"
+  compliance_score: "% of hosts passing ansible-lint checks"
+  idempotency_rate: "% of tasks reporting 'ok' on re-run"
+  inventory_accuracy: "Dynamic inventory freshness"
+
+limitations:
+  - "NOT a test automation framework for applications"
+  - "Slower than Terraform for pure provisioning (SSH overhead)"
+  - "YAML syntax can be error-prone and hard to debug"
+  - "No true state management (desired-state, not tracked state)"
+  - "Complex variable precedence (22 levels)"
+  - "Limited Windows support compared to Linux"
+  - "Performance degrades with large inventories"
+  - "No native drift detection (requires scheduled runs)"
+  - "GPL-3.0 license may restrict some enterprise usage"
+  - "Cannot test application behavior, only configuration/deployment"

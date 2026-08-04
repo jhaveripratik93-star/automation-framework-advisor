@@ -1,0 +1,117 @@
+framework_name: "Pulumi"
+vendor: "Pulumi Corporation"
+license: "Apache-2.0"
+website: "https://www.pulumi.com"
+first_release: "2018"
+latest_version: "3.x"
+category: "cloud_infrastructure"
+languages_supported:
+  - Python
+  - TypeScript
+  - JavaScript
+  - Go
+  - "C#"
+  - Java
+  - YAML
+
+architecture_fit:
+  web_spa: false
+  web_mpa: false
+  native_mobile: false
+  hybrid_mobile: false
+  desktop: false
+  api_testing: false
+  microservices: false
+  cloud_infrastructure: true
+  infrastructure_as_code: true
+  multi_cloud: true
+  hybrid_cloud: true
+
+capabilities:
+  shadow_dom: false
+  iframe_cross_origin: false
+  multi_tab: false
+  multi_domain: false
+  canvas_webgl: false
+  file_upload_download: false
+  network_interception: false
+  visual_regression: false
+  parallel_execution: "native (dependency graph)"
+  auto_wait: false
+  test_recorder: false
+  code_generation: "pulumi import, pulumi convert"
+  component_testing: "unit testing with standard test frameworks"
+  accessibility_testing: false
+  state_management: true
+  drift_detection: "pulumi refresh"
+  real_programming_languages: true
+  policy_as_code: "Pulumi CrossGuard (OPA-based)"
+  secrets_management: "built-in (encrypted in state)"
+  automation_api: "programmatic infrastructure deployment"
+
+cloud_providers:
+  aws: true
+  azure: true
+  gcp: true
+  kubernetes: true
+  digital_ocean: true
+  oracle_cloud: true
+  cloudflare: true
+  docker: true
+
+testing_capabilities:
+  unit_testing: "native language test frameworks (pytest, jest, go test)"
+  integration_testing: "pulumi testing framework (preview + assert)"
+  compliance_testing: "CrossGuard policies"
+  property_testing: "policy packs with assertions"
+  mock_providers: "pulumi.runtime.mocks"
+  snapshot_testing: "stack export comparison"
+
+cicd_integration:
+  docker_support: true
+  github_actions: true
+  jenkins: true
+  gitlab_ci: true
+  azure_devops: true
+  pre_built_docker_images: true
+  pulumi_cloud: true
+
+cloud_grids:
+  pulumi_cloud: true
+  self_hosted: true
+
+performance:
+  avg_test_execution_speed: "moderate (depends on provider API)"
+  resource_footprint: "low-medium"
+  startup_time_ms: 1000
+  parallel_overhead: "low (DAG parallelism)"
+
+maintainability:
+  page_object_support: false
+  fixture_support: "component resources, stack references"
+  reusable_components: "component resources + packages"
+  built_in_reporting: "Pulumi Cloud dashboards"
+  trace_viewer: false
+  debugging_tools: "standard IDE debugging (real languages)"
+  package_registry: true
+
+cloud_migration_metrics:
+  resource_coverage: "% of cloud resources under IaC management"
+  drift_detection_rate: "% of drift caught via pulumi refresh"
+  deployment_frequency: "Stack updates per day/week"
+  mean_time_to_recovery: "Time to pulumi up after failure"
+  change_failure_rate: "% of updates that fail or rollback"
+  infrastructure_cost_visibility: "via Pulumi Cloud"
+  compliance_score: "% passing CrossGuard policies"
+  code_reuse_ratio: "% of infra using shared components"
+  type_safety_coverage: "Compile-time errors caught"
+
+limitations:
+  - "NOT a test automation framework for applications"
+  - "Pulumi Cloud required for team collaboration features"
+  - "Smaller provider ecosystem than Terraform"
+  - "State management tied to Pulumi Cloud or self-managed backends"
+  - "Import from existing infrastructure is partial"
+  - "Less community content/tutorials than Terraform"
+  - "Runtime SDK overhead compared to declarative HCL"
+  - "Cannot test application behavior, only infrastructure code"

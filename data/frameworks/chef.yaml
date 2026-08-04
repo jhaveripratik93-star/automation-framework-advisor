@@ -1,0 +1,124 @@
+framework_name: "Chef"
+vendor: "Progress Software"
+license: "Apache-2.0"
+website: "https://www.chef.io"
+first_release: "2009"
+latest_version: "18.x (Infra Client)"
+category: "cloud_infrastructure"
+languages_supported:
+  - "Ruby (cookbooks/recipes)"
+  - "InSpec DSL (compliance testing)"
+  - "Habitat (application packaging)"
+
+architecture_fit:
+  web_spa: false
+  web_mpa: false
+  native_mobile: false
+  hybrid_mobile: false
+  desktop: false
+  api_testing: false
+  microservices: false
+  cloud_infrastructure: true
+  infrastructure_as_code: true
+  configuration_management: true
+  multi_cloud: true
+  hybrid_cloud: true
+  on_premise: true
+  compliance_automation: true
+
+capabilities:
+  shadow_dom: false
+  iframe_cross_origin: false
+  multi_tab: false
+  multi_domain: false
+  canvas_webgl: false
+  file_upload_download: false
+  network_interception: false
+  visual_regression: false
+  parallel_execution: "native (client runs, parallel convergence)"
+  auto_wait: false
+  test_recorder: false
+  code_generation: "chef generate (scaffolding)"
+  component_testing: "ChefSpec (unit), Test Kitchen (integration)"
+  accessibility_testing: false
+  agent_based: true
+  idempotent: true
+  configuration_management: true
+  compliance_as_code: "Chef InSpec"
+  application_packaging: "Chef Habitat"
+  node_management: true
+  cookbook_versioning: true
+  supermarket_ecosystem: "community cookbooks"
+
+cloud_providers:
+  aws: "aws cookbook, knife-ec2"
+  azure: "azure cookbook, knife-azure"
+  gcp: "google-cloud cookbook"
+  vmware: "knife-vsphere"
+  oracle_cloud: "community cookbooks"
+  kubernetes: "via Habitat"
+  openstack: "openstack cookbook"
+
+testing_capabilities:
+  unit_testing: "ChefSpec (RSpec-based, fast, no convergence)"
+  integration_testing: "Test Kitchen (multi-platform, real convergence)"
+  compliance_testing: "Chef InSpec (200+ built-in resources)"
+  idempotency_testing: "Test Kitchen converge x2 check"
+  linting: "Cookstyle (RuboCop-based)"
+  contract_testing: "custom resource property validation"
+  audit_mode: "Chef Infra audit mode"
+
+cicd_integration:
+  docker_support: true
+  github_actions: true
+  jenkins: true
+  gitlab_ci: true
+  azure_devops: true
+  pre_built_docker_images: true
+  chef_automate: true
+
+cloud_grids:
+  chef_automate: true
+  chef_manage: true
+  hosted_chef: true
+
+performance:
+  avg_test_execution_speed: "moderate (convergence-based)"
+  resource_footprint: "medium (agent on each node)"
+  startup_time_ms: 2000
+  parallel_overhead: "low (each node converges independently)"
+  convergence_interval: "configurable (default 30 min)"
+
+maintainability:
+  page_object_support: false
+  fixture_support: "cookbooks, roles, environments"
+  reusable_components: "cookbooks (versioned) + Policyfiles"
+  built_in_reporting: "Chef Automate dashboards"
+  trace_viewer: false
+  debugging_tools: "chef-shell, why-run mode, -l debug"
+  cookbook_versioning: true
+  supermarket_registry: true
+
+cloud_migration_metrics:
+  node_coverage: "% of nodes managed by Chef"
+  convergence_success_rate: "% of successful chef-client runs"
+  configuration_drift: "Nodes deviating (detected by InSpec)"
+  compliance_score: "InSpec profile pass rate"
+  deployment_frequency: "Cookbook version promotions per week"
+  mean_time_to_recovery: "Time to re-converge after failure"
+  change_failure_rate: "% of cookbook changes causing failures"
+  audit_coverage: "% of CIS/SOC2 controls automated"
+  resource_coverage: "% of infrastructure resources in cookbooks"
+
+limitations:
+  - "NOT a test automation framework for applications"
+  - "Ruby knowledge required (steeper learning curve)"
+  - "Agent-based architecture (requires client on every node)"
+  - "Chef Server adds operational complexity"
+  - "Smaller community than Ansible/Terraform"
+  - "Heavier setup compared to Ansible (agentless)"
+  - "Cookbook dependency management can be complex"
+  - "Progress Software acquisition raised long-term concerns"
+  - "Higher operational overhead for small teams"
+  - "Not suitable for immutable infrastructure patterns"
+  - "Cannot test application behavior, only server configuration"

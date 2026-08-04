@@ -1,0 +1,72 @@
+framework_name: "Cypress"
+vendor: "Cypress.io (acquired by Netlify)"
+license: "MIT"
+website: "https://www.cypress.io"
+first_release: "2017"
+latest_version: "13.x"
+languages_supported:
+  - JavaScript
+  - TypeScript
+
+architecture_fit:
+  web_spa: true
+  web_mpa: "limited"
+  native_mobile: false
+  hybrid_mobile: false
+  desktop: false
+  api_testing: true
+  microservices: "partial"
+
+capabilities:
+  shadow_dom: true
+  iframe_cross_origin: "limited (workarounds needed)"
+  multi_tab: false
+  multi_domain: "limited (cy.origin in v12+)"
+  canvas_webgl: "limited"
+  file_upload_download: true
+  network_interception: true
+  visual_regression: "plugin (cypress-image-snapshot)"
+  parallel_execution: "Cypress Cloud (paid) or third-party"
+  auto_wait: true
+  test_recorder: "Cypress Studio (deprecated)"
+  code_generation: false
+  component_testing: true
+  accessibility_testing: "plugin (cypress-axe)"
+
+cicd_integration:
+  docker_support: true
+  github_actions: true
+  jenkins: true
+  gitlab_ci: true
+  azure_devops: true
+  pre_built_docker_images: true
+
+cloud_grids:
+  browserstack: "limited"
+  sauce_labs: "limited"
+  cypress_cloud: true
+
+performance:
+  avg_test_execution_speed: "fast"
+  resource_footprint: "medium-high"
+  startup_time_ms: 3000
+  parallel_overhead: "high (requires paid Cloud or orchestration)"
+
+maintainability:
+  page_object_support: "custom pattern (not enforced)"
+  fixture_support: true
+  reusable_components: true
+  built_in_reporting: "basic (dashboard in Cloud)"
+  trace_viewer: false
+  debugging_tools: "excellent (time-travel)"
+
+limitations:
+  - "JavaScript/TypeScript ONLY - no Python/Java support"
+  - "Single browser tab execution model"
+  - "Cross-origin iFrame support is limited"
+  - "No multi-tab or multi-window support"
+  - "Parallel execution requires paid Cypress Cloud or workarounds"
+  - "Cannot test native mobile applications"
+  - "Limited browser support (no WebKit/Safari in free tier)"
+  - "Test isolation can be challenging for complex workflows"
+  - "Large dependency footprint"

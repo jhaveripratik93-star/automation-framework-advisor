@@ -1,0 +1,71 @@
+framework_name: "TestCafe"
+vendor: "DevExpress"
+license: "MIT"
+website: "https://testcafe.io"
+first_release: "2016"
+latest_version: "3.x"
+languages_supported:
+  - JavaScript
+  - TypeScript
+
+architecture_fit:
+  web_spa: true
+  web_mpa: true
+  native_mobile: false
+  hybrid_mobile: false
+  desktop: false
+  api_testing: "basic (via RequestMock)"
+  microservices: false
+
+capabilities:
+  shadow_dom: true
+  iframe_cross_origin: true
+  multi_tab: "limited"
+  multi_domain: true
+  canvas_webgl: "limited"
+  file_upload_download: true
+  network_interception: true
+  visual_regression: "plugin"
+  parallel_execution: "native (concurrent browser instances)"
+  auto_wait: true
+  test_recorder: "TestCafe Studio (paid)"
+  code_generation: "TestCafe Studio"
+  component_testing: false
+  accessibility_testing: "plugin (axe-testcafe)"
+
+cicd_integration:
+  docker_support: true
+  github_actions: true
+  jenkins: true
+  gitlab_ci: true
+  azure_devops: true
+  pre_built_docker_images: "community"
+
+cloud_grids:
+  browserstack: true
+  sauce_labs: true
+  lambda_test: true
+
+performance:
+  avg_test_execution_speed: "moderate-fast"
+  resource_footprint: "low-medium"
+  startup_time_ms: 1000
+  parallel_overhead: "low"
+
+maintainability:
+  page_object_support: true
+  fixture_support: true
+  reusable_components: true
+  built_in_reporting: "basic + plugins"
+  trace_viewer: false
+  debugging_tools: "good (live mode, screenshots)"
+
+limitations:
+  - "JavaScript/TypeScript ONLY"
+  - "No WebDriver protocol (proxy-based injection)"
+  - "Smaller community than Playwright/Cypress"
+  - "TestCafe Studio (recorder) is paid"
+  - "Multi-tab support is limited"
+  - "No native mobile testing"
+  - "Fewer third-party integrations than competitors"
+  - "DevExpress backing raises long-term OSS concerns"

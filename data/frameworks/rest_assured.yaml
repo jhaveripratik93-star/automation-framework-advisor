@@ -1,0 +1,77 @@
+framework_name: "REST Assured"
+vendor: "OpenSource"
+license: "Apache-2.0"
+website: "https://rest-assured.io"
+first_release: "2010"
+latest_version: "5.x"
+languages_supported:
+  - Java
+  - Kotlin
+  - Groovy
+
+architecture_fit:
+  web_spa: false
+  web_mpa: false
+  native_mobile: false
+  hybrid_mobile: false
+  desktop: false
+  api_testing: true
+  microservices: true
+
+capabilities:
+  shadow_dom: false
+  iframe_cross_origin: false
+  multi_tab: false
+  multi_domain: false
+  canvas_webgl: false
+  file_upload_download: true
+  network_interception: false
+  visual_regression: false
+  parallel_execution: "via TestNG/JUnit parallel"
+  auto_wait: false
+  test_recorder: false
+  code_generation: false
+  component_testing: false
+  accessibility_testing: false
+  protocol_support:
+    - HTTP/HTTPS
+    - "JSON/XML validation"
+    - "OAuth2 support"
+  schema_validation: true
+  json_path_support: true
+  xml_path_support: true
+
+cicd_integration:
+  docker_support: true
+  github_actions: true
+  jenkins: true
+  gitlab_ci: true
+  azure_devops: true
+  pre_built_docker_images: "via Maven/Gradle images"
+
+cloud_grids:
+  not_applicable: true
+
+performance:
+  avg_test_execution_speed: "fast"
+  resource_footprint: "medium (JVM)"
+  startup_time_ms: 2000
+  parallel_overhead: "low"
+
+maintainability:
+  page_object_support: false
+  fixture_support: "via JUnit/TestNG"
+  reusable_components: "specification reuse pattern"
+  built_in_reporting: "via test framework"
+  trace_viewer: false
+  debugging_tools: "Java IDE debugging"
+
+limitations:
+  - "Java/JVM ONLY"
+  - "API testing only - no UI capabilities"
+  - "No Python support"
+  - "Verbose syntax compared to modern alternatives"
+  - "No built-in reporting (relies on JUnit/TestNG)"
+  - "Limited async/reactive API support"
+  - "No WebSocket or gRPC support natively"
+  - "Heavier dependency footprint than Python requests"

@@ -1,0 +1,70 @@
+framework_name: "Puppeteer"
+vendor: "Google"
+license: "Apache-2.0"
+website: "https://pptr.dev"
+first_release: "2017"
+latest_version: "22.x"
+languages_supported:
+  - JavaScript
+  - TypeScript
+
+architecture_fit:
+  web_spa: true
+  web_mpa: true
+  native_mobile: false
+  hybrid_mobile: false
+  desktop: false
+  api_testing: "indirect (via page.evaluate)"
+  microservices: false
+
+capabilities:
+  shadow_dom: true
+  iframe_cross_origin: true
+  multi_tab: true
+  multi_domain: true
+  canvas_webgl: "screenshot-based"
+  file_upload_download: true
+  network_interception: true
+  visual_regression: "third-party (pixelmatch)"
+  parallel_execution: "manual (multiple browser instances)"
+  auto_wait: "partial (waitForSelector)"
+  test_recorder: "Chrome DevTools Recorder"
+  code_generation: "Chrome DevTools export"
+  component_testing: false
+  accessibility_testing: "via @axe-core/puppeteer"
+
+cicd_integration:
+  docker_support: true
+  github_actions: true
+  jenkins: true
+  gitlab_ci: true
+  azure_devops: true
+  pre_built_docker_images: true
+
+cloud_grids:
+  browserstack: "limited"
+  sauce_labs: "limited"
+
+performance:
+  avg_test_execution_speed: "fast"
+  resource_footprint: "medium"
+  startup_time_ms: 800
+  parallel_overhead: "medium (manual orchestration)"
+
+maintainability:
+  page_object_support: "custom pattern"
+  fixture_support: "via test framework (Jest/Mocha)"
+  reusable_components: true
+  built_in_reporting: false
+  trace_viewer: "Chrome DevTools"
+  debugging_tools: "good (DevTools Protocol)"
+
+limitations:
+  - "Chromium-only (no Firefox/WebKit native support)"
+  - "JavaScript/TypeScript ONLY"
+  - "Not a test framework (no assertions, runner)"
+  - "Manual parallel execution setup"
+  - "No built-in reporting"
+  - "Being superseded by Playwright for new projects"
+  - "Less active development since Playwright fork"
+  - "No test retry or flaky test handling built-in"
