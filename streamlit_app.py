@@ -49,8 +49,8 @@ st.markdown("""
 <style>
     /* Clean look */
     #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
+    #footer {visibility: hidden;}
+    #header {visibility: hidden;}
 
     .block-container {
         padding-top: 2rem;
@@ -833,7 +833,7 @@ def process_message(user_input: str, uploaded_docs: str = "", case_study: str = 
     import logging
     logger = logging.getLogger(__name__)
     
-    logger.info("=" * 80)
+    logger.info("=" * 100)
     logger.info("PROCESS_MESSAGE: New request received")
     logger.info(f"  User input length: {len(user_input)} chars")
     logger.info(f"  Uploaded docs context: {len(uploaded_docs)} chars")
@@ -995,9 +995,6 @@ def _render_input_sidebar():
     
     with st.sidebar:
         logger.info("_render_input_sidebar: Inside st.sidebar context")
-        
-        # Visible confirmation for debugging
-        st.success("✅ Left Sidebar Loaded")
         
         st.markdown("### 📂 Input Sources")
         logger.info("_render_input_sidebar: Rendered header")
