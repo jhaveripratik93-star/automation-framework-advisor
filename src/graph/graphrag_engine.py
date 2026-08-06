@@ -19,7 +19,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _DEFAULT_MAX_HOPS = 2
-_MIN_FUZZY_SCORE = 0.6
+_MIN_FUZZY_SCORE = 0.75   # raised from 0.6 — reduces noise matches
+_MIN_TOKEN_LEN = 5        # skip short stop-words like 'test', 'for', 'are'
+_MAX_MATCHED_ENTITIES = 20  # cap subgraph size to keep context small
 
 
 def _overlap_ratio(query_token: str, candidate: str) -> float:
@@ -84,33 +86,39 @@ class GraphRAGEngine:
 
         Validates: Requirements 7.1
         """
-        tokens = [t.strip(".,!?;:\"'()") for t in query.split() if len(t) >= 3]
+        tokens = [
+            t.strip(".,!?;:\"'()")
+            for t in query.split()
+            if len(t) >= _MIN_TOKEN_LEN
+        ]
         logger.debug("GraphRAGEngine._identify_entities: tokens=%s", tokens)
 
         matched_ids: list[str] = []
         seen: set[str] = set()
 
+        # Exact match first
         for token in tokens:
-            exact = self._graph.find_entities_by_name(token)
-            for e in exact:
+            for e in self._graph.find_entities_by_name(token):
                 if e.id not in seen:
                     seen.add(e.id)
                     matched_ids.append(e.id)
-                    logger.debug("GraphRAGEngine._identify_entities: exact match token='%s' -> entity='%s'", token, e.name)
+                    logger.debug("GraphRAGEngine._identify_entities: exact token='%s' -> '%s'", token, e.name)
 
-        if not matched_ids:
-            for token in tokens:
-                for name_key, entity_ids in self._graph._name_index.items():
-                    score = _overlap_ratio(token, name_key)
-                    if score >= _MIN_FUZZY_SCORE:
-                        for eid in entity_ids:
-                            if eid not in seen:
-                                seen.add(eid)
-                                matched_ids.append(eid)
-                                logger.debug(
-                                    "GraphRAGEngine._identify_entities: fuzzy match token='%s' -> name='%s' score=%.2f",
-                                    token, name_key, score,
-                                )
+        # Fuzzy match only for tokens that produced no exact hits
+        for token in tokens:
+            if len(matched_ids) >= _MAX_MATCHED_ENTITIES:
+                break
+            for name_key, entity_ids in self._graph._name_index.items():
+                score = _overlap_ratio(token, name_key)
+                if score >= _MIN_FUZZY_SCORE:
+                    for eid in entity_ids:
+                        if eid not in seen and len(matched_ids) < _MAX_MATCHED_ENTITIES:
+                            seen.add(eid)
+                            matched_ids.append(eid)
+                            logger.debug(
+                                "GraphRAGEngine._identify_entities: fuzzy token='%s' -> '%s' score=%.2f",
+                                token, name_key, score,
+                            )
 
         logger.debug("GraphRAGEngine._identify_entities: total matched=%d", len(matched_ids))
         return matched_ids

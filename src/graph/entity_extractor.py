@@ -23,7 +23,7 @@ from src.graph.knowledge_graph import (
 from src.knowledge_base.schema import FrameworkData
 
 if TYPE_CHECKING:
-    from src.llm.ollama_client import OllamaClient
+    from src.llm.groq_client import GroqClient as LLMClient
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +46,8 @@ class EntityExtractor:
     Validates: Requirements 5.1, 5.2, 5.3, 5.4, 6.1, 6.2, 6.4
     """
 
-    def __init__(self, ollama_client: OllamaClient | None = None) -> None:
-        self._client = ollama_client
+    def __init__(self, llm_client: LLMClient | None = None) -> None:  # type: ignore
+        self._client = llm_client
 
     # ------------------------------------------------------------------
     # YAML extraction
@@ -212,11 +212,11 @@ class EntityExtractor:
         Validates: Requirements 6.1, 6.2, 6.4
         """
         if self._client is None:
-            logger.debug("EntityExtractor.extract_from_message: no OllamaClient configured")
+            logger.debug("EntityExtractor.extract_from_message: no LLM client configured")
             return [], []
 
         if not self._client.is_available:
-            logger.debug("EntityExtractor.extract_from_message: Ollama unavailable, skipping extraction")
+            logger.debug("EntityExtractor.extract_from_message: LLM unavailable, skipping extraction")
             return [], []
 
         logger.debug("EntityExtractor.extract_from_message: message_len=%d model=%s", len(message), self._client.model)

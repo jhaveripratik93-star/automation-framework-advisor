@@ -337,8 +337,10 @@
       "id": "java-language",
       "name": "Java",
       "entity_type": "Language",
-      "properties": {},
-      "source": "yaml"
+      "properties": {
+        "confidence": 0.5
+      },
+      "source": "user"
     },
     {
       "id": "javascript-language",
@@ -2881,6 +2883,123 @@
     {
       "id": "microservice-api-language",
       "name": "microservice api",
+      "entity_type": "Language",
+      "properties": {
+        "confidence": 0.65
+      },
+      "source": "user"
+    },
+    {
+      "id": "jmeter-framework",
+      "name": "JMeter",
+      "entity_type": "Framework",
+      "properties": {
+        "confidence": 0.8
+      },
+      "source": "user"
+    },
+    {
+      "id": "postman-capability",
+      "name": "Postman",
+      "entity_type": "Capability",
+      "properties": {
+        "confidence": 0.65
+      },
+      "source": "user"
+    },
+    {
+      "id": "katalon-studio-ci_cd_tool",
+      "name": "Katalon Studio",
+      "entity_type": "CI_CD_Tool",
+      "properties": {
+        "confidence": 0.8
+      },
+      "source": "user"
+    },
+    {
+      "id": "aws-cloudformation-cloud_provider",
+      "name": "AWS CloudFormation",
+      "entity_type": "Cloud_Provider",
+      "properties": {
+        "confidence": 0.65
+      },
+      "source": "user"
+    },
+    {
+      "id": "microservice-capability",
+      "name": "microservice",
+      "entity_type": "Capability",
+      "properties": {
+        "confidence": 0.8
+      },
+      "source": "user"
+    },
+    {
+      "id": "api-testing-framework-framework",
+      "name": "API Testing Framework",
+      "entity_type": "Framework",
+      "properties": {
+        "confidence": 0.8
+      },
+      "source": "user"
+    },
+    {
+      "id": "apitesting-framework",
+      "name": "apitesting",
+      "entity_type": "Framework",
+      "properties": {
+        "confidence": 0.65
+      },
+      "source": "user"
+    },
+    {
+      "id": "api-capability",
+      "name": "API",
+      "entity_type": "Capability",
+      "properties": {
+        "confidence": 0.8
+      },
+      "source": "user"
+    },
+    {
+      "id": "testing-framework",
+      "name": "testing",
+      "entity_type": "Framework",
+      "properties": {
+        "confidence": 0.65
+      },
+      "source": "user"
+    },
+    {
+      "id": "framework-framework",
+      "name": "framework",
+      "entity_type": "Framework",
+      "properties": {
+        "confidence": 0.8
+      },
+      "source": "user"
+    },
+    {
+      "id": "microservice-api-testing-framework-framework",
+      "name": "Microservice API Testing Framework",
+      "entity_type": "Framework",
+      "properties": {
+        "confidence": 0.5
+      },
+      "source": "user"
+    },
+    {
+      "id": "testing-framework-framework",
+      "name": "testing framework",
+      "entity_type": "Framework",
+      "properties": {
+        "confidence": 0.8
+      },
+      "source": "user"
+    },
+    {
+      "id": "testing-language",
+      "name": "testing",
       "entity_type": "Language",
       "properties": {
         "confidence": 0.65
@@ -7896,6 +8015,86 @@
       "properties": {
         "path_id": "testcafe-webdriverio-migration_path"
       }
+    },
+    {
+      "source_id": "jmeter-framework",
+      "target_id": "java-language",
+      "relationship_type": "SUPPORTS_LANGUAGE",
+      "confidence": 0.5,
+      "source": "user",
+      "properties": {}
+    },
+    {
+      "source_id": "postman-capability",
+      "target_id": "java-language",
+      "relationship_type": "REQUIRES",
+      "confidence": 0.5,
+      "source": "user",
+      "properties": {}
+    },
+    {
+      "source_id": "katalon-studio-ci_cd_tool",
+      "target_id": "aws-cloudformation-cloud_provider",
+      "relationship_type": "INTEGRATES_WITH",
+      "confidence": 0.5,
+      "source": "user",
+      "properties": {}
+    },
+    {
+      "source_id": "api-testing-framework-framework",
+      "target_id": "microservice-capability",
+      "relationship_type": "HAS_CAPABILITY",
+      "confidence": 0.5,
+      "source": "user",
+      "properties": {}
+    },
+    {
+      "source_id": "apitesting-framework",
+      "target_id": "microservice-capability",
+      "relationship_type": "SUPPORTS_LANGUAGE",
+      "confidence": 0.5,
+      "source": "user",
+      "properties": {}
+    },
+    {
+      "source_id": "microservice-capability",
+      "target_id": "api-capability",
+      "relationship_type": "INTEGRATES_WITH",
+      "confidence": 0.5,
+      "source": "user",
+      "properties": {}
+    },
+    {
+      "source_id": "microservice-capability",
+      "target_id": "api-capability",
+      "relationship_type": "SUPPORTS_LANGUAGE",
+      "confidence": 0.5,
+      "source": "user",
+      "properties": {}
+    },
+    {
+      "source_id": "microservice-capability",
+      "target_id": "api-capability",
+      "relationship_type": "HAS_CAPABILITY",
+      "confidence": 0.5,
+      "source": "user",
+      "properties": {}
+    },
+    {
+      "source_id": "testing-framework",
+      "target_id": "framework-framework",
+      "relationship_type": "REQUIRES",
+      "confidence": 0.5,
+      "source": "user",
+      "properties": {}
+    },
+    {
+      "source_id": "microservice-api-testing-framework-framework",
+      "target_id": "api-capability",
+      "relationship_type": "SUPPORTS_LANGUAGE",
+      "confidence": 0.5,
+      "source": "user",
+      "properties": {}
     }
   ]
 }
