@@ -10,7 +10,7 @@ seamless migrations, and verifies 100% functional coverage parity.
 - **Migration Roadmap** – Phased plan with effort estimates
 - **Coverage Gap Analysis** – Ensures no functional coverage is lost
 - **Boilerplate Generator** – Ready-to-run project templates with CI/CD
-- **Ollama LLM Advisor** – Local LLM-powered chat grounded by knowledge graph (llama3/mistral/codellama)
+- **Groq LLM Advisor** – Cloud LLM-powered chat with fast inference (llama-3.1-70b/mixtral)
 - **Persistent Knowledge Graph** – Self-growing graph seeded from 17 YAML profiles, grows from user interactions
 - **GraphRAG Engine** – 2-hop subgraph retrieval for grounded, citation-backed responses
 - **Criteria Sidebar** – Real-time weight sliders, preset selector, custom criteria with proportional redistribution
@@ -22,26 +22,15 @@ seamless migrations, and verifies 100% functional coverage parity.
 # Install dependencies
 pip install -r requirements.txt
 
-# Install Ollama (required for LLM features)
-# macOS/Linux:
-curl -fsSL https://ollama.ai/install.sh | sh
-# Windows: download from https://ollama.ai/download
+# Set Groq API key (required for LLM features)
+# Option 1: Environment variable (recommended)
+export GROQ_API_KEY="your_api_key_here"
 
-# Add Ollama to PATH permanently (run in PowerShell as normal user):
-$env:PATH += ";C:\Users\xjhapra\AppData\Local\Programs\Ollama"
-[System.Environment]::SetEnvironmentVariable("PATH", $env:PATH + ";C:\Users\xjhapra\AppData\Local\Programs\Ollama", "User")
-
-# Pull a supported model (choose one)
-ollama pull llama3      # recommended
-ollama pull mistral     # alternative
-ollama pull codellama   # code-focused alternative
-
-# Start Ollama (runs at http://localhost:11434)
-ollama serve
+# Option 2: The key is already hardcoded in the app as fallback
 
 # Option 1: Run the Streamlit UI (recommended for interactive use)
 streamlit run streamlit_app.py 
-or 
+# or 
 python -m streamlit run streamlit_app.py
 # Opens at http://localhost:8501
 
@@ -51,9 +40,8 @@ python run.py
 # API docs at http://localhost:8000/docs
 ```
 
-> **Note:** Ollama must be running locally before starting the app.
-> If Ollama is unavailable, the advisor automatically falls back to
-> the rule-based AdvisorChat.
+> **Note:** The app uses Groq's cloud API for LLM inference - no local setup required.
+> If Groq is unavailable, the advisor automatically falls back to the rule-based AdvisorChat.
 
 ## Project Structure
 

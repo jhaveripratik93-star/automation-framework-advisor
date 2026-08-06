@@ -16,7 +16,5 @@ hypothesis>=6.100.0
 pytest>=8.0.0
 pytest-anyio>=0.0.0
 
-# Ollama LLM integration (requires Ollama running locally)
-# Install Ollama: https://ollama.ai/download
-# Pull a model: ollama pull llama3
-# httpx is already listed above and handles Ollama HTTP API calls
+# Groq LLM
+groq>=0.9.0
