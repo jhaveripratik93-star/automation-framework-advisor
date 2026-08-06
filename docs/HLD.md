@@ -1,607 +1,480 @@
 # High-Level Design (HLD)
 # Automation Framework Migration & Coverage Advisor
 
-**Version:** 1.0  
-**Date:** July 2026  
-**Status:** POC / Draft
+**Version:** 2.0
+**Date:** August 2026
+**Status:** Active
 
 ---
 
 ## 1. Executive Summary
 
-This document outlines the high-level architecture for an AI-powered
-**Automation Framework Migration & Coverage Advisor** agent. The system
-ingests legacy test metadata, team constraints, and CI/CD context to produce:
+An AI-powered advisor that helps engineering teams select, evaluate, and migrate to the right test automation framework. The system combines a **weighted scoring matrix** with a **GraphRAG knowledge engine** and a **4-agent agentic pipeline** to produce grounded, context-aware recommendations.
 
-1. A **Weighted Decision Matrix** recommending the best-fit framework.
-2. An automated **Migration Roadmap** with phased execution plan.
-3. A **Coverage Gap Analysis** report ensuring no functional parity is lost.
-4. A **Boilerplate Generator** producing ready-to-run project templates.
+Key capabilities:
+1. **Weighted Decision Matrix** — scores 17+ frameworks across 7–10 configurable criteria
+2. **GraphRAG Context Retrieval** — 2-hop knowledge graph subgraph grounding every LLM response
+3. **4-Agent Pipeline** — Decision → Tool Selection → Evaluation → Format agents
+4. **Human-in-the-Loop (HITL)** — every agent-generated response is reviewed before publishing to chat
+5. **Persistent Knowledge Graph** — self-growing graph seeded from 17 YAML profiles, enriched by user interactions
 
 ---
 
 ## 2. System Context Diagram
 
 ```
-┌───────────────────────────────────────────────────────────────┐
-│                     USER / QA LEADER                           │
-│ (Provides: legacy scripts, constraints, team info, CI/CD env) │
-└──────────────────────────┬────────────────────────────────────┘
-                           │
-                           ▼
-┌───────────────────────────────────────────────────────────────┐
-│                ADVISOR AGENT (Core Engine)                     │
-│                                                               │
-│ ┌────────────┐ ┌──────────────┐ ┌─────────────────────────┐  │
-│ │Interactive │ │ Scoring &    │ │ Migration & Coverage    │  │
-│ │Discovery   │ │ Evaluation   │ │ Engine                  │  │
-│ │Module      │ │ Engine       │ │                         │  │
-│ └────────────┘ └──────────────┘ └─────────────────────────┘  │
-│                                                               │
-│ ┌─────────────────┐  ┌─────────────────────────────────────┐ │
-│ │Boilerplate      │  │ Knowledge Base                      │ │
-│ │Generator        │  │ (Framework DB + Limitations)        │ │
-│ └─────────────────┘  └─────────────────────────────────────┘ │
-└──────────────────────────┬────────────────────────────────────┘
-                           │
-                           ▼
-┌───────────────────────────────────────────────────────────────┐
-│                       OUTPUTS                                  │
-│ • Decision Matrix (scored)   • Migration Roadmap              │
-│ • Coverage Gap Report        • Project Template (repo)        │
-└───────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                        USER / QA LEAD                           │
+│  (chat queries · uploaded test files · case study documents)    │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   STREAMLIT FRONTEND (UI)                       │
+│                                                                 │
+│  ┌──────────────┐  ┌──────────────────┐  ┌──────────────────┐  │
+│  │ Chat Panel   │  │ HITL Review Panel│  │ Sidebar          │  │
+│  │ (history)    │  │ approve/edit/    │  │ file upload      │  │
+│  │              │  │ discard          │  │ weight sliders   │  │
+│  └──────────────┘  └──────────────────┘  └──────────────────┘  │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    AGENT ORCHESTRATOR                           │
+│                                                                 │
+│  ┌──────────────┐  ┌──────────────────┐                        │
+│  │ Decision     │  │ Tool Selection   │                        │
+│  │ Agent        │→ │ Agent            │                        │
+│  └──────────────┘  └────────┬─────────┘                        │
+│                             │ tool calls                        │
+│                             ▼                                   │
+│                    ┌────────────────┐                           │
+│                    │ Tool Executor  │                           │
+│                    │ (src/tools/)   │                           │
+│                    └────────┬───────┘                           │
+│                             │ raw results                       │
+│                             ▼                                   │
+│  ┌──────────────┐  ┌──────────────────┐                        │
+│  │ Evaluation   │  │ Format Agent     │→ HITLState (pending)   │
+│  │ Agent        │→ │                  │                        │
+│  └──────────────┘  └──────────────────┘                        │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              ▼              ▼              ▼
+   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+   │ Ollama LLM   │  │ GraphRAG     │  │ Scoring      │
+   │ (local)      │  │ Engine       │  │ Engine       │
+   │ llama3/      │  │ (2-hop       │  │ (weighted    │
+   │ mistral      │  │  subgraph)   │  │  matrix)     │
+   └──────────────┘  └──────┬───────┘  └──────────────┘
+                            │
+                   ┌────────▼────────┐
+                   │ Knowledge Graph │
+                   │ (306 entities   │
+                   │  604 relations) │
+                   └────────┬────────┘
+                            │
+                   ┌────────▼────────┐
+                   │ Knowledge Base  │
+                   │ 17 YAML profiles│
+                   └─────────────────┘
 ```
-
 
 ---
 
 ## 3. Architecture Components
 
-### 3.1 Interactive Discovery Module
+### 3.1 Streamlit Frontend
 
 | Aspect | Detail |
 |--------|--------|
-| **Purpose** | Dynamically gather project context via adaptive Q&A |
-| **Approach** | LLM-driven conversational flow (not a static form) |
-| **Covers** | 5 Decision Vectors (see §5) |
-| **Output** | Structured JSON profile of the project requirements |
+| **File** | `streamlit_app.py` |
+| **Layout** | Left sidebar (inputs) · Main chat panel · HITL review panel |
+| **Sidebar** | File upload, case study upload, weight preset selector, per-criterion sliders |
+| **Chat** | Full message history, welcome message, discovery questionnaire flow |
+| **HITL Panel** | Appears below chat when a draft is pending; shows tool metadata, editable text area, Approve / Send Edited / Discard buttons |
 
-**Flow:**
+### 3.2 Agent Orchestrator (`src/agents/orchestrator.py`)
+
+Central coordinator of the 4-agent pipeline. Manages `HITLState` — a dataclass that holds the draft response and is serialised into Streamlit `session_state`.
+
+**Pipeline steps:**
 ```
-User starts session
-  → Agent asks about Application Architecture
-  → Agent probes Team Skillset & Language preferences
-  → Agent inquires about Execution Environment
-  → Agent checks Special UI Requirements
-  → Agent evaluates Maintenance & Budget constraints
-  → Structured Profile JSON generated
+user query
+  → GraphRAG.retrieve_context()          # pre-fetch graph context
+  → DecisionAgent.decide()               # tool_call | direct
+  → ToolSelectionAgent.select()          # picks tool + builds args
+  → ToolExecutor.execute()               # runs tool, returns raw string
+  → EvaluationAgent.evaluate()           # LLM synthesises results
+  → FormatAgent.format()                 # markdown / table structure
+  → HITLState(pending=True)              # returned to UI for review
 ```
 
-### 3.2 Scoring & Evaluation Engine
+### 3.3 Decision Agent (`src/agents/decision_agent.py`)
 
-| Aspect | Detail |
+Decides whether the query needs a tool call or can be answered directly from graph context.
+
+| Signal | Action |
 |--------|--------|
-| **Purpose** | Rank candidate frameworks against the gathered profile |
-| **Method** | Weighted scoring across configurable criteria |
-| **Data Source** | Knowledge Base (framework capabilities + limitations) |
-| **Output** | Weighted Decision Matrix with scores & pros/cons |
+| Keywords: compare, recommend, migrate, coverage, evaluate | `tool_call` |
+| Keywords: hello, what is, explain + short message | `direct` |
+| Graph context > 200 chars already retrieved | `direct` |
+| Default (no strong signal) | `tool_call` |
 
-**Core Evaluation Criteria (default weights):**
+### 3.4 Tool Selection Agent (`src/agents/tool_selection_agent.py`)
 
-| Criterion | Weight | Description |
-|-----------|--------|-------------|
-| Python/Pytest Compatibility | 20% | Alignment with Python testing ecosystem |
-| API/Backend Validation | 20% | REST API, data validation, DB verification |
-| Performance/Load Testing | 15% | K6, Locust, JMeter integration |
-| CI/CD Integration | 20% | Jenkins, Docker, GitHub Actions compatibility |
-| Maintainability | 15% | Reusable components, POM, reduced tech debt |
-| Cloud-Native/AWS Readiness | 5% | AWS service integration, containerization |
-| License Cost | 5% | OSS vs commercial licensing impact |
+Maps user intent to the correct tool and builds typed arguments.
 
-### 3.3 Migration & Coverage Engine
+| Intent | Tool |
+|--------|------|
+| compare / vs / versus | `run_framework_comparison` |
+| migrate / migration / move from | `find_migration_paths` |
+| coverage / test case | `analyze_test_case_coverage` |
+| uploaded / file / case study | `analyze_uploaded_content` |
+| details / capabilities / about | `get_framework_details` |
+| default | `search_knowledge_graph` |
 
-| Aspect | Detail |
-|--------|--------|
-| **Purpose** | Plan migration steps and verify coverage parity |
-| **Inputs** | Legacy test inventory, existing script metadata |
-| **Outputs** | Migration Roadmap + Coverage Gap Analysis report |
+### 3.5 Tool Executor (`src/tools/executor.py`)
 
-**Sub-components:**
-- **Script Parser** – Extracts test intent/metadata from legacy scripts
-- **Mapping Engine** – Maps legacy test functions → target framework equivalents
-- **Gap Detector** – Identifies tests that cannot be directly migrated
-- **Roadmap Builder** – Produces phased migration plan with effort estimates
+Implements 6 tools that query the knowledge graph, knowledge base, and uploaded documents:
 
-### 3.4 Boilerplate Generator
+| Tool | Description |
+|------|-------------|
+| `search_knowledge_graph` | 2-hop GraphRAG subgraph retrieval |
+| `get_framework_details` | Full YAML profile for a named framework |
+| `run_framework_comparison` | Side-by-side capability comparison |
+| `find_migration_paths` | MIGRATES_TO relationships from knowledge graph |
+| `analyze_test_case_coverage` | Coverage matrix across frameworks |
+| `analyze_uploaded_content` | Keyword search in uploaded files / case study |
 
-| Aspect | Detail |
-|--------|--------|
-| **Purpose** | Generate a ready-to-run project template once framework is selected |
-| **Includes** | CI/CD config, linting, sample page-object structure, Docker setup |
-| **Templates** | Playwright, Cypress, WebdriverIO, Selenium, Robot Framework, etc. |
+### 3.6 Evaluation Agent (`src/agents/evaluation_agent.py`)
 
-### 3.5 Knowledge Base
+Sends tool results + graph context to the LLM via `/api/chat` (no tools, pure synthesis). Produces a coherent draft answer grounded in retrieved data.
 
-| Aspect | Detail |
-|--------|--------|
-| **Purpose** | Structured repository of framework capabilities & limitations |
-| **Format** | JSON/YAML dataset with scoring attributes per framework |
-| **Coverage** | 15+ frameworks across Web, Mobile, API, Desktop |
-| **Updatable** | New frameworks/versions added without code changes |
+### 3.7 Format Agent (`src/agents/format_agent.py`)
 
+Applies consistent markdown structure based on query type:
+
+| Query type | Format applied |
+|------------|---------------|
+| compare / vs | Ensures markdown table |
+| migrate / roadmap | Ensures phase headings |
+| coverage | Ensures summary table |
+| default | Adds `### Response` heading if missing |
+
+Appends HITL footer notice to all drafts.
+
+### 3.8 Scoring Engine (`src/scoring/`)
+
+Standalone weighted matrix evaluation triggered by the discovery questionnaire or explicit `evaluate` command. Completely independent of the agent pipeline.
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| `ScoringEngine` | `engine.py` | Orchestrates evaluation, ranking, pros/cons |
+| `WeightProfile` | `weights.py` | 8 presets + dynamic adjustment per profile |
+| Criterion scorers | `criteria.py` | 10 individual scoring functions (C1–C10) |
+| Penalty/bonus logic | `penalties.py` | Hard penalties for missing requirements |
+| Output models | `models.py` | `DecisionMatrix`, `FrameworkScore`, `CriteriaScores` |
+
+**Evaluation criteria:**
+
+| ID | Criterion | Default Weight |
+|----|-----------|---------------|
+| C1 | Language Compatibility | 20% |
+| C2 | API Validation | 20% |
+| C3 | Performance & Load | 15% |
+| C4 | CI/CD Integration | 20% |
+| C5 | Maintainability | 15% |
+| C6 | Cloud Readiness | 5% |
+| C7 | License & Cost | 5% |
+| C8 | Cloud Provider Support | cloud only |
+| C9 | IaC Capabilities | cloud only |
+| C10 | Cloud Migration Readiness | cloud only |
+
+### 3.9 GraphRAG Engine (`src/graph/graphrag_engine.py`)
+
+Retrieves structured knowledge graph context to ground every LLM call.
+
+**Algorithm:**
+1. Tokenise query (min 5 chars per token to skip stop-words)
+2. Exact-match tokens against entity name index
+3. Fuzzy-match remaining tokens (threshold 0.75, cap 20 entities)
+4. Retrieve 2-hop subgraph from matched entity IDs
+5. Format as `[source] --relationship--> [target] (confidence)` triples
+6. YAML fallback if no graph entities matched
+
+### 3.10 Knowledge Graph (`src/graph/`)
+
+Persistent entity-relationship graph seeded from 17 YAML framework profiles and enriched by user interactions.
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| `KnowledgeGraph` | `knowledge_graph.py` | In-memory graph with name index |
+| `GraphStore` | `graph_store.py` | Atomic JSON persistence (`data/knowledge_graph.json`) |
+| `EntityExtractor` | `entity_extractor.py` | Extracts entities/relationships from YAML and user messages |
+| `GraphRAGEngine` | `graphrag_engine.py` | Context retrieval (see §3.9) |
+
+Current graph size: **306 entities, 604 relationships** across entity types: `framework`, `language`, `capability`, `limitation`, `ci_cd_tool`, `cloud_provider`, `migration_path`.
+
+### 3.11 Knowledge Base (`src/knowledge_base/`)
+
+17 YAML framework profiles loaded at startup. Each profile contains: languages, architecture fit, capabilities, CI/CD integration, cloud grids, limitations, performance, maintainability.
+
+**Frameworks:** Playwright, Cypress, Selenium WebDriver, WebdriverIO, Robot Framework, TestCafe, Puppeteer, Appium, Karate, K6, Locust, REST Assured, Terraform, Ansible, Chef, Pulumi, AWS CloudFormation.
+
+### 3.12 Ollama LLM Client (`src/llm/ollama_client.py`)
+
+Local LLM inference via Ollama HTTP API.
+
+| Feature | Detail |
+|---------|--------|
+| Chat endpoint | `/api/chat` (tool-calling support) |
+| Generate endpoint | `/api/generate` (entity extraction) |
+| Tool support probe | Sends minimal tools payload at startup; sets `supports_tools` flag |
+| Models | `llama3:latest` (8B), `mistral:latest` (7B) |
+| Timeout | 180s |
+| Max tokens | 256 |
 
 ---
 
-## 4. Data Flow Architecture
+## 4. Data Flow
 
 ```
-┌──────────────┐     ┌──────────────────┐     ┌──────────────────┐
-│   INPUT      │     │   PROCESSING     │     │   OUTPUT         │
-│              │     │                  │     │                  │
-│ • Legacy     │────▶│ 1. Discovery     │────▶│ • Decision       │
-│   Scripts    │     │    (Adaptive Q&A)│     │   Matrix         │
-│ • Team Info  │     │                  │     │                  │
-│ • CI/CD Env  │     │ 2. Scoring       │────▶│ • Migration      │
-│ • Test       │     │    (Weighted)    │     │   Roadmap        │
-│   Inventory  │     │                  │     │                  │
-│ • Constraints│     │ 3. Migration     │────▶│ • Coverage Gap   │
-│              │     │    Planning      │     │   Report         │
-│              │     │                  │     │                  │
-│              │     │ 4. Boilerplate   │────▶│ • Project        │
-│              │     │    Generation    │     │   Template       │
-└──────────────┘     └──────────────────┘     └──────────────────┘
-                              │
-                              ▼
-                     ┌──────────────────┐
-                     │  KNOWLEDGE BASE  │
-                     │                  │
-                     │ • Framework DB   │
-                     │ • Limitations    │
-                     │ • CI/CD Patterns │
-                     │ • Template Repo  │
-                     └──────────────────┘
+┌─────────────┐     ┌──────────────────────────────────────────┐
+│   INPUTS    │     │              PROCESSING                  │
+│             │     │                                          │
+│ • Chat      │────▶│  1. GraphRAG context retrieval           │
+│   query     │     │     (knowledge graph 2-hop subgraph)     │
+│             │     │                                          │
+│ • Uploaded  │────▶│  2. Decision Agent                       │
+│   test files│     │     (tool_call | direct)                 │
+│             │     │                                          │
+│ • Case      │────▶│  3. Tool Selection Agent                 │
+│   study     │     │     (tool name + typed arguments)        │
+│             │     │                                          │
+│ • Discovery │────▶│  4. Tool Executor                        │
+│   answers   │     │     (KB lookup / graph search)           │
+│             │     │                                          │
+│             │     │  5. Evaluation Agent                     │
+│             │     │     (LLM synthesis via /api/chat)        │
+│             │     │                                          │
+│             │     │  6. Format Agent                         │
+│             │     │     (markdown / table structure)         │
+│             │     │                                          │
+│             │     │  7. HITL Review                          │
+│             │     │     (approve / edit / discard)           │
+└─────────────┘     └──────────────────┬───────────────────────┘
+                                       │
+                    ┌──────────────────▼───────────────────────┐
+                    │                OUTPUTS                    │
+                    │                                          │
+                    │  • Weighted scorecard (evaluation flow)  │
+                    │  • Framework comparison table            │
+                    │  • Migration path analysis               │
+                    │  • Test coverage matrix                  │
+                    │  • Framework detail cards                │
+                    │  • Knowledge graph context citations     │
+                    └──────────────────────────────────────────┘
 ```
 
 ---
 
-## 5. Five Decision Vectors (Evaluation Dimensions)
+## 5. Human-in-the-Loop (HITL) Flow
 
-| # | Decision Vector | What the Agent Probes | Example Outcome |
-|---|----------------|----------------------|-----------------|
-| 1 | **Application Architecture** | Web (SPA/MPA), Native Mobile, Desktop, Hybrid, Microservices/API | Playwright vs. Appium vs. Cypress |
-| 2 | **Team Skillset & Language** | Dev-heavy (TS/Python/Java) vs. QA-heavy vs. No-code needs | Selenium/Playwright vs. Robot Framework/BDD |
-| 3 | **Execution Environment** | On-premise, Cloud Grids (BrowserStack/Sauce), CI/CD pipelines | Docker compatibility, native parallelization |
-| 4 | **Special UI Requirements** | Shadow DOM, Canvas/WebGL, multi-tab/multi-domain, iFrames | Playwright (multi-context) vs. Cypress (single-tab) |
-| 5 | **Maintenance & Budget** | Open-source ecosystem vs. Commercial AI-healing tools | Cost vs. engineering maintenance trade-offs |
+```
+Agent pipeline produces HITLState(pending=True, draft=...)
+              │
+              ▼
+   ┌──────────────────────────────────┐
+   │     HITL Review Panel (UI)       │
+   │                                  │
+   │  Draft shown in editable area    │
+   │  Tool names + format type shown  │
+   │                                  │
+   │  [✅ Approve]  [✏️ Edit]  [🗑️ Discard] │
+   └──────────┬───────────┬───────────┘
+              │           │
+     approved │           │ edited
+              ▼           ▼
+   Strip HITL footer   Replace draft
+   Return final text   with edited text
+              │           │
+              └─────┬─────┘
+                    ▼
+         Appended to chat history
+         HITLState cleared
+```
 
 ---
 
-## 6. Technology Stack (Recommended for POC)
+## 6. Weighted Matrix Evaluation Flow
+
+Triggered by typing `evaluate` or completing the discovery questionnaire.
+
+```
+User answers 8 discovery questions
+              │
+              ▼
+   _build_profile() → UserProfile
+              │
+              ▼
+   WeightProfile.from_preset()
+   (auto-selects cloud_migration preset if cloud=True)
+              │
+              ▼
+   ScoringEngine.evaluate(profile)
+   ├── filter_by_architecture()     → candidate frameworks
+   ├── weights.adjust(profile)      → dynamic weight tuning
+   ├── _score_framework() × N       → CriteriaScores per framework
+   │   ├── score_language_compatibility()
+   │   ├── score_api_validation()
+   │   ├── score_performance_load()
+   │   ├── score_cicd_integration()
+   │   ├── score_maintainability()
+   │   ├── score_cloud_readiness()
+   │   ├── score_license_cost()
+   │   └── [C8–C10 if cloud_migration]
+   ├── calculate_penalties()
+   ├── calculate_bonuses()
+   └── rank + derive pros/cons
+              │
+              ▼
+   DecisionMatrix → formatted markdown report → chat
+```
+
+---
+
+## 7. Directory Structure
+
+```
+Automation_framework_migration/
+├── data/
+│   ├── frameworks/          # 17 YAML framework profiles
+│   ├── samples/             # sample input/output JSON
+│   └── knowledge_graph.json # persistent graph store
+├── docs/
+│   ├── HLD.md               # this document
+│   ├── LLD_scoring_engine.md
+│   ├── evaluation_metrics.md
+│   └── LOGGING_GUIDE.md
+├── logs/
+│   └── advisor.log          # rotating log (5MB × 3)
+├── src/
+│   ├── agents/              # 4-agent pipeline
+│   │   ├── decision_agent.py
+│   │   ├── tool_selection_agent.py
+│   │   ├── evaluation_agent.py
+│   │   ├── format_agent.py
+│   │   └── orchestrator.py
+│   ├── graph/               # knowledge graph + GraphRAG
+│   │   ├── knowledge_graph.py
+│   │   ├── graph_store.py
+│   │   ├── entity_extractor.py
+│   │   └── graphrag_engine.py
+│   ├── knowledge_base/      # YAML loader + schema
+│   │   ├── loader.py
+│   │   └── schema.py
+│   ├── scoring/             # weighted matrix evaluation
+│   │   ├── engine.py
+│   │   ├── criteria.py
+│   │   ├── weights.py
+│   │   ├── penalties.py
+│   │   └── models.py
+│   ├── tools/               # tool implementations
+│   │   └── executor.py
+│   ├── llm/                 # LLM clients
+│   │   ├── ollama_client.py
+│   │   └── advisor_llm.py
+│   ├── models.py            # UserProfile, enums
+│   └── logging_config.py
+├── streamlit_app.py         # Streamlit UI entry point
+└── requirements.txt
+```
+
+---
+
+## 8. Technology Stack
 
 | Layer | Technology | Rationale |
 |-------|-----------|-----------|
-| **Core Language** | Python 3.11+ | Aligns with existing team expertise |
-| **LLM Integration** | LangChain / LlamaIndex | Orchestration of LLM calls, RAG pipeline |
-| **LLM Provider** | OpenAI GPT-4 / Claude / Bedrock | Conversational discovery + analysis |
-| **Knowledge Store** | JSON/YAML flat files (POC) → Vector DB (scale) | Simplicity for POC, embeddings for scale |
-| **API Layer** | FastAPI | Lightweight, async, Python-native |
-| **Frontend (optional)** | Streamlit / Gradio | Rapid UI prototyping for POC demo |
-| **Template Engine** | Jinja2 + Cookiecutter | Boilerplate project generation |
-| **CI/CD Templates** | GitHub Actions / Jenkins YAML | Pre-built pipeline configs |
-| **Containerization** | Docker | Reproducible environments |
-
-
----
-
-## 7. Dummy Input / Output Specification
-
-### 7.1 Sample Input (Discovery Profile JSON)
-
-```json
-{
-  "project_name": "E-Commerce Platform Migration",
-  "application_architecture": {
-    "type": "Web SPA",
-    "frontend_framework": "React",
-    "backend": "Python/FastAPI + Microservices",
-    "special_ui": ["Shadow DOM", "iFrames (payment gateway)"]
-  },
-  "team_profile": {
-    "size": 8,
-    "primary_language": "Python",
-    "secondary_languages": ["JavaScript", "TypeScript"],
-    "automation_experience": "intermediate",
-    "current_framework": "Selenium + Pytest"
-  },
-  "execution_environment": {
-    "ci_cd": "Jenkins",
-    "containerized": true,
-    "cloud_grid": "None (on-premise)",
-    "parallel_execution_needed": true
-  },
-  "legacy_inventory": {
-    "total_test_scripts": 342,
-    "ui_tests": 180,
-    "api_tests": 120,
-    "integration_tests": 42,
-    "frameworks_used": ["Selenium WebDriver", "Requests", "Pytest"],
-    "avg_execution_time_mins": 45
-  },
-  "constraints": {
-    "budget": "open-source preferred",
-    "timeline_weeks": 12,
-    "must_support": ["cross-browser", "API testing", "parallel execution"],
-    "nice_to_have": ["visual regression", "mobile web"]
-  }
-}
-```
-
-### 7.2 Sample Output – Decision Matrix
-
-```json
-{
-  "recommendation_date": "2026-07-30",
-  "top_recommendations": [
-    {
-      "rank": 1,
-      "framework": "Playwright",
-      "overall_score": 92,
-      "scores": {
-        "python_pytest_compatibility": 95,
-        "api_backend_validation": 85,
-        "performance_load_testing": 80,
-        "cicd_integration": 98,
-        "maintainability": 93,
-        "cloud_native_readiness": 90,
-        "license_cost": 100
-      },
-      "pros": [
-        "Native Python support with pytest-playwright",
-        "Excellent Shadow DOM and iFrame handling",
-        "Built-in parallelization and auto-wait",
-        "Docker-ready with pre-built images",
-        "Multi-browser support (Chromium, Firefox, WebKit)"
-      ],
-      "cons": [
-        "Newer ecosystem – fewer community plugins than Selenium",
-        "No native mobile app testing (web-only)"
-      ]
-    },
-    {
-      "rank": 2,
-      "framework": "WebdriverIO",
-      "overall_score": 78,
-      "scores": {
-        "python_pytest_compatibility": 40,
-        "api_backend_validation": 75,
-        "performance_load_testing": 70,
-        "cicd_integration": 90,
-        "maintainability": 85,
-        "cloud_native_readiness": 85,
-        "license_cost": 100
-      },
-      "pros": ["Mature plugin ecosystem", "Good cloud grid support"],
-      "cons": ["JavaScript/TypeScript only – team ramp-up needed"]
-    },
-    {
-      "rank": 3,
-      "framework": "Cypress",
-      "overall_score": 65,
-      "scores": {
-        "python_pytest_compatibility": 10,
-        "api_backend_validation": 70,
-        "performance_load_testing": 50,
-        "cicd_integration": 85,
-        "maintainability": 80,
-        "cloud_native_readiness": 75,
-        "license_cost": 80
-      },
-      "pros": ["Excellent developer experience", "Fast feedback loop"],
-      "cons": ["No Python support", "Single-tab limitation", "No iFrame cross-origin"]
-    }
-  ]
-}
-```
-
-
-### 7.3 Sample Output – Migration Roadmap
-
-```json
-{
-  "migration_plan": {
-    "target_framework": "Playwright",
-    "total_scripts_to_migrate": 342,
-    "estimated_effort_weeks": 10,
-    "phases": [
-      {
-        "phase": 1,
-        "name": "Foundation & Infrastructure",
-        "duration_weeks": 2,
-        "tasks": [
-          "Set up Playwright project with pytest-playwright",
-          "Configure CI/CD pipeline (Jenkins + Docker)",
-          "Establish page-object model structure",
-          "Create shared utilities and fixtures"
-        ]
-      },
-      {
-        "phase": 2,
-        "name": "API Test Migration",
-        "duration_weeks": 2,
-        "scripts_count": 120,
-        "tasks": [
-          "Migrate Requests-based API tests to Playwright API context",
-          "Validate response schemas and data contracts",
-          "Set up parallel execution for API suite"
-        ]
-      },
-      {
-        "phase": 3,
-        "name": "UI Test Migration (Core Flows)",
-        "duration_weeks": 4,
-        "scripts_count": 180,
-        "tasks": [
-          "Migrate critical path UI tests (login, checkout, search)",
-          "Handle Shadow DOM and iFrame payment components",
-          "Implement visual regression baseline",
-          "Cross-browser validation (Chromium, Firefox, WebKit)"
-        ]
-      },
-      {
-        "phase": 4,
-        "name": "Integration Tests & Validation",
-        "duration_weeks": 2,
-        "scripts_count": 42,
-        "tasks": [
-          "Migrate integration/E2E flows",
-          "Run coverage gap analysis (target: 100% parity)",
-          "Performance benchmarking vs. legacy suite",
-          "Decommission legacy Selenium scripts"
-        ]
-      }
-    ]
-  }
-}
-```
-
-### 7.4 Sample Output – Coverage Gap Report
-
-```json
-{
-  "coverage_analysis": {
-    "legacy_total_tests": 342,
-    "migrated_tests": 338,
-    "coverage_parity_percentage": 98.8,
-    "gaps": [
-      {
-        "test_id": "TC-UI-156",
-        "description": "WebGL canvas interaction test",
-        "reason": "Playwright has limited canvas pixel validation",
-        "mitigation": "Use visual comparison tool (Percy/Applitools)"
-      },
-      {
-        "test_id": "TC-UI-201",
-        "description": "Native file download verification (OS dialog)",
-        "reason": "Requires OS-level automation beyond browser scope",
-        "mitigation": "Use Playwright download event listener + file system check"
-      },
-      {
-        "test_id": "TC-INT-38",
-        "description": "Legacy SOAP service integration",
-        "reason": "No direct SOAP support in Playwright",
-        "mitigation": "Keep as standalone pytest + zeep test, integrate via shared reporting"
-      },
-      {
-        "test_id": "TC-PERF-12",
-        "description": "Load test with 500 concurrent users",
-        "reason": "Playwright not designed for load testing",
-        "mitigation": "Retain K6 for load tests, orchestrate via same CI pipeline"
-      }
-    ],
-    "new_coverage_opportunities": [
-      "Accessibility testing via @axe-core/playwright",
-      "Network mocking for offline/degraded scenarios",
-      "Multi-browser parallel execution (was single-browser before)"
-    ]
-  }
-}
-```
+| Language | Python 3.11+ | Team expertise, rich ML ecosystem |
+| UI | Streamlit | Rapid interactive prototyping |
+| LLM inference | Ollama (local) | No API cost, privacy, offline capable |
+| LLM models | llama3:latest, mistral:latest | Available locally; mistral faster on CPU |
+| HTTP client | httpx | Async-capable, timeout control |
+| Data validation | Pydantic v2 | Type-safe models throughout |
+| Knowledge graph | Custom (dict + JSON) | Lightweight, no external DB dependency |
+| YAML parsing | PyYAML | Framework profile loading |
+| Logging | Python logging + RotatingFileHandler | Structured logs, 5MB × 3 backups |
 
 ---
 
-## 8. Knowledge Base Dataset Structure
-
-### 8.1 Framework Capabilities Schema
-
-```yaml
-framework_name: "Playwright"
-vendor: "Microsoft"
-license: "Apache-2.0"
-languages_supported: ["Python", "TypeScript", "JavaScript", "Java", "C#"]
-architecture_fit:
-  web_spa: true
-  web_mpa: true
-  native_mobile: false
-  desktop: false
-  api_testing: true
-capabilities:
-  shadow_dom: true
-  iframe_cross_origin: true
-  multi_tab: true
-  multi_domain: true
-  canvas_webgl: "limited"
-  file_upload_download: true
-  network_interception: true
-  visual_regression: "plugin"
-  parallel_execution: "native"
-  auto_wait: true
-cicd_integration:
-  docker_support: true
-  github_actions: true
-  jenkins: true
-  gitlab_ci: true
-  azure_devops: true
-cloud_grids:
-  browserstack: true
-  sauce_labs: true
-  lambda_test: true
-limitations:
-  - "No native mobile app testing"
-  - "Canvas/WebGL pixel-level validation limited"
-  - "Relatively newer community compared to Selenium"
-  - "No built-in load/performance testing"
-performance:
-  avg_test_execution_speed: "fast"
-  resource_footprint: "medium"
-  startup_time_ms: 500
-maintainability:
-  page_object_support: true
-  component_testing: true
-  code_generation: true
-  test_recorder: true
-```
-
-
-### 8.2 Frameworks Included in Knowledge Base
-
-| Framework | Type | Languages | Best For |
-|-----------|------|-----------|----------|
-| Playwright | Web E2E | Python, TS, JS, Java, C# | Modern web apps, SPAs |
-| Cypress | Web E2E | JavaScript, TypeScript | Developer-centric fast feedback |
-| Selenium WebDriver | Web E2E | Python, Java, JS, C#, Ruby | Legacy migration, broad browser support |
-| WebdriverIO | Web E2E | JavaScript, TypeScript | Hybrid web/mobile |
-| Puppeteer | Web E2E | JavaScript, TypeScript | Chrome-specific automation |
-| Robot Framework | Multi | Python (keyword-driven) | QA teams, BDD-style |
-| TestCafe | Web E2E | JavaScript, TypeScript | No WebDriver dependency |
-| Appium | Mobile | Python, Java, JS, Ruby, C# | Native/hybrid mobile |
-| Detox | Mobile | JavaScript | React Native apps |
-| Espresso | Mobile | Java, Kotlin | Android native |
-| XCUITest | Mobile | Swift, Objective-C | iOS native |
-| K6 | Performance | JavaScript | Load & performance testing |
-| Locust | Performance | Python | Python-native load testing |
-| Karate | API + E2E | Java (DSL) | API testing + some UI |
-| REST Assured | API | Java | Java-based API validation |
-| Pytest + Requests | API | Python | Python API testing |
-
----
-
-## 9. High-Level Module Interaction Sequence
-
-```
-User                    Discovery Module      Scoring Engine       Knowledge Base
- │                           │                     │                    │
- │─── Start Session ────────▶│                     │                    │
- │                           │                     │                    │
- │◀── Question 1 (Arch) ────│                     │                    │
- │─── Answer ───────────────▶│                     │                    │
- │◀── Question 2 (Team) ────│                     │                    │
- │─── Answer ───────────────▶│                     │                    │
- │◀── Question 3 (Env) ─────│                     │                    │
- │─── Answer ───────────────▶│                     │                    │
- │◀── Question 4 (UI) ──────│                     │                    │
- │─── Answer ───────────────▶│                     │                    │
- │◀── Question 5 (Budget) ──│                     │                    │
- │─── Answer ───────────────▶│                     │                    │
- │                           │                     │                    │
- │                           │── Profile JSON ────▶│                    │
- │                           │                     │── Query ──────────▶│
- │                           │                     │◀── Framework Data ─│
- │                           │                     │                    │
- │                           │◀── Scored Matrix ──│                    │
- │◀── Decision Matrix ──────│                     │                    │
- │◀── Migration Roadmap ────│                     │                    │
- │◀── Coverage Gap Report ──│                     │                    │
- │                           │                     │                    │
-```
-
----
-
-## 10. Deployment Architecture (POC)
-
-```
-┌─────────────────────────────────────────────────┐
-│              Docker Compose Stack                 │
-│                                                  │
-│  ┌──────────────┐    ┌────────────────────────┐ │
-│  │  Streamlit   │    │  FastAPI Backend        │ │
-│  │  Frontend    │───▶│  (Advisor Agent)        │ │
-│  │  Port: 8501  │    │  Port: 8000            │ │
-│  └──────────────┘    └───────────┬────────────┘ │
-│                                  │               │
-│                      ┌───────────▼────────────┐ │
-│                      │  Knowledge Base (JSON)  │ │
-│                      │  /data/frameworks/      │ │
-│                      └────────────────────────┘ │
-│                                                  │
-│                      ┌────────────────────────┐ │
-│                      │  LLM API (External)    │ │
-│                      │  OpenAI / Bedrock      │ │
-│                      └────────────────────────┘ │
-└─────────────────────────────────────────────────┘
-```
-
----
-
-## 11. Key Design Decisions
+## 9. Key Design Decisions
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| LLM-driven discovery vs. static forms | LLM conversational | Adaptive probing catches edge cases |
-| Flat-file KB vs. Vector DB | Flat files (POC) | Simpler for 15-20 frameworks; Vector DB in v2 |
-| Scoring weights | Configurable per-user | Teams have different priorities |
-| Template generation approach | Cookiecutter + Jinja2 | Industry-standard, extensible |
-| Single agent vs. multi-agent | Single agent (POC) | Reduce complexity; multi-agent in v2 |
+| Local LLM vs cloud API | Ollama (local) | No cost, no data privacy concerns, works offline |
+| Tool support detection | Probe at startup | `llama3:latest` returns 400 for tools; probe sets `supports_tools` flag once |
+| Graph context size | Capped at 3000 chars | Prevents 31KB prompts that cause 180s timeouts on CPU |
+| Token min length | 5 chars | Stops stop-words (`test`, `for`, `are`) matching hundreds of entities |
+| HITL placement | After format agent | Human reviews formatted output, not raw LLM text |
+| Scoring + agents | Independent paths | Evaluation uses deterministic scoring; agents use LLM synthesis |
+| Weighted matrix trigger | Explicit (`evaluate`) | Prevents accidental re-scoring on every chat message |
 
 ---
 
-## 12. Assumptions & Constraints
+## 10. Deployment
 
-**Assumptions:**
-- Users can provide or extract legacy test metadata (script count, libraries, structure)
-- LLM API access is available (OpenAI/Bedrock/Claude)
-- Teams have basic CI/CD infrastructure already in place
+```
+┌─────────────────────────────────────────────┐
+│              Local Machine                  │
+│                                             │
+│  ┌─────────────────┐   ┌─────────────────┐  │
+│  │  Streamlit UI   │   │  Ollama Server  │  │
+│  │  Port: 8501     │──▶│  Port: 11434    │  │
+│  └─────────────────┘   │  llama3:latest  │  │
+│                        │  mistral:latest │  │
+│                        └─────────────────┘  │
+│                                             │
+│  ┌─────────────────────────────────────┐    │
+│  │  data/                              │    │
+│  │  ├── frameworks/*.yaml  (17 files)  │    │
+│  │  └── knowledge_graph.json           │    │
+│  └─────────────────────────────────────┘    │
+└─────────────────────────────────────────────┘
+```
 
-**Constraints:**
-- POC scope limited to web and API automation frameworks
-- Mobile and desktop frameworks included in KB but not in boilerplate generator (v1)
-- Load testing recommendations only (no migration of perf scripts)
-- Knowledge Base manually curated for POC; automated updates in future phases
+**Start:**
+```bash
+ollama serve                        # ensure Ollama is running
+streamlit run streamlit_app.py      # opens http://localhost:8501
+```
 
 ---
 
-## 13. Success Metrics
-
-| Metric | Target |
-|--------|--------|
-| Framework recommendation accuracy | Validated by 3+ QA leads |
-| Coverage gap detection | Identifies ≥95% of known gaps |
-| Migration roadmap relevance | Effort estimates within ±20% |
-| Boilerplate usability | Runs green on first `pytest` execution |
-| End-to-end advisory session time | < 15 minutes |
-
----
-
-## 14. Risks & Mitigations
+## 11. Risks & Mitigations
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| LLM hallucination on framework capabilities | Wrong recommendation | Ground all claims via Knowledge Base lookup |
-| Outdated framework data | Stale advice | Version-dated KB entries + periodic refresh |
-| Over-reliance on weights | Biased scoring | Allow user to adjust weights; show transparency |
-| Complex legacy scripts not parseable | Incomplete migration plan | Manual review flag + human-in-the-loop step |
+| LLM timeout on CPU (llama3 8B) | Fallback to direct respond | 180s timeout; graph context capped at 3000 chars; `max_tokens=256` |
+| Tool calling not supported by model | 400 error | Startup probe sets `supports_tools`; tools silently dropped if unsupported |
+| Knowledge graph grows unbounded | Slow fuzzy matching | Entity cap (20) per query; min token length 5 |
+| LLM hallucination | Wrong recommendation | All responses grounded via GraphRAG; HITL review before publishing |
+| Stale framework data | Outdated advice | YAML profiles version-dated; graph enriched from user interactions |
 
 ---
 
-## 15. Future Enhancements (Beyond POC)
+## 12. Future Enhancements
 
-- **Multi-agent architecture** – Specialized agents for discovery, scoring, migration
-- **RAG pipeline** – Embed framework docs for real-time Q&A
-- **Plugin marketplace** – Community-contributed framework profiles
-- **Visual regression integration** – Percy / Applitools comparison
-- **Automated script conversion** – LLM-based code translation (Selenium → Playwright)
-- **CI/CD pipeline analyzer** – Scan existing pipelines and suggest optimizations
-- **Team training recommender** – Identify skill gaps and suggest learning paths
+- **Groq cloud LLM** — faster inference fallback when Ollama is slow
+- **Vector embeddings** — semantic search over framework docs (replace fuzzy matching)
+- **Automated script conversion** — LLM-based Selenium → Playwright code translation
+- **CI/CD pipeline analyser** — scan existing pipelines and suggest optimisations
+- **Multi-account cloud evaluation** — Terraform/Ansible scoring for enterprise setups
+- **Knowledge graph visualisation** — interactive entity-relationship explorer
 
 ---
 
-*End of HLD Document*
+*End of HLD Document — Version 2.0*
