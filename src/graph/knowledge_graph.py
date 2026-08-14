@@ -19,6 +19,7 @@ class EntityType(str, Enum):
     """
 
     FRAMEWORK = "Framework"
+    VERSION = "Version"
     CAPABILITY = "Capability"
     LANGUAGE = "Language"
     CI_CD_TOOL = "CI_CD_Tool"
@@ -36,6 +37,11 @@ class RelationshipType(str, Enum):
 
     SUPPORTS_LANGUAGE = "SUPPORTS_LANGUAGE"
     HAS_CAPABILITY = "HAS_CAPABILITY"
+    HAS_VERSION = "HAS_VERSION"
+    ADDED_IN = "ADDED_IN"
+    DEPRECATED_IN = "DEPRECATED_IN"
+    REMOVED_IN = "REMOVED_IN"
+    BREAKING_CHANGE_IN = "BREAKING_CHANGE_IN"
     INTEGRATES_WITH = "INTEGRATES_WITH"
     MIGRATES_TO = "MIGRATES_TO"
     COMPATIBLE_WITH = "COMPATIBLE_WITH"

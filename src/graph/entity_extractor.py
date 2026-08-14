@@ -133,6 +133,88 @@ class EntityExtractor:
                 confidence=_YAML_CONFIDENCE, source="yaml",
             ))
 
+        # ── Version entities ──────────────────────────────────────────
+        for ver in fw_data.versions:
+            ver_name = f"{fw_data.framework_name} {ver.version}"
+            ver_id = _entity_id(ver_name, EntityType.VERSION)
+            entities.append(Entity(
+                id=ver_id, name=ver_name, entity_type=EntityType.VERSION,
+                properties={
+                    "version": ver.version,
+                    "release_date": ver.release_date,
+                    "eol_date": ver.eol_date,
+                    "is_lts": ver.is_lts,
+                    "min_runtime": ver.min_runtime,
+                    "notable_features": ver.notable_features,
+                    "known_limitations": ver.known_limitations,
+                },
+                source="yaml",
+            ))
+            relationships.append(Relationship(
+                source_id=fw_id, target_id=ver_id,
+                relationship_type=RelationshipType.HAS_VERSION,
+                confidence=_YAML_CONFIDENCE, source="yaml",
+            ))
+
+            # Capabilities added in this version
+            for cap in ver.capabilities_added:
+                cap_label = cap.name.replace("_", " ").title()
+                cap_id = _entity_id(cap_label, EntityType.CAPABILITY)
+                entities.append(Entity(
+                    id=cap_id, name=cap_label, entity_type=EntityType.CAPABILITY,
+                    properties={"status": cap.status, "description": cap.description},
+                    source="yaml",
+                ))
+                relationships.append(Relationship(
+                    source_id=cap_id, target_id=ver_id,
+                    relationship_type=RelationshipType.ADDED_IN,
+                    confidence=_YAML_CONFIDENCE, source="yaml",
+                    properties={"description": cap.description},
+                ))
+
+            # Capabilities deprecated/removed in this version
+            for cap in ver.capabilities_deprecated:
+                cap_label = cap.name.replace("_", " ").title()
+                cap_id = _entity_id(cap_label, EntityType.CAPABILITY)
+                entities.append(Entity(
+                    id=cap_id, name=cap_label, entity_type=EntityType.CAPABILITY,
+                    properties={"status": cap.status, "replacement": cap.replacement},
+                    source="yaml",
+                ))
+                rel_type = (
+                    RelationshipType.REMOVED_IN if cap.status == "removed"
+                    else RelationshipType.DEPRECATED_IN
+                )
+                relationships.append(Relationship(
+                    source_id=cap_id, target_id=ver_id,
+                    relationship_type=rel_type,
+                    confidence=_YAML_CONFIDENCE, source="yaml",
+                    properties={"replacement": cap.replacement, "description": cap.description},
+                ))
+
+            # Breaking changes in this version
+            for bc in ver.breaking_changes:
+                bc_label = bc.description[:60]
+                bc_id = _entity_id(bc_label, EntityType.LIMITATION)
+                entities.append(Entity(
+                    id=bc_id, name=bc.description, entity_type=EntityType.LIMITATION,
+                    properties={
+                        "migration_effort": bc.migration_effort,
+                        "affected_apis": bc.affected_apis,
+                        "workaround": bc.workaround,
+                    },
+                    source="yaml",
+                ))
+                relationships.append(Relationship(
+                    source_id=bc_id, target_id=ver_id,
+                    relationship_type=RelationshipType.BREAKING_CHANGE_IN,
+                    confidence=_YAML_CONFIDENCE, source="yaml",
+                    properties={
+                        "migration_effort": bc.migration_effort,
+                        "affected_apis": bc.affected_apis,
+                    },
+                ))
+
         logger.debug(
             "EntityExtractor.extract_from_yaml: %s -> entities=%d relationships=%d",
             fw_data.framework_name, len(entities), len(relationships),

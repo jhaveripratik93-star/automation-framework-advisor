@@ -127,3 +127,207 @@ For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/St
 
 2026-08-06 10:41:15 [WARNING ] src.graph.entity_extractor: EntityExtractor.extract_from_message: LLM extraction failed — HTTPStatusError: Client error '400 Bad Request' for url 'https://api.groq.com/openai/v1/chat/completions'
 For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+2026-08-11 10:57:37 [INFO    ] src.knowledge_base.loader: Loaded framework: Ansible
+2026-08-11 10:57:37 [INFO    ] src.knowledge_base.loader: Loaded framework: Appium
+2026-08-11 10:57:37 [INFO    ] src.knowledge_base.loader: Loaded framework: Chef
+2026-08-11 10:57:37 [INFO    ] src.knowledge_base.loader: Loaded framework: AWS CloudFormation
+2026-08-11 10:57:37 [INFO    ] src.knowledge_base.loader: Loaded framework: Cypress
+2026-08-11 10:57:37 [INFO    ] src.knowledge_base.loader: Loaded framework: K6
+2026-08-11 10:57:37 [INFO    ] src.knowledge_base.loader: Loaded framework: Karate
+2026-08-11 10:57:37 [INFO    ] src.knowledge_base.loader: Loaded framework: Locust
+2026-08-11 10:57:37 [INFO    ] src.knowledge_base.loader: Loaded framework: Playwright
+2026-08-11 10:57:37 [INFO    ] src.knowledge_base.loader: Loaded framework: Pulumi
+2026-08-11 10:57:37 [INFO    ] src.knowledge_base.loader: Loaded framework: Puppeteer
+2026-08-11 10:57:37 [INFO    ] src.knowledge_base.loader: Loaded framework: REST Assured
+2026-08-11 10:57:37 [INFO    ] src.knowledge_base.loader: Loaded framework: Robot Framework
+2026-08-11 10:57:37 [INFO    ] src.knowledge_base.loader: Loaded framework: Selenium WebDriver
+2026-08-11 10:57:37 [INFO    ] src.knowledge_base.loader: Loaded framework: Terraform
+2026-08-11 10:57:37 [INFO    ] src.knowledge_base.loader: Loaded framework: TestCafe
+2026-08-11 10:57:37 [INFO    ] src.knowledge_base.loader: Loaded framework: WebdriverIO
+2026-08-11 10:57:37 [INFO    ] src.knowledge_base.loader: Knowledge base loaded: 17 frameworks
+2026-08-11 10:57:37 [INFO    ] __main__: Groq: model=llama-3.1-70b-versatile ready
+2026-08-11 10:57:37 [DEBUG   ] src.graph.graph_store: GraphStore initialized: path=data\knowledge_graph.json
+2026-08-11 10:57:38 [DEBUG   ] src.graph.graph_store: GraphStore.load: loading from data\knowledge_graph.json
+2026-08-11 10:57:38 [INFO    ] src.graph.graph_store: GraphStore.load: loaded 319 entities, 614 relationships from data\knowledge_graph.json
+2026-08-11 10:57:38 [INFO    ] src.graph: Knowledge graph loaded from data/knowledge_graph.json
+2026-08-11 10:57:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine initialized: entities=319 relationships=614 max_hops=2
+2026-08-11 11:00:19 [DEBUG   ] src.graph.entity_extractor: EntityExtractor.extract_from_message: message_len=64 model=llama-3.1-70b-versatile
+2026-08-11 11:00:19 [INFO    ] src.agents.orchestrator: AgentOrchestrator.run: START query='"Is Selenium 4.0 compatible with tests using find_element_by_id?'
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine.retrieve_context: query_len=64 query='"Is Selenium 4.0 compatible with tests using find_element_by_id?'
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: tokens=['Selenium', 'compatible', 'tests', 'using', 'find_element_by_id']
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'smaller community than selenium/playwright' score=1.00
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'relatively newer community compared to selenium' score=1.00
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'selenium webdriver' score=1.00
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'selenium grid setup is complex for parallelization' score=1.00
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'appium → selenium webdriver' score=1.00
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'cypress → selenium webdriver' score=1.00
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'k6 → selenium webdriver' score=1.00
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'locust → selenium webdriver' score=1.00
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'playwright → selenium webdriver' score=1.00
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'pulumi → selenium webdriver' score=1.00
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'puppeteer → selenium webdriver' score=1.00
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'rest assured → selenium webdriver' score=1.00
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'selenium webdriver → testcafe' score=1.00
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'selenium webdriver → webdriverio' score=1.00
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='tests' -> 'flaky tests common due to device state' score=1.00
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='tests' -> 'no built-in auto-wait (flaky tests common)' score=1.00
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: total matched=16
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine.retrieve_context: matched entity_ids=['smaller-community-than-selenium-playwright-limitation', 'relatively-newer-community-compared-to-selenium-limitation', 'selenium-webdriver-framework', 'selenium-grid-setup-is-complex-for-parallelization-limitation', 'appium-selenium-webdriver-migration_path', 'cypress-selenium-webdriver-migration_path', 'k6-selenium-webdriver-migration_path', 'locust-selenium-webdriver-migration_path', 'playwright-selenium-webdriver-migration_path', 'pulumi-selenium-webdriver-migration_path', 'puppeteer-selenium-webdriver-migration_path', 'rest-assured-selenium-webdriver-migration_path', 'selenium-webdriver-testcafe-migration_path', 'selenium-webdriver-webdriverio-migration_path', 'flaky-tests-common-due-to-device-state-limitation', 'no-built-in-auto-wait-flaky-tests-common-limitation']
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine.retrieve_context: subgraph entities=158 relationships=397
+2026-08-11 11:00:19 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine.retrieve_context: formatted context_len=27670
+2026-08-11 11:00:19 [INFO    ] src.agents.decision_agent: DecisionAgent: "Is Selenium 4.0 compatible with tests using find_element_by → tool_call (heuristic: tool-signal keyword matched)
+2026-08-11 11:00:19 [INFO    ] src.agents.orchestrator: AgentOrchestrator: decision=tool_call (heuristic: tool-signal keyword matched)
+2026-08-11 11:00:19 [INFO    ] src.agents.tool_selection_agent: ToolSelectionAgent: selected 1 tool(s): ['analyze_version_compatibility']
+2026-08-11 11:00:19 [INFO    ] src.agents.orchestrator: AgentOrchestrator: round=1 selected 1 tool(s)
+2026-08-11 11:00:19 [INFO    ] src.tools.executor: ToolExecutor: 'analyze_version_compatibility' → 49 chars
+2026-08-11 11:00:19 [INFO    ] src.agents.orchestrator: AgentOrchestrator: tool='analyze_version_compatibility' result_len=49
+2026-08-11 11:00:20 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 400 — {"error":{"message":"The model `llama-3.1-70b-versatile` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.","type":"invalid_request_error","code":"model_decommissioned"}}
+
+2026-08-11 11:00:20 [WARNING ] src.agents.synthesis_agent: SynthesisAgent: LLM call failed (Client error '400 Bad Request' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400) — skipping extra round
+2026-08-11 11:00:20 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 400 — {"error":{"message":"The model `llama-3.1-70b-versatile` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.","type":"invalid_request_error","code":"model_decommissioned"}}
+
+2026-08-11 11:00:20 [INFO    ] src.agents.orchestrator: AgentOrchestrator: synthesis round=1 needs_more=False verdict_len=22
+2026-08-11 11:00:20 [WARNING ] src.graph.entity_extractor: EntityExtractor.extract_from_message: LLM extraction failed — HTTPStatusError: Client error '400 Bad Request' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+2026-08-11 11:00:20 [INFO    ] src.agents.evaluation_agent: EvaluationAgent: synthesising 1 tool result(s) for query='"Is Selenium 4.0 compatible with tests using find_element_by'
+2026-08-11 11:00:20 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 400 — {"error":{"message":"The model `llama-3.1-70b-versatile` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.","type":"invalid_request_error","code":"model_decommissioned"}}
+
+2026-08-11 11:00:20 [WARNING ] src.agents.evaluation_agent: EvaluationAgent: LLM call failed (Client error '400 Bad Request' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400) — returning raw tool output
+2026-08-11 11:00:20 [INFO    ] src.agents.evaluation_agent: EvaluationAgent: response_len=89
+2026-08-11 11:00:20 [INFO    ] src.agents.format_agent: FormatAgent: fmt_type=markdown output_len=89
+2026-08-11 11:00:20 [INFO    ] src.agents.orchestrator: AgentOrchestrator.run: DONE response_len=89
+2026-08-11 11:00:20 [DEBUG   ] src.graph.entity_extractor: EntityExtractor.extract_from_message: message_len=64 model=llama-3.1-70b-versatile
+2026-08-11 11:00:21 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 400 — {"error":{"message":"The model `llama-3.1-70b-versatile` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.","type":"invalid_request_error","code":"model_decommissioned"}}
+
+2026-08-11 11:00:21 [WARNING ] src.graph.entity_extractor: EntityExtractor.extract_from_message: LLM extraction failed — HTTPStatusError: Client error '400 Bad Request' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+2026-08-11 11:06:38 [DEBUG   ] src.graph.entity_extractor: EntityExtractor.extract_from_message: message_len=62 model=llama-3.1-70b-versatile
+2026-08-11 11:06:38 [INFO    ] src.agents.orchestrator: AgentOrchestrator.run: START query='Is Selenium 4.0 compatible with tests using find_element_by_id'
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine.retrieve_context: query_len=62 query='Is Selenium 4.0 compatible with tests using find_element_by_id'
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: tokens=['Selenium', 'compatible', 'tests', 'using', 'find_element_by_id']
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'smaller community than selenium/playwright' score=1.00
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'relatively newer community compared to selenium' score=1.00
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'selenium webdriver' score=1.00
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'selenium grid setup is complex for parallelization' score=1.00
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'appium → selenium webdriver' score=1.00
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'cypress → selenium webdriver' score=1.00
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'k6 → selenium webdriver' score=1.00
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'locust → selenium webdriver' score=1.00
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'playwright → selenium webdriver' score=1.00
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'pulumi → selenium webdriver' score=1.00
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'puppeteer → selenium webdriver' score=1.00
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'rest assured → selenium webdriver' score=1.00
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'selenium webdriver → testcafe' score=1.00
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'selenium webdriver → webdriverio' score=1.00
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='tests' -> 'flaky tests common due to device state' score=1.00
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='tests' -> 'no built-in auto-wait (flaky tests common)' score=1.00
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: total matched=16
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine.retrieve_context: matched entity_ids=['smaller-community-than-selenium-playwright-limitation', 'relatively-newer-community-compared-to-selenium-limitation', 'selenium-webdriver-framework', 'selenium-grid-setup-is-complex-for-parallelization-limitation', 'appium-selenium-webdriver-migration_path', 'cypress-selenium-webdriver-migration_path', 'k6-selenium-webdriver-migration_path', 'locust-selenium-webdriver-migration_path', 'playwright-selenium-webdriver-migration_path', 'pulumi-selenium-webdriver-migration_path', 'puppeteer-selenium-webdriver-migration_path', 'rest-assured-selenium-webdriver-migration_path', 'selenium-webdriver-testcafe-migration_path', 'selenium-webdriver-webdriverio-migration_path', 'flaky-tests-common-due-to-device-state-limitation', 'no-built-in-auto-wait-flaky-tests-common-limitation']
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine.retrieve_context: subgraph entities=158 relationships=397
+2026-08-11 11:06:38 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine.retrieve_context: formatted context_len=27670
+2026-08-11 11:06:38 [INFO    ] src.agents.decision_agent: DecisionAgent: Is Selenium 4.0 compatible with tests using find_element_by_ → tool_call (heuristic: tool-signal keyword matched)
+2026-08-11 11:06:38 [INFO    ] src.agents.orchestrator: AgentOrchestrator: decision=tool_call (heuristic: tool-signal keyword matched)
+2026-08-11 11:06:38 [INFO    ] src.agents.tool_selection_agent: ToolSelectionAgent: selected 1 tool(s): ['analyze_version_compatibility']
+2026-08-11 11:06:38 [INFO    ] src.agents.orchestrator: AgentOrchestrator: round=1 selected 1 tool(s)
+2026-08-11 11:06:38 [INFO    ] src.tools.executor: ToolExecutor: 'analyze_version_compatibility' → 49 chars
+2026-08-11 11:06:38 [INFO    ] src.agents.orchestrator: AgentOrchestrator: tool='analyze_version_compatibility' result_len=49
+2026-08-11 11:06:39 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 400 — {"error":{"message":"The model `llama-3.1-70b-versatile` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.","type":"invalid_request_error","code":"model_decommissioned"}}
+
+2026-08-11 11:06:39 [WARNING ] src.agents.synthesis_agent: SynthesisAgent: LLM call failed (Client error '400 Bad Request' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400) — skipping extra round
+2026-08-11 11:06:39 [INFO    ] src.agents.orchestrator: AgentOrchestrator: synthesis round=1 needs_more=False verdict_len=22
+2026-08-11 11:06:39 [INFO    ] src.agents.evaluation_agent: EvaluationAgent: synthesising 1 tool result(s) for query='Is Selenium 4.0 compatible with tests using find_element_by_'
+2026-08-11 11:06:39 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 400 — {"error":{"message":"The model `llama-3.1-70b-versatile` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.","type":"invalid_request_error","code":"model_decommissioned"}}
+
+2026-08-11 11:06:39 [WARNING ] src.graph.entity_extractor: EntityExtractor.extract_from_message: LLM extraction failed — HTTPStatusError: Client error '400 Bad Request' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+2026-08-11 11:06:40 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 400 — {"error":{"message":"The model `llama-3.1-70b-versatile` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.","type":"invalid_request_error","code":"model_decommissioned"}}
+
+2026-08-11 11:06:40 [WARNING ] src.agents.evaluation_agent: EvaluationAgent: LLM call failed (Client error '400 Bad Request' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400) — returning raw tool output
+2026-08-11 11:06:40 [INFO    ] src.agents.evaluation_agent: EvaluationAgent: response_len=89
+2026-08-11 11:06:40 [INFO    ] src.agents.format_agent: FormatAgent: fmt_type=markdown output_len=89
+2026-08-11 11:06:40 [INFO    ] src.agents.orchestrator: AgentOrchestrator.run: DONE response_len=89
+2026-08-11 11:06:40 [DEBUG   ] src.graph.entity_extractor: EntityExtractor.extract_from_message: message_len=62 model=llama-3.1-70b-versatile
+2026-08-11 11:06:40 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 400 — {"error":{"message":"The model `llama-3.1-70b-versatile` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.","type":"invalid_request_error","code":"model_decommissioned"}}
+
+2026-08-11 11:06:40 [WARNING ] src.graph.entity_extractor: EntityExtractor.extract_from_message: LLM extraction failed — HTTPStatusError: Client error '400 Bad Request' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+2026-08-11 11:07:08 [INFO    ] src.knowledge_base.loader: Loaded framework: Ansible
+2026-08-11 11:07:08 [INFO    ] src.knowledge_base.loader: Loaded framework: Appium
+2026-08-11 11:07:08 [INFO    ] src.knowledge_base.loader: Loaded framework: Chef
+2026-08-11 11:07:08 [INFO    ] src.knowledge_base.loader: Loaded framework: AWS CloudFormation
+2026-08-11 11:07:08 [INFO    ] src.knowledge_base.loader: Loaded framework: Cypress
+2026-08-11 11:07:08 [INFO    ] src.knowledge_base.loader: Loaded framework: K6
+2026-08-11 11:07:08 [INFO    ] src.knowledge_base.loader: Loaded framework: Karate
+2026-08-11 11:07:08 [INFO    ] src.knowledge_base.loader: Loaded framework: Locust
+2026-08-11 11:07:08 [INFO    ] src.knowledge_base.loader: Loaded framework: Playwright
+2026-08-11 11:07:08 [INFO    ] src.knowledge_base.loader: Loaded framework: Pulumi
+2026-08-11 11:07:08 [INFO    ] src.knowledge_base.loader: Loaded framework: Puppeteer
+2026-08-11 11:07:08 [INFO    ] src.knowledge_base.loader: Loaded framework: REST Assured
+2026-08-11 11:07:08 [INFO    ] src.knowledge_base.loader: Loaded framework: Robot Framework
+2026-08-11 11:07:08 [INFO    ] src.knowledge_base.loader: Loaded framework: Selenium WebDriver
+2026-08-11 11:07:08 [INFO    ] src.knowledge_base.loader: Loaded framework: Terraform
+2026-08-11 11:07:08 [INFO    ] src.knowledge_base.loader: Loaded framework: TestCafe
+2026-08-11 11:07:08 [INFO    ] src.knowledge_base.loader: Loaded framework: WebdriverIO
+2026-08-11 11:07:08 [INFO    ] src.knowledge_base.loader: Knowledge base loaded: 17 frameworks
+2026-08-11 11:07:08 [INFO    ] __main__: Groq: model=llama-3.1-70b-versatile ready
+2026-08-11 11:07:08 [DEBUG   ] src.graph.graph_store: GraphStore initialized: path=data\knowledge_graph.json
+2026-08-11 11:07:08 [DEBUG   ] src.graph.graph_store: GraphStore.load: loading from data\knowledge_graph.json
+2026-08-11 11:07:08 [INFO    ] src.graph.graph_store: GraphStore.load: loaded 319 entities, 614 relationships from data\knowledge_graph.json
+2026-08-11 11:07:08 [INFO    ] src.graph: Knowledge graph loaded from data/knowledge_graph.json
+2026-08-11 11:07:08 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine initialized: entities=319 relationships=614 max_hops=2
+2026-08-11 11:08:57 [DEBUG   ] src.graph.entity_extractor: EntityExtractor.extract_from_message: message_len=62 model=llama-3.1-70b-versatile
+2026-08-11 11:08:57 [INFO    ] src.agents.orchestrator: AgentOrchestrator.run: START query='Is Selenium 4.0 compatible with tests using find_element_by_id'
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine.retrieve_context: query_len=62 query='Is Selenium 4.0 compatible with tests using find_element_by_id'
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: tokens=['Selenium', 'compatible', 'tests', 'using', 'find_element_by_id']
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'smaller community than selenium/playwright' score=1.00
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'relatively newer community compared to selenium' score=1.00
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'selenium webdriver' score=1.00
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'selenium grid setup is complex for parallelization' score=1.00
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'appium → selenium webdriver' score=1.00
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'cypress → selenium webdriver' score=1.00
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'k6 → selenium webdriver' score=1.00
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'locust → selenium webdriver' score=1.00
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'playwright → selenium webdriver' score=1.00
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'pulumi → selenium webdriver' score=1.00
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'puppeteer → selenium webdriver' score=1.00
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'rest assured → selenium webdriver' score=1.00
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'selenium webdriver → testcafe' score=1.00
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='Selenium' -> 'selenium webdriver → webdriverio' score=1.00
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='tests' -> 'flaky tests common due to device state' score=1.00
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: fuzzy token='tests' -> 'no built-in auto-wait (flaky tests common)' score=1.00
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine._identify_entities: total matched=16
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine.retrieve_context: matched entity_ids=['smaller-community-than-selenium-playwright-limitation', 'relatively-newer-community-compared-to-selenium-limitation', 'selenium-webdriver-framework', 'selenium-grid-setup-is-complex-for-parallelization-limitation', 'appium-selenium-webdriver-migration_path', 'cypress-selenium-webdriver-migration_path', 'k6-selenium-webdriver-migration_path', 'locust-selenium-webdriver-migration_path', 'playwright-selenium-webdriver-migration_path', 'pulumi-selenium-webdriver-migration_path', 'puppeteer-selenium-webdriver-migration_path', 'rest-assured-selenium-webdriver-migration_path', 'selenium-webdriver-testcafe-migration_path', 'selenium-webdriver-webdriverio-migration_path', 'flaky-tests-common-due-to-device-state-limitation', 'no-built-in-auto-wait-flaky-tests-common-limitation']
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine.retrieve_context: subgraph entities=158 relationships=397
+2026-08-11 11:08:57 [DEBUG   ] src.graph.graphrag_engine: GraphRAGEngine.retrieve_context: formatted context_len=27670
+2026-08-11 11:08:57 [INFO    ] src.agents.decision_agent: DecisionAgent: Is Selenium 4.0 compatible with tests using find_element_by_ → tool_call (heuristic: tool-signal keyword matched)
+2026-08-11 11:08:57 [INFO    ] src.agents.orchestrator: AgentOrchestrator: decision=tool_call (heuristic: tool-signal keyword matched)
+2026-08-11 11:08:57 [INFO    ] src.agents.tool_selection_agent: ToolSelectionAgent: selected 1 tool(s): ['analyze_version_compatibility']
+2026-08-11 11:08:57 [INFO    ] src.agents.orchestrator: AgentOrchestrator: round=1 selected 1 tool(s)
+2026-08-11 11:08:57 [INFO    ] src.tools.executor: ToolExecutor: 'analyze_version_compatibility' → 948 chars
+2026-08-11 11:08:57 [INFO    ] src.agents.orchestrator: AgentOrchestrator: tool='analyze_version_compatibility' result_len=948
+2026-08-11 11:08:58 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 400 — {"error":{"message":"The model `llama-3.1-70b-versatile` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.","type":"invalid_request_error","code":"model_decommissioned"}}
+
+2026-08-11 11:08:58 [WARNING ] src.agents.synthesis_agent: SynthesisAgent: LLM call failed (Client error '400 Bad Request' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400) — skipping extra round
+2026-08-11 11:08:58 [INFO    ] src.agents.orchestrator: AgentOrchestrator: synthesis round=1 needs_more=False verdict_len=22
+2026-08-11 11:08:58 [INFO    ] src.agents.evaluation_agent: EvaluationAgent: synthesising 1 tool result(s) for query='Is Selenium 4.0 compatible with tests using find_element_by_'
+2026-08-11 11:08:58 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 400 — {"error":{"message":"The model `llama-3.1-70b-versatile` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.","type":"invalid_request_error","code":"model_decommissioned"}}
+
+2026-08-11 11:08:58 [WARNING ] src.graph.entity_extractor: EntityExtractor.extract_from_message: LLM extraction failed — HTTPStatusError: Client error '400 Bad Request' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+2026-08-11 11:08:59 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 400 — {"error":{"message":"The model `llama-3.1-70b-versatile` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.","type":"invalid_request_error","code":"model_decommissioned"}}
+
+2026-08-11 11:08:59 [WARNING ] src.agents.evaluation_agent: EvaluationAgent: LLM call failed (Client error '400 Bad Request' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400) — returning raw tool output
+2026-08-11 11:08:59 [INFO    ] src.agents.evaluation_agent: EvaluationAgent: response_len=988
+2026-08-11 11:08:59 [INFO    ] src.agents.format_agent: FormatAgent: fmt_type=markdown output_len=988
+2026-08-11 11:08:59 [INFO    ] src.agents.orchestrator: AgentOrchestrator.run: DONE response_len=988
+2026-08-11 11:08:59 [DEBUG   ] src.graph.entity_extractor: EntityExtractor.extract_from_message: message_len=62 model=llama-3.1-70b-versatile
+2026-08-11 11:08:59 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 400 — {"error":{"message":"The model `llama-3.1-70b-versatile` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead.","type":"invalid_request_error","code":"model_decommissioned"}}
+
+2026-08-11 11:08:59 [WARNING ] src.graph.entity_extractor: EntityExtractor.extract_from_message: LLM extraction failed — HTTPStatusError: Client error '400 Bad Request' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400

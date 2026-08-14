@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 
 # Mapping of intent keywords → tool name (order matters — first match wins)
 _INTENT_MAP: list[tuple[list[str], str]] = [
+    (["version", "upgrade", "compatible", "compatibility", "breaking change",
+      "deprecated", "deprecation", "v3", "v4", "v2", "1.40", "1.45", "1.30",
+      "api removed", "still supported"], "analyze_version_compatibility"),
     (["compare", "vs", "versus", "difference between"], "run_framework_comparison"),
     (["migrate", "migration", "path from", "move from"], "find_migration_paths"),
     (["coverage", "test case", "analyze test"], "analyze_test_case_coverage"),
@@ -134,6 +137,30 @@ class ToolSelectionAgent:
                 tool_name="analyze_test_case_coverage",
                 arguments={"test_cases": [], "frameworks": [f.title() for f in mentioned] or None},
                 reasoning="coverage query",
+            ))
+
+        elif matched_tool == "analyze_version_compatibility":
+            # Extract version numbers from the message
+            version_pattern = re.findall(r"\b(\d+\.[\d.]+)\b", msg_lower)
+            fw_name = mentioned[0].title() if mentioned else ""
+            target_ver = ""
+            current_ver = ""
+            if len(version_pattern) >= 2:
+                current_ver = version_pattern[0]
+                target_ver = version_pattern[1]
+            elif len(version_pattern) == 1:
+                target_ver = version_pattern[0]
+            # Extract API patterns if mentioned (e.g. find_element_by_id)
+            api_patterns = re.findall(r"\b([a-z_]+(?:_[a-z_]+){2,})\b", msg_lower)
+            tool_calls.append(ToolCall(
+                tool_name="analyze_version_compatibility",
+                arguments={
+                    "framework_name": fw_name,
+                    "target_version": target_ver,
+                    "current_version": current_ver,
+                    "test_apis": api_patterns or None,
+                },
+                reasoning=f"version compatibility: {fw_name} {current_ver} → {target_ver}",
             ))
 
         elif matched_tool == "search_knowledge_graph":

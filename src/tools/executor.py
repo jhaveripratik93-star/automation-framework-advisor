@@ -46,6 +46,7 @@ class ToolExecutor:
             "find_migration_paths": self._find_migration_paths,
             "analyze_test_case_coverage": self._analyze_test_case_coverage,
             "analyze_uploaded_content": self._analyze_uploaded_content,
+            "analyze_version_compatibility": self._analyze_version_compatibility,
         }
 
     def execute(self, tool_name: str, arguments: dict[str, Any]) -> str:
@@ -270,6 +271,25 @@ class ToolExecutor:
             lines.append(f"| {name} | {count} | {total} | {pct:.0f}% |")
         return "\n".join(lines)
 
+    # ── Helpers ─────────────────────────────────────────────────────────
+
+    def _resolve_framework(self, name: str):
+        """Resolve a framework name with fuzzy matching (handles 'Selenium' → 'Selenium WebDriver')."""
+        # Exact match first
+        fw = self.kb.get(name.lower())
+        if fw:
+            return fw
+        # Partial match: check if the input is a substring of any framework name
+        name_lower = name.lower()
+        for candidate in self.kb.list_all():
+            if name_lower in candidate.framework_name.lower():
+                return candidate
+        # Reverse: check if any framework name is a substring of the input
+        for candidate in self.kb.list_all():
+            if candidate.framework_name.lower() in name_lower:
+                return candidate
+        return None
+
     def _analyze_uploaded_content(self, search_term: str, document_type: str = "all") -> str:
         results = []
         term = search_term.lower()
@@ -284,3 +304,181 @@ class ToolExecutor:
                 results.append(f"\n**Case Study ({len(matches)} matches):**")
                 results.extend(matches)
         return "\n".join(results) if results else f"No matches found for '{search_term}'."
+
+    def _analyze_version_compatibility(
+        self,
+        framework_name: str,
+        target_version: str = "",
+        current_version: str = "",
+        test_apis: list[str] | None = None,
+    ) -> str:
+        """Analyze version-specific compatibility for test cases.
+
+        Args:
+            framework_name: Framework to analyze (e.g. "Playwright", "Selenium")
+            target_version: Version to migrate TO (e.g. "4.0"). If empty, uses latest.
+            current_version: Version migrating FROM (e.g. "3.141"). If empty, shows all.
+            test_apis: List of API patterns used in test cases to check against breaking changes.
+        """
+        fw = self._resolve_framework(framework_name)
+        if not fw:
+            available = ", ".join(self.kb.list_names())
+            return f"Framework '{framework_name}' not found in knowledge base. Available: {available}"
+
+        if not fw.versions:
+            return f"No version data available for '{framework_name}'. Version analysis not supported."
+
+        # Sort versions by release date (newest first)
+        sorted_versions = sorted(
+            fw.versions, key=lambda v: v.release_date or "", reverse=True
+        )
+
+        # Resolve target version
+        target_ver = None
+        if target_version:
+            target_ver = next((v for v in sorted_versions if v.version == target_version), None)
+            if not target_ver:
+                available = ", ".join(v.version for v in sorted_versions)
+                return f"Version '{target_version}' not found for {framework_name}. Available: {available}"
+        else:
+            target_ver = sorted_versions[0]  # latest
+
+        # Resolve current version
+        current_ver = None
+        if current_version:
+            current_ver = next((v for v in sorted_versions if v.version == current_version), None)
+
+        lines = [f"# Version Compatibility Analysis: {fw.framework_name}\n"]
+
+        # ── Target version summary ────────────────────────────────────
+        lines += [
+            f"## Target Version: {target_ver.version}",
+            f"- **Release date:** {target_ver.release_date or 'unknown'}",
+            f"- **Min runtime:** {target_ver.min_runtime or 'not specified'}",
+            f"- **EOL:** {target_ver.eol_date or 'still supported'}",
+            "",
+        ]
+
+        # ── Breaking changes between current → target ─────────────────
+        if current_ver:
+            # Collect all breaking changes in versions AFTER current up to target
+            current_date = current_ver.release_date or ""
+            target_date = target_ver.release_date or ""
+            upgrade_versions = [
+                v for v in sorted_versions
+                if (v.release_date or "") > current_date
+                and (v.release_date or "") <= target_date
+            ]
+
+            if upgrade_versions:
+                lines.append(f"## Breaking Changes ({current_ver.version} → {target_ver.version})\n")
+                total_breaking = 0
+                for v in sorted(upgrade_versions, key=lambda x: x.release_date or ""):
+                    if v.breaking_changes:
+                        lines.append(f"### Introduced in {v.version}")
+                        for bc in v.breaking_changes:
+                            total_breaking += 1
+                            lines.append(f"- **[{bc.migration_effort.upper()}]** {bc.description}")
+                            if bc.affected_apis:
+                                lines.append(f"  - Affected APIs: `{', '.join(bc.affected_apis)}`")
+                            if bc.workaround:
+                                lines.append(f"  - Fix: {bc.workaround}")
+                        lines.append("")
+
+                if total_breaking == 0:
+                    lines.append("No breaking changes in this upgrade path.\n")
+            else:
+                lines.append(f"## No intermediate versions between {current_ver.version} → {target_ver.version}\n")
+
+            # ── Deprecated APIs in the path ───────────────────────────
+            deprecated_in_path = []
+            for v in upgrade_versions:
+                for cap in v.capabilities_deprecated:
+                    deprecated_in_path.append((v.version, cap))
+
+            if deprecated_in_path:
+                lines.append("## Deprecated APIs in Upgrade Path\n")
+                lines.append("| Deprecated In | API | Status | Replacement |")
+                lines.append("|---|---|---|---|")
+                for ver_str, cap in deprecated_in_path:
+                    lines.append(f"| {ver_str} | {cap.name} | {cap.status} | {cap.replacement or 'none'} |")
+                lines.append("")
+
+        # ── Test API compatibility check ──────────────────────────────
+        if test_apis:
+            lines.append("## Test API Compatibility Check\n")
+            lines.append("| API Pattern | Status | Details |")
+            lines.append("|---|---|---|")
+
+            # Gather all affected APIs from breaking changes across all versions up to target
+            all_breaking_apis: dict[str, dict] = {}
+            for v in sorted_versions:
+                if target_ver.release_date and (v.release_date or "") > (target_ver.release_date or ""):
+                    continue  # skip versions after target
+                for bc in v.breaking_changes:
+                    for api in bc.affected_apis:
+                        all_breaking_apis[api.lower()] = {
+                            "version": v.version,
+                            "effort": bc.migration_effort,
+                            "workaround": bc.workaround,
+                        }
+
+            # Also gather deprecated capabilities
+            all_deprecated: dict[str, dict] = {}
+            for v in sorted_versions:
+                if target_ver.release_date and (v.release_date or "") > (target_ver.release_date or ""):
+                    continue
+                for cap in v.capabilities_deprecated:
+                    all_deprecated[cap.name.lower()] = {
+                        "version": v.version,
+                        "status": cap.status,
+                        "replacement": cap.replacement,
+                    }
+
+            for api in test_apis:
+                api_lower = api.lower()
+                # Check against breaking changes
+                matched_breaking = None
+                for broken_api, info in all_breaking_apis.items():
+                    if api_lower in broken_api or broken_api in api_lower:
+                        matched_breaking = info
+                        break
+
+                if matched_breaking:
+                    lines.append(
+                        f"| `{api}` | BROKEN (v{matched_breaking['version']}) | "
+                        f"Effort: {matched_breaking['effort']}. {matched_breaking['workaround']} |"
+                    )
+                    continue
+
+                # Check against deprecated
+                matched_deprecated = None
+                for dep_name, info in all_deprecated.items():
+                    if api_lower in dep_name or dep_name in api_lower:
+                        matched_deprecated = info
+                        break
+
+                if matched_deprecated:
+                    lines.append(
+                        f"| `{api}` | {matched_deprecated['status'].upper()} (v{matched_deprecated['version']}) | "
+                        f"Replace with: {matched_deprecated['replacement'] or 'TBD'} |"
+                    )
+                else:
+                    lines.append(f"| `{api}` | COMPATIBLE | No known issues in {target_ver.version} |")
+
+            lines.append("")
+
+        # ── New capabilities available in target ──────────────────────
+        if target_ver.capabilities_added:
+            lines.append("## New Capabilities Available\n")
+            for cap in target_ver.capabilities_added:
+                lines.append(f"- **{cap.name.replace('_', ' ').title()}**: {cap.description}")
+            lines.append("")
+
+        # ── Known limitations of target version ───────────────────────
+        if target_ver.known_limitations:
+            lines.append("## Known Limitations\n")
+            for lim in target_ver.known_limitations:
+                lines.append(f"- {lim}")
+
+        return "\n".join(lines)
