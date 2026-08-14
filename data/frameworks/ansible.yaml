@@ -121,3 +121,85 @@ limitations:
   - "No native drift detection (requires scheduled runs)"
   - "GPL-3.0 license may restrict some enterprise usage"
   - "Cannot test application behavior, only configuration/deployment"
+
+versions:
+  - version: "2.17"
+    release_date: "2024-05-20"
+    min_runtime: "Python 3.10+"
+    notable_features:
+      - "Python 3.12 support"
+      - "Improved ansible-lint integration"
+      - "Better error messages"
+    capabilities_added:
+      - name: "python312_support"
+        status: "added"
+        description: "Full Python 3.12 compatibility"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations:
+      - "Some older community collections may not support Python 3.12"
+
+  - version: "2.14"
+    release_date: "2023-05-16"
+    min_runtime: "Python 3.9+"
+    notable_features:
+      - "ansible-core and ansible package split"
+      - "Improved collection dependency resolution"
+    capabilities_added:
+      - name: "collection_dependency_resolution"
+        status: "improved"
+        description: "Better galaxy dependency resolution for complex collection graphs"
+    capabilities_deprecated:
+      - name: "python38_support"
+        status: "removed"
+        description: "Python 3.8 no longer supported"
+        replacement: "Python 3.9+"
+    breaking_changes:
+      - description: "Python 3.8 dropped — minimum is 3.9"
+        migration_effort: "low"
+        affected_apis: []
+        workaround: "Upgrade Python to 3.9+"
+    known_limitations:
+      - "Large inventories still slow with SSH transport"
+
+  - version: "2.9"
+    release_date: "2021-10-13"
+    min_runtime: "Python 3.8+"
+    notable_features:
+      - "ansible-core 2.12 based"
+      - "Collections as first-class"
+      - "Jinja2 improvements"
+    capabilities_added:
+      - name: "collections_first_class"
+        status: "improved"
+        description: "Collections fully replace role-based distribution"
+    capabilities_deprecated:
+      - name: "classic_modules"
+        status: "deprecated"
+        description: "Many modules moved from ansible-base to collections"
+        replacement: "Install collections separately: ansible-galaxy collection install"
+    breaking_changes:
+      - description: "Modules moved to collections — bare module names require FQCN"
+        migration_effort: "high"
+        affected_apis: ["yum", "apt", "copy", "template", "service"]
+        workaround: "Use FQCN: ansible.builtin.yum, ansible.builtin.copy, etc."
+    known_limitations:
+      - "FQCN makes playbooks more verbose"
+
+  - version: "2.0"
+    release_date: "2019-11-06"
+    eol_date: "2022-05-01"
+    min_runtime: "Python 2.7+ / Python 3.5+"
+    notable_features:
+      - "Last version before ansible-core split"
+      - "All modules bundled in single package"
+    capabilities_added: []
+    capabilities_deprecated:
+      - name: "python27"
+        status: "deprecated"
+        description: "Python 2.7 support deprecated"
+        replacement: "Python 3.8+"
+    breaking_changes: []
+    known_limitations:
+      - "Monolithic package — large install size"
+      - "No collection isolation"

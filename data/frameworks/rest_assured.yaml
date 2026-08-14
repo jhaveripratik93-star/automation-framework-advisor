@@ -75,3 +75,94 @@ limitations:
   - "Limited async/reactive API support"
   - "No WebSocket or gRPC support natively"
   - "Heavier dependency footprint than Python requests"
+
+versions:
+  - version: "5.4"
+    release_date: "2024-01-15"
+    min_runtime: "Java 11+"
+    notable_features:
+      - "Jakarta EE namespace support"
+      - "Improved JSON/XML validation"
+    capabilities_added:
+      - name: "jakarta_support"
+        status: "added"
+        description: "Jakarta EE namespace compatibility for modern Java apps"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations: []
+
+  - version: "5.0"
+    release_date: "2022-03-01"
+    min_runtime: "Java 11+"
+    notable_features:
+      - "Java 11+ required"
+      - "Improved JSON schema validation"
+      - "Better Spring Boot test integration"
+    capabilities_added:
+      - name: "json_schema_improved"
+        status: "improved"
+        description: "Enhanced JSON schema validation with draft-7 support"
+    capabilities_deprecated:
+      - name: "java8_support"
+        status: "removed"
+        description: "Java 8 no longer supported"
+        replacement: "Java 11+"
+    breaking_changes:
+      - description: "Minimum Java version raised to 11"
+        migration_effort: "medium"
+        affected_apis: []
+        workaround: "Upgrade JDK to 11+"
+      - description: "Package restructuring — some imports changed"
+        migration_effort: "low"
+        affected_apis: ["io.restassured.module.*"]
+        workaround: "Update import statements to new package paths"
+    known_limitations:
+      - "Still no reactive/async HTTP client support"
+
+  - version: "4.0"
+    release_date: "2019-03-01"
+    eol_date: "2022-06-01"
+    min_runtime: "Java 8+"
+    notable_features:
+      - "Spring MockMvc integration"
+      - "Kotlin extensions"
+      - "Improved OAuth2 support"
+    capabilities_added:
+      - name: "spring_mockmvc"
+        status: "added"
+        description: "Direct Spring MockMvc integration for controller testing"
+      - name: "kotlin_extensions"
+        status: "added"
+        description: "Kotlin-friendly extension functions"
+      - name: "oauth2_support"
+        status: "improved"
+        description: "Built-in OAuth2 authentication flow support"
+    capabilities_deprecated: []
+    breaking_changes:
+      - description: "Package renamed from com.jayway.restassured to io.restassured"
+        migration_effort: "medium"
+        affected_apis: ["com.jayway.restassured.*"]
+        workaround: "Find-and-replace all imports from com.jayway.restassured to io.restassured"
+    known_limitations:
+      - "Verbose syntax for complex request chains"
+
+  - version: "3.0"
+    release_date: "2016-12-01"
+    eol_date: "2019-06-01"
+    min_runtime: "Java 8+"
+    notable_features:
+      - "Package name change to io.restassured"
+      - "Java 8 support"
+    capabilities_added: []
+    capabilities_deprecated:
+      - name: "jayway_package"
+        status: "removed"
+        description: "com.jayway.restassured package removed"
+        replacement: "io.restassured"
+    breaking_changes:
+      - description: "Root package changed from com.jayway.restassured to io.restassured"
+        migration_effort: "high"
+        affected_apis: ["com.jayway.restassured.*"]
+        workaround: "Global find-and-replace of all import statements"
+    known_limitations:
+      - "No Kotlin extensions yet"

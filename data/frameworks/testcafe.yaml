@@ -69,3 +69,80 @@ limitations:
   - "No native mobile testing"
   - "Fewer third-party integrations than competitors"
   - "DevExpress backing raises long-term OSS concerns"
+
+versions:
+  - version: "3.0"
+    release_date: "2023-08-22"
+    min_runtime: "Node 16+"
+    notable_features:
+      - "Native ESM support"
+      - "Improved multi-window handling"
+      - "Better error messages"
+    capabilities_added:
+      - name: "esm_support"
+        status: "added"
+        description: "ES module test files supported natively"
+      - name: "multi_window_improvements"
+        status: "improved"
+        description: "Better multi-window/tab handling (still limited)"
+    capabilities_deprecated:
+      - name: "commonjs_tests"
+        status: "deprecated"
+        description: "CommonJS test files deprecated"
+        replacement: "ESM (import/export) syntax"
+    breaking_changes:
+      - description: "Node 14 no longer supported"
+        migration_effort: "low"
+        affected_apis: []
+        workaround: "Upgrade to Node 16+"
+      - description: "Legacy test API syntax removed"
+        migration_effort: "medium"
+        affected_apis: ["test.page()", "fixture.page()"]
+        workaround: "Use fixture/test chaining API"
+    known_limitations:
+      - "Multi-tab still not fully supported"
+      - "Smaller plugin ecosystem than Cypress/Playwright"
+
+  - version: "2.0"
+    release_date: "2022-08-09"
+    min_runtime: "Node 14+"
+    notable_features:
+      - "Native TypeScript support"
+      - "Improved CI/CD integration"
+      - "Better Docker support"
+    capabilities_added:
+      - name: "native_typescript"
+        status: "added"
+        description: "TypeScript tests without compilation step"
+      - name: "improved_docker"
+        status: "improved"
+        description: "Official Docker image with all browsers pre-installed"
+    capabilities_deprecated: []
+    breaking_changes:
+      - description: "Test syntax API changed — runner-based approach"
+        migration_effort: "low"
+        affected_apis: ["createTestCafe()", "runner.run()"]
+        workaround: "Use testcafe CLI or new programmatic API"
+    known_limitations:
+      - "TypeScript config type inference still limited"
+
+  - version: "1.0"
+    release_date: "2019-02-07"
+    eol_date: "2022-12-01"
+    min_runtime: "Node 8+"
+    notable_features:
+      - "First stable release"
+      - "Proxy-based browser automation"
+      - "Built-in auto-wait"
+    capabilities_added:
+      - name: "proxy_automation"
+        status: "added"
+        description: "Proxy-based browser testing (no WebDriver needed)"
+      - name: "auto_wait"
+        status: "added"
+        description: "Smart automatic waiting for page elements"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations:
+      - "No multi-browser testing in parallel"
+      - "Limited ecosystem"

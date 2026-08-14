@@ -70,3 +70,123 @@ limitations:
   - "Limited browser support (no WebKit/Safari in free tier)"
   - "Test isolation can be challenging for complex workflows"
   - "Large dependency footprint"
+
+versions:
+  - version: "13.0"
+    release_date: "2023-09-13"
+    min_runtime: "Node 18+"
+    notable_features:
+      - "Retry-ability improvements"
+      - "Full TypeScript support by default"
+      - "Test isolation enabled by default"
+    capabilities_added:
+      - name: "test_isolation_default"
+        status: "improved"
+        description: "Test isolation enabled by default for cleaner state between tests"
+      - name: "full_typescript_support"
+        status: "improved"
+        description: "TypeScript configuration auto-detected without manual setup"
+    capabilities_deprecated: []
+    breaking_changes:
+      - description: "Node 16 and below no longer supported"
+        migration_effort: "low"
+        affected_apis: []
+        workaround: "Upgrade Node.js to 18+"
+      - description: "Test isolation enabled by default — tests sharing state will fail"
+        migration_effort: "medium"
+        affected_apis: ["cy.session", "Cypress.Cookies.preserveOnce"]
+        workaround: "Set testIsolation: false in cypress.config or refactor tests to be independent"
+      - description: "Cypress.Cookies.preserveOnce removed"
+        migration_effort: "medium"
+        affected_apis: ["Cypress.Cookies.preserveOnce"]
+        workaround: "Use cy.session() API for cookie/session management"
+    known_limitations:
+      - "Still no multi-tab support"
+
+  - version: "12.0"
+    release_date: "2022-12-06"
+    min_runtime: "Node 14+"
+    notable_features:
+      - "cy.origin() for cross-origin testing"
+      - "Component testing GA"
+      - "Test isolation option"
+    capabilities_added:
+      - name: "cy_origin"
+        status: "added"
+        description: "Cross-origin testing via cy.origin() without workarounds"
+      - name: "component_testing"
+        status: "added"
+        description: "Component testing for React, Vue, Angular, Svelte (GA)"
+      - name: "test_isolation"
+        status: "added"
+        description: "Test isolation option to clear state between tests"
+    capabilities_deprecated:
+      - name: "cy_intercept_legacy"
+        status: "deprecated"
+        description: "cy.route() and cy.server() fully removed"
+        replacement: "cy.intercept()"
+      - name: "cypress_cookies_defaults"
+        status: "deprecated"
+        description: "Cypress.Cookies.defaults() deprecated"
+        replacement: "cy.session()"
+    breaking_changes:
+      - description: "cy.route() and cy.server() removed"
+        migration_effort: "medium"
+        affected_apis: ["cy.route", "cy.server"]
+        workaround: "Replace with cy.intercept() for network stubbing"
+    known_limitations:
+      - "cy.origin() has performance overhead"
+      - "Component testing requires framework-specific adapters"
+
+  - version: "10.0"
+    release_date: "2022-06-01"
+    min_runtime: "Node 14+"
+    notable_features:
+      - "Cypress App redesign"
+      - "Component testing beta"
+      - "cy.session() for auth caching"
+    capabilities_added:
+      - name: "cy_session"
+        status: "added"
+        description: "Session caching for faster auth setup across tests"
+      - name: "component_testing_beta"
+        status: "added"
+        description: "Component testing (beta) for mounting components in isolation"
+    capabilities_deprecated:
+      - name: "cypress_open_integration"
+        status: "removed"
+        description: "integrationFolder config option removed"
+        replacement: "e2e.specPattern in cypress.config"
+      - name: "plugins_file"
+        status: "removed"
+        description: "plugins/index.js file no longer used"
+        replacement: "setupNodeEvents in cypress.config.ts"
+    breaking_changes:
+      - description: "cypress.json replaced by cypress.config.ts/js"
+        migration_effort: "medium"
+        affected_apis: ["cypress.json", "pluginsFile", "integrationFolder"]
+        workaround: "Run npx cypress open to auto-migrate config, or manually create cypress.config.ts"
+      - description: "plugins/index.js removed — use setupNodeEvents"
+        migration_effort: "medium"
+        affected_apis: ["plugins/index.js", "module.exports"]
+        workaround: "Move plugin code into setupNodeEvents() in cypress.config.ts"
+    known_limitations:
+      - "Component testing is beta — API may change"
+      - "Migration from v9 requires config file restructuring"
+
+  - version: "9.0"
+    release_date: "2021-11-24"
+    min_runtime: "Node 12+"
+    notable_features:
+      - "cy.intercept() improvements"
+      - "Improved TypeScript support"
+      - "Cypress Studio (experimental)"
+    capabilities_added:
+      - name: "cypress_studio"
+        status: "added"
+        description: "Record tests interactively via Cypress Studio (experimental)"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations:
+      - "Cypress Studio is experimental and later deprecated"
+      - "No cross-origin support yet"

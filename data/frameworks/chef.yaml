@@ -122,3 +122,104 @@ limitations:
   - "Higher operational overhead for small teams"
   - "Not suitable for immutable infrastructure patterns"
   - "Cannot test application behavior, only server configuration"
+
+versions:
+  - version: "18.0"
+    release_date: "2023-10-25"
+    min_runtime: "Ruby 3.1+"
+    notable_features:
+      - "Ruby 3.1+ required"
+      - "Compliance phase improvements"
+      - "Target mode enhancements"
+    capabilities_added:
+      - name: "target_mode_enhanced"
+        status: "improved"
+        description: "Better agentless (target mode) execution for cloud resources"
+    capabilities_deprecated:
+      - name: "ruby27_support"
+        status: "removed"
+        description: "Ruby 2.7 no longer supported"
+        replacement: "Ruby 3.1+"
+    breaking_changes:
+      - description: "Ruby 3.1 minimum required"
+        migration_effort: "medium"
+        affected_apis: []
+        workaround: "Upgrade Ruby on all nodes and workstations"
+    known_limitations:
+      - "Some community cookbooks may need updates for Ruby 3.1"
+
+  - version: "17.0"
+    release_date: "2022-04-01"
+    min_runtime: "Ruby 2.7+"
+    notable_features:
+      - "Chef Infra unified agent"
+      - "Compliance phase (InSpec embedded)"
+      - "Improved FIPS support"
+    capabilities_added:
+      - name: "compliance_phase"
+        status: "added"
+        description: "Run InSpec profiles directly within chef-client run"
+      - name: "unified_agent"
+        status: "improved"
+        description: "Single package includes Infra, InSpec, and Habitat"
+    capabilities_deprecated:
+      - name: "legacy_mixins"
+        status: "deprecated"
+        description: "Legacy Chef::Mixin classes deprecated"
+        replacement: "Use Chef::DSL:: modules"
+    breaking_changes: []
+    known_limitations:
+      - "Unified package is larger"
+
+  - version: "16.0"
+    release_date: "2020-04-02"
+    eol_date: "2023-01-01"
+    min_runtime: "Ruby 2.6+"
+    notable_features:
+      - "Chef Infra branding (replaces Chef Client)"
+      - "Policyfile as default workflow"
+      - "YAML recipe support (experimental)"
+    capabilities_added:
+      - name: "policyfile_default"
+        status: "improved"
+        description: "Policyfile recommended over roles/environments"
+      - name: "yaml_recipes"
+        status: "added"
+        description: "Experimental YAML recipe format"
+    capabilities_deprecated:
+      - name: "roles_environments"
+        status: "deprecated"
+        description: "Roles and environments workflow deprecated"
+        replacement: "Policyfiles"
+    breaking_changes:
+      - description: "Many legacy resource properties removed"
+        migration_effort: "medium"
+        affected_apis: ["supports property on service", "provider property"]
+        workaround: "Use modern resource syntax — see Chef migration docs"
+    known_limitations:
+      - "YAML recipes are experimental"
+      - "Policyfile migration from roles/environments is non-trivial"
+
+  - version: "14.0"
+    release_date: "2018-04-01"
+    eol_date: "2021-05-01"
+    min_runtime: "Ruby 2.5+"
+    notable_features:
+      - "Custom resource improvements"
+      - "Ohai 14 (system profiling)"
+    capabilities_added:
+      - name: "custom_resources_improved"
+        status: "improved"
+        description: "Simplified custom resource authoring"
+    capabilities_deprecated:
+      - name: "chef_12_compat"
+        status: "removed"
+        description: "Chef 12 backward compatibility code removed"
+        replacement: "Update cookbooks to Chef 14+ syntax"
+    breaking_changes:
+      - description: "Chef 12 compatibility mode removed"
+        migration_effort: "high"
+        affected_apis: ["Chef 12 resource cloning", "run_context compat"]
+        workaround: "Update all cookbooks to modern Chef resource syntax"
+    known_limitations:
+      - "Must update all community cookbooks to 14+ compatible versions"

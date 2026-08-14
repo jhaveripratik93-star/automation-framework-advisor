@@ -68,3 +68,99 @@ limitations:
   - "Less opinionated - more configuration decisions needed"
   - "Documentation can be inconsistent across plugins"
   - "Debugging complex async flows can be challenging"
+
+versions:
+  - version: "8.0"
+    release_date: "2022-12-12"
+    min_runtime: "Node 16+"
+    notable_features:
+      - "Full ESM support"
+      - "Simplified configuration"
+      - "Mobile native support (Appium 2.x)"
+      - "Component testing for React/Vue/Svelte"
+    capabilities_added:
+      - name: "esm_support"
+        status: "added"
+        description: "Full ES Modules support — import/export syntax natively"
+      - name: "component_testing"
+        status: "added"
+        description: "Native component testing for React, Vue, Svelte, Lit"
+      - name: "appium_2_support"
+        status: "added"
+        description: "Native integration with Appium 2.x driver architecture"
+    capabilities_deprecated:
+      - name: "commonjs_config"
+        status: "deprecated"
+        description: "CommonJS wdio.conf.js deprecated in favor of ESM"
+        replacement: "wdio.conf.ts or wdio.conf.mjs"
+      - name: "sync_mode"
+        status: "removed"
+        description: "@wdio/sync package and synchronous command execution removed"
+        replacement: "Use async/await natively (default in v8)"
+    breaking_changes:
+      - description: "Synchronous mode (@wdio/sync) removed entirely"
+        migration_effort: "high"
+        affected_apis: ["@wdio/sync", "browser.call", "synchronous commands"]
+        workaround: "Add async/await to all test functions and command chains"
+      - description: "Node 14 and below no longer supported"
+        migration_effort: "low"
+        affected_apis: []
+        workaround: "Upgrade to Node 16+"
+      - description: "Configuration format changed for ESM compatibility"
+        migration_effort: "medium"
+        affected_apis: ["wdio.conf.js", "require()", "module.exports"]
+        workaround: "Rename to wdio.conf.ts and use export const config = {...}"
+    known_limitations:
+      - "Some third-party plugins not yet updated for v8 ESM"
+
+  - version: "7.0"
+    release_date: "2021-02-09"
+    min_runtime: "Node 12+"
+    notable_features:
+      - "Async-first architecture"
+      - "TypeScript native support"
+      - "Improved WebDriver BiDi support"
+    capabilities_added:
+      - name: "async_first"
+        status: "improved"
+        description: "Async/await is now the default — sync mode deprecated"
+      - name: "typescript_native"
+        status: "added"
+        description: "TypeScript configuration and test files supported without extra setup"
+    capabilities_deprecated:
+      - name: "sync_mode"
+        status: "deprecated"
+        description: "@wdio/sync deprecated — will be removed in v8"
+        replacement: "async/await pattern"
+    breaking_changes:
+      - description: "Default command behavior is now async (was sync in v6)"
+        migration_effort: "high"
+        affected_apis: ["browser.$", "browser.$$", "element.click()", "all commands"]
+        workaround: "Add async/await to all command calls, or install @wdio/sync for temporary compat"
+    known_limitations:
+      - "@wdio/sync is a temporary bridge — planned for removal"
+
+  - version: "6.0"
+    release_date: "2020-03-26"
+    eol_date: "2022-03-01"
+    min_runtime: "Node 10+"
+    notable_features:
+      - "Full TypeScript rewrite of internals"
+      - "DevTools protocol support"
+      - "Sync mode via @wdio/sync (fiber-based)"
+    capabilities_added:
+      - name: "devtools_protocol"
+        status: "added"
+        description: "Chrome DevTools Protocol automation as alternative to WebDriver"
+      - name: "network_interception"
+        status: "added"
+        description: "Network interception via DevTools protocol"
+    capabilities_deprecated: []
+    breaking_changes:
+      - description: "New test runner — wdio.conf.js format changed significantly from v5"
+        migration_effort: "medium"
+        affected_apis: ["wdio.conf.js", "capabilities format"]
+        workaround: "Use wdio config helper: npx wdio config"
+    known_limitations:
+      - "DevTools protocol only works with Chromium browsers"
+      - "Sync mode requires node-fibers (Linux/Mac only in some cases)"

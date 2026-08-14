@@ -75,3 +75,74 @@ limitations:
   - "Less protocol support than K6 out of the box"
   - "Reporting requires external tools for enterprise use"
   - "No record-and-playback capability"
+
+versions:
+  - version: "2.24"
+    release_date: "2024-02-01"
+    min_runtime: "Python 3.8+"
+    notable_features:
+      - "Improved REST/FastHTTP client"
+      - "Custom messages in assertions"
+    capabilities_added:
+      - name: "custom_messages"
+        status: "improved"
+        description: "Custom assertion messages for better failure reporting"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations: []
+
+  - version: "2.0"
+    release_date: "2022-03-15"
+    min_runtime: "Python 3.7+"
+    notable_features:
+      - "Modern Python async with geventhttpclient"
+      - "Improved web UI"
+      - "Class-based users replace Locust/HttpLocust"
+    capabilities_added:
+      - name: "modern_web_ui"
+        status: "improved"
+        description: "Redesigned web UI with real-time charts"
+      - name: "tag_support"
+        status: "added"
+        description: "Tag tasks for selective execution"
+    capabilities_deprecated:
+      - name: "locust_class"
+        status: "removed"
+        description: "Locust and HttpLocust base classes removed"
+        replacement: "Use User and HttpUser base classes"
+      - name: "task_set"
+        status: "removed"
+        description: "TaskSet class removed"
+        replacement: "Use @task decorator directly on User class methods"
+    breaking_changes:
+      - description: "Locust/HttpLocust classes removed — use User/HttpUser"
+        migration_effort: "medium"
+        affected_apis: ["Locust", "HttpLocust", "TaskSet"]
+        workaround: "Replace Locust with User, HttpLocust with HttpUser, and flatten TaskSets into @task methods"
+      - description: "Python 3.6 no longer supported"
+        migration_effort: "low"
+        affected_apis: []
+        workaround: "Upgrade to Python 3.7+"
+    known_limitations:
+      - "No backward compatibility with Locust 1.x scripts"
+
+  - version: "1.0"
+    release_date: "2020-06-01"
+    eol_date: "2022-06-01"
+    min_runtime: "Python 3.6+"
+    notable_features:
+      - "First stable release"
+      - "Simplified API"
+      - "Web UI for real-time monitoring"
+    capabilities_added:
+      - name: "simplified_api"
+        status: "added"
+        description: "HttpUser and @task decorator as primary API"
+    capabilities_deprecated:
+      - name: "locust_class"
+        status: "deprecated"
+        description: "Old Locust/HttpLocust classes deprecated"
+        replacement: "User/HttpUser"
+    breaking_changes: []
+    known_limitations:
+      - "Distributed mode requires manual worker setup"

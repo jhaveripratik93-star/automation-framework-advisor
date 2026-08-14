@@ -68,3 +68,94 @@ limitations:
   - "Being superseded by Playwright for new projects"
   - "Less active development since Playwright fork"
   - "No test retry or flaky test handling built-in"
+
+versions:
+  - version: "22.0"
+    release_date: "2024-03-01"
+    min_runtime: "Node 18+"
+    notable_features:
+      - "Firefox support (WebDriver BiDi)"
+      - "Improved locator API"
+      - "Automatic browser download management"
+    capabilities_added:
+      - name: "firefox_support"
+        status: "added"
+        description: "Firefox support via WebDriver BiDi protocol"
+      - name: "locator_api"
+        status: "added"
+        description: "Playwright-style locator API for more resilient element selection"
+    capabilities_deprecated:
+      - name: "page_waitfor"
+        status: "deprecated"
+        description: "page.waitFor() removed"
+        replacement: "page.waitForSelector() or page.waitForTimeout()"
+    breaking_changes:
+      - description: "Minimum Node.js version raised to 18"
+        migration_effort: "low"
+        affected_apis: []
+        workaround: "Upgrade Node.js to 18+"
+    known_limitations:
+      - "Firefox BiDi support is still experimental"
+
+  - version: "20.0"
+    release_date: "2023-07-01"
+    min_runtime: "Node 16+"
+    notable_features:
+      - "New headless mode (--headless=new)"
+      - "Automatic browser management via @puppeteer/browsers"
+    capabilities_added:
+      - name: "new_headless_mode"
+        status: "added"
+        description: "Chrome's new headless mode (not old headless shell)"
+      - name: "browser_management"
+        status: "improved"
+        description: "Automatic browser download and cache via @puppeteer/browsers"
+    capabilities_deprecated:
+      - name: "old_headless"
+        status: "deprecated"
+        description: "Old headless mode deprecated by Chrome team"
+        replacement: "Use headless: 'new' option"
+    breaking_changes:
+      - description: "puppeteer.launch() default changed — downloads Chrome for Testing"
+        migration_effort: "low"
+        affected_apis: ["puppeteer.launch()", "PUPPETEER_CHROMIUM_REVISION"]
+        workaround: "Set PUPPETEER_CACHE_DIR or use puppeteer.launch({channel: 'chrome'})"
+    known_limitations:
+      - "Browser download on first run may slow CI"
+
+  - version: "15.0"
+    release_date: "2022-07-01"
+    eol_date: "2023-07-01"
+    min_runtime: "Node 14+"
+    notable_features:
+      - "ESM support"
+      - "New page.locator() API preview"
+    capabilities_added:
+      - name: "esm_support"
+        status: "added"
+        description: "ES module import support"
+    capabilities_deprecated: []
+    breaking_changes:
+      - description: "Dropped Node 12 support"
+        migration_effort: "low"
+        affected_apis: []
+        workaround: "Upgrade to Node 14+"
+    known_limitations:
+      - "page.locator() is experimental"
+
+  - version: "10.0"
+    release_date: "2021-07-01"
+    eol_date: "2022-07-01"
+    min_runtime: "Node 10+"
+    notable_features:
+      - "Improved TypeScript types"
+      - "Element handle improvements"
+    capabilities_added: []
+    capabilities_deprecated: []
+    breaking_changes:
+      - description: "puppeteer-core split — must choose puppeteer or puppeteer-core explicitly"
+        migration_effort: "low"
+        affected_apis: ["require('puppeteer')"]
+        workaround: "Use puppeteer (includes browser) or puppeteer-core (BYO browser)"
+    known_limitations:
+      - "Still Chromium-only"

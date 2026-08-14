@@ -70,3 +70,112 @@ limitations:
   - "Relatively newer community compared to Selenium"
   - "No built-in load/performance testing capability"
   - "Learning curve for teams coming from Cypress single-tab model"
+
+versions:
+  - version: "1.45"
+    release_date: "2024-07-11"
+    min_runtime: "Node 18+"
+    notable_features:
+      - "Clock API for time-mocking"
+      - "Improved locator handler for overlays"
+      - "Test runner snapshot updates"
+    capabilities_added:
+      - name: "clock_api"
+        status: "added"
+        description: "Built-in clock/time mocking without third-party libraries"
+      - name: "locator_handler_improvements"
+        status: "improved"
+        description: "Better overlay and popup handling with locator.handler"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations:
+      - "Clock API does not support Web Workers"
+
+  - version: "1.40"
+    release_date: "2024-01-30"
+    min_runtime: "Node 16+"
+    notable_features:
+      - "Component testing for React, Vue, Svelte"
+      - "Tag-based test filtering (@smoke, @regression)"
+      - "Snapshot path template configuration"
+    capabilities_added:
+      - name: "component_testing"
+        status: "added"
+        description: "Native component testing for React, Vue, Svelte without a browser"
+      - name: "test_tagging"
+        status: "added"
+        description: "Tag-based test filtering using @tag annotations"
+    capabilities_deprecated: []
+    breaking_changes:
+      - description: "Minimum Node version raised from 14 to 16"
+        migration_effort: "low"
+        affected_apis: []
+        workaround: "Upgrade Node.js runtime to 16+"
+    known_limitations:
+      - "Component testing limited to React, Vue, Svelte (no Angular)"
+
+  - version: "1.30"
+    release_date: "2023-10-10"
+    min_runtime: "Node 16+"
+    notable_features:
+      - "Accessibility testing with @axe-core/playwright"
+      - "UI mode for visual test debugging"
+      - "Improved trace viewer"
+    capabilities_added:
+      - name: "accessibility_testing"
+        status: "added"
+        description: "First-class accessibility testing via @axe-core/playwright plugin"
+      - name: "ui_mode"
+        status: "added"
+        description: "Visual UI mode for debugging and running tests interactively"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations: []
+
+  - version: "1.20"
+    release_date: "2023-02-01"
+    min_runtime: "Node 14+"
+    notable_features:
+      - "API testing built-in (APIRequestContext)"
+      - "Trace viewer v2"
+      - "Multiple browser contexts"
+    capabilities_added:
+      - name: "api_testing"
+        status: "added"
+        description: "Built-in API testing via APIRequestContext without separate HTTP library"
+      - name: "trace_viewer_v2"
+        status: "improved"
+        description: "Revamped trace viewer with network tab and console logs"
+    capabilities_deprecated:
+      - name: "experimental_api_testing"
+        status: "deprecated"
+        description: "Old experimental API testing module replaced by stable APIRequestContext"
+        replacement: "APIRequestContext"
+    breaking_changes: []
+    known_limitations:
+      - "API testing does not support GraphQL subscriptions"
+
+  - version: "1.0"
+    release_date: "2021-11-02"
+    min_runtime: "Node 12+"
+    notable_features:
+      - "Initial stable release"
+      - "Cross-browser testing (Chromium, Firefox, WebKit)"
+      - "Auto-wait mechanism"
+      - "Network interception"
+    capabilities_added:
+      - name: "cross_browser"
+        status: "added"
+        description: "Native cross-browser support for Chromium, Firefox, WebKit"
+      - name: "auto_wait"
+        status: "added"
+        description: "Automatic waiting for elements to be actionable"
+      - name: "network_interception"
+        status: "added"
+        description: "Built-in request/response interception and mocking"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations:
+      - "No component testing support"
+      - "No built-in accessibility testing"
+      - "Limited debugging tools"

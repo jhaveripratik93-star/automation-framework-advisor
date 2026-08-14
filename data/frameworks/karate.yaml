@@ -74,3 +74,90 @@ limitations:
   - "IDE support limited to VS Code plugin"
   - "Not ideal for complex UI interaction scenarios"
   - "Performance testing capabilities are basic"
+
+versions:
+  - version: "1.5"
+    release_date: "2024-01-10"
+    min_runtime: "Java 11+"
+    notable_features:
+      - "Playwright engine for UI automation"
+      - "Improved gRPC support"
+      - "Better parallel execution"
+    capabilities_added:
+      - name: "playwright_engine"
+        status: "improved"
+        description: "Upgraded Playwright engine for better browser automation"
+      - name: "grpc_improvements"
+        status: "improved"
+        description: "Enhanced gRPC testing with streaming support"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations:
+      - "Playwright engine version may lag behind standalone Playwright"
+
+  - version: "1.4"
+    release_date: "2023-06-01"
+    min_runtime: "Java 11+"
+    notable_features:
+      - "Karate UI (Playwright-based)"
+      - "Improved JSON schema validation"
+      - "Enhanced retry mechanisms"
+    capabilities_added:
+      - name: "karate_ui"
+        status: "added"
+        description: "Browser automation via embedded Playwright engine"
+      - name: "retry_mechanism"
+        status: "improved"
+        description: "Per-scenario retry with configurable attempts"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations:
+      - "UI automation less mature than dedicated Playwright"
+
+  - version: "1.0"
+    release_date: "2021-02-21"
+    min_runtime: "Java 8+"
+    notable_features:
+      - "First stable major release"
+      - "Standalone JAR execution"
+      - "Built-in parallel execution"
+      - "Gatling integration for performance"
+    capabilities_added:
+      - name: "standalone_jar"
+        status: "added"
+        description: "Run tests without Maven/Gradle via standalone JAR"
+      - name: "gatling_integration"
+        status: "added"
+        description: "Performance testing via Gatling integration"
+    capabilities_deprecated:
+      - name: "karate_junit4"
+        status: "deprecated"
+        description: "JUnit4 runner deprecated"
+        replacement: "JUnit5 runner (karate-junit5)"
+    breaking_changes:
+      - description: "JUnit4 runner removed as default"
+        migration_effort: "low"
+        affected_apis: ["karate-junit4", "@KarateOptions"]
+        workaround: "Switch to karate-junit5 dependency and @Karate.Test annotation"
+    known_limitations:
+      - "No browser automation in 1.0 (added in 1.4)"
+
+  - version: "0.9"
+    release_date: "2020-01-15"
+    eol_date: "2021-06-01"
+    min_runtime: "Java 8+"
+    notable_features:
+      - "Final pre-1.0 release"
+      - "Mock server support"
+      - "GraphQL testing"
+    capabilities_added:
+      - name: "mock_server"
+        status: "added"
+        description: "Built-in mock server for service virtualization"
+      - name: "graphql_testing"
+        status: "added"
+        description: "Native GraphQL query/mutation testing support"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations:
+      - "API may change before 1.0 GA"

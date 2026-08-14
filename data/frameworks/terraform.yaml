@@ -120,3 +120,107 @@ limitations:
   - "Limited refactoring support (state moves are manual)"
   - "No built-in secret management (needs Vault integration)"
   - "Cannot test application behavior, only infrastructure provisioning"
+
+versions:
+  - version: "1.9"
+    release_date: "2024-06-26"
+    min_runtime: "N/A (standalone binary)"
+    notable_features:
+      - "Input validation via variables"
+      - "Improved terraform test"
+      - "Override files improvements"
+    capabilities_added:
+      - name: "variable_validation_improved"
+        status: "improved"
+        description: "Cross-variable validation rules and complex condition expressions"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations:
+      - "BSL license applies"
+
+  - version: "1.6"
+    release_date: "2023-10-04"
+    min_runtime: "N/A (standalone binary)"
+    notable_features:
+      - "terraform test (native testing framework)"
+      - "Config-driven import"
+      - "S3 state backend native locking"
+    capabilities_added:
+      - name: "terraform_test"
+        status: "added"
+        description: "Native HCL-based testing framework — write tests in .tftest.hcl files"
+      - name: "config_driven_import"
+        status: "added"
+        description: "Import existing resources via import blocks (no state surgery)"
+    capabilities_deprecated:
+      - name: "terraform_import_cli"
+        status: "deprecated"
+        description: "terraform import CLI deprecated for new workflows"
+        replacement: "import {} block in configuration"
+    breaking_changes: []
+    known_limitations:
+      - "terraform test cannot mock all providers yet"
+
+  - version: "1.5"
+    release_date: "2023-06-12"
+    min_runtime: "N/A (standalone binary)"
+    notable_features:
+      - "License change to BSL-1.1"
+      - "import block (preview)"
+      - "check block for custom validations"
+    capabilities_added:
+      - name: "check_block"
+        status: "added"
+        description: "Post-apply validation assertions via check {} blocks"
+      - name: "import_block"
+        status: "added"
+        description: "Declarative resource import (preview)"
+    capabilities_deprecated: []
+    breaking_changes:
+      - description: "License changed from MPL-2.0 to BSL-1.1"
+        migration_effort: "low"
+        affected_apis: []
+        workaround: "Evaluate BSL terms. For MPL alternative, consider OpenTofu fork"
+    known_limitations:
+      - "BSL restricts competitive use"
+      - "Some enterprise customers may need legal review"
+
+  - version: "1.0"
+    release_date: "2021-06-08"
+    min_runtime: "N/A (standalone binary)"
+    notable_features:
+      - "First stable 1.x release"
+      - "Compatibility promises (no breaking changes until 2.0)"
+      - "Improved plan output"
+    capabilities_added: []
+    capabilities_deprecated:
+      - name: "terraform_012_syntax"
+        status: "removed"
+        description: "Terraform 0.11 and 0.12 legacy HCL syntax removed"
+        replacement: "HCL2 syntax (Terraform 0.13+)"
+    breaking_changes:
+      - description: "terraform 0.x state files require migration"
+        migration_effort: "medium"
+        affected_apis: ["terraform state"]
+        workaround: "Run terraform init to upgrade state format"
+    known_limitations:
+      - "Large state files can be slow to plan"
+
+  - version: "0.14"
+    release_date: "2020-12-02"
+    eol_date: "2022-01-01"
+    min_runtime: "N/A (standalone binary)"
+    notable_features:
+      - "Provider dependency lock file"
+      - "Sensitive output marking"
+    capabilities_added:
+      - name: "dependency_lock_file"
+        status: "added"
+        description: ".terraform.lock.hcl for reproducible provider versions"
+      - name: "sensitive_outputs"
+        status: "added"
+        description: "Mark outputs as sensitive to hide in plan/apply output"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations:
+      - "Lock file must be committed to VCS"

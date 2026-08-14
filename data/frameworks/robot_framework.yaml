@@ -69,3 +69,110 @@ limitations:
   - "IDE support less mature than mainstream languages"
   - "Not suitable for performance/load testing"
   - "Large test suites can have long startup times"
+
+versions:
+  - version: "7.0"
+    release_date: "2024-01-12"
+    min_runtime: "Python 3.8+"
+    notable_features:
+      - "Python 3.12 support"
+      - "Improved SKIP and TRY/EXCEPT handling"
+      - "VAR syntax for inline variable creation"
+    capabilities_added:
+      - name: "var_syntax"
+        status: "added"
+        description: "Inline variable creation with VAR keyword (no Set Variable needed)"
+      - name: "try_except_improved"
+        status: "improved"
+        description: "TRY/EXCEPT/FINALLY with WHILE and BREAK support"
+    capabilities_deprecated:
+      - name: "python2_support"
+        status: "removed"
+        description: "Python 2 removed entirely"
+        replacement: "Python 3.8+"
+    breaking_changes:
+      - description: "Python 3.6/3.7 no longer supported"
+        migration_effort: "low"
+        affected_apis: []
+        workaround: "Upgrade to Python 3.8+"
+    known_limitations:
+      - "Some legacy libraries may not work with Python 3.12"
+
+  - version: "6.0"
+    release_date: "2023-02-16"
+    min_runtime: "Python 3.6+"
+    notable_features:
+      - "JSON result format"
+      - "Inline IF syntax"
+      - "WHILE loops"
+      - "TRY/EXCEPT/FINALLY"
+    capabilities_added:
+      - name: "inline_if"
+        status: "added"
+        description: "Single-line IF/ELSE without block syntax"
+      - name: "while_loop"
+        status: "added"
+        description: "WHILE loop keyword for iteration"
+      - name: "try_except"
+        status: "added"
+        description: "TRY/EXCEPT/FINALLY for error handling within tests"
+    capabilities_deprecated:
+      - name: "robot_result_xml_v4"
+        status: "deprecated"
+        description: "Old XML output format deprecated"
+        replacement: "New JSON output + XML v5 format"
+    breaking_changes:
+      - description: "Minimum Python version raised to 3.6"
+        migration_effort: "low"
+        affected_apis: []
+        workaround: "Upgrade Python"
+    known_limitations:
+      - "WHILE loop has no direct list iteration (use FOR)"
+
+  - version: "5.0"
+    release_date: "2021-07-23"
+    min_runtime: "Python 3.6+"
+    notable_features:
+      - "IF/ELSE/ELSE IF native syntax"
+      - "SKIP test support"
+      - "Listener v3 API"
+    capabilities_added:
+      - name: "native_if_else"
+        status: "added"
+        description: "Native IF/ELSE/ELSE IF keywords (no Run Keyword If needed)"
+      - name: "skip_support"
+        status: "added"
+        description: "SKIP keyword and --skip-on-failure option"
+    capabilities_deprecated:
+      - name: "run_keyword_if"
+        status: "deprecated"
+        description: "Run Keyword If deprecated in favor of native IF syntax"
+        replacement: "IF / ELSE IF / ELSE / END"
+    breaking_changes:
+      - description: "Listener API v2 deprecated — v3 is default"
+        migration_effort: "medium"
+        affected_apis: ["ROBOT_LISTENER_API_VERSION = 2"]
+        workaround: "Update listener classes to use v3 API methods"
+    known_limitations:
+      - "v3 listener API has different method signatures"
+
+  - version: "4.0"
+    release_date: "2020-06-24"
+    eol_date: "2023-01-01"
+    min_runtime: "Python 3.6+"
+    notable_features:
+      - "Dropped Python 2 support"
+      - "Native SKIP support preview"
+    capabilities_added: []
+    capabilities_deprecated:
+      - name: "python2"
+        status: "removed"
+        description: "Python 2 support removed"
+        replacement: "Python 3.6+"
+    breaking_changes:
+      - description: "Python 2 no longer supported"
+        migration_effort: "medium"
+        affected_apis: ["Python 2.7 runtime"]
+        workaround: "Port test environment to Python 3"
+    known_limitations:
+      - "Some older libraries still reference Python 2 APIs"

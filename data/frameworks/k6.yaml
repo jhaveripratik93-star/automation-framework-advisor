@@ -79,3 +79,80 @@ limitations:
   - "Complex scenarios require JavaScript expertise"
   - "No built-in UI for test management"
   - "Extension ecosystem smaller than JMeter"
+
+versions:
+  - version: "0.50"
+    release_date: "2024-03-26"
+    min_runtime: "N/A (standalone Go binary)"
+    notable_features:
+      - "k6-browser module stable"
+      - "Improved cloud output"
+      - "WebSocket improvements"
+    capabilities_added:
+      - name: "browser_module_stable"
+        status: "improved"
+        description: "k6-browser module moved from experimental to stable"
+      - name: "websocket_improvements"
+        status: "improved"
+        description: "Enhanced WebSocket testing with better lifecycle control"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations:
+      - "Browser module resource usage is significantly higher than protocol tests"
+
+  - version: "0.47"
+    release_date: "2023-09-21"
+    min_runtime: "N/A (standalone Go binary)"
+    notable_features:
+      - "k6 new sub-command (project scaffolding)"
+      - "Experimental tracing module"
+      - "Improved gRPC streaming"
+    capabilities_added:
+      - name: "k6_new"
+        status: "added"
+        description: "Project scaffolding via k6 new command"
+      - name: "tracing_module"
+        status: "added"
+        description: "Experimental distributed tracing support"
+      - name: "grpc_streaming"
+        status: "improved"
+        description: "Bidirectional gRPC streaming support"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations:
+      - "Tracing module is experimental"
+
+  - version: "0.43"
+    release_date: "2023-03-08"
+    min_runtime: "N/A (standalone Go binary)"
+    notable_features:
+      - "k6-browser module (experimental)"
+      - "Scenarios improvements"
+    capabilities_added:
+      - name: "browser_module"
+        status: "added"
+        description: "Experimental browser testing module (Chromium via CDP)"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations:
+      - "Browser module is experimental — API may change"
+      - "Only Chromium supported"
+
+  - version: "0.39"
+    release_date: "2022-07-05"
+    min_runtime: "N/A (standalone Go binary)"
+    notable_features:
+      - "Extensions system (xk6)"
+      - "Improved outputs"
+    capabilities_added:
+      - name: "xk6_extensions"
+        status: "added"
+        description: "Build custom k6 binaries with Go extensions via xk6"
+    capabilities_deprecated:
+      - name: "k6_cloud_legacy"
+        status: "deprecated"
+        description: "k6 cloud legacy output format deprecated"
+        replacement: "Grafana Cloud k6 output"
+    breaking_changes: []
+    known_limitations:
+      - "Custom extensions require Go knowledge to build"

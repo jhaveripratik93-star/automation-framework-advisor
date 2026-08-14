@@ -119,3 +119,90 @@ limitations:
   - "No import for all resource types"
   - "Cannot test application behavior, only infrastructure"
   - "Vendor lock-in to AWS"
+
+versions:
+  - version: "2023-12"
+    release_date: "2023-12-01"
+    min_runtime: "N/A (AWS managed service)"
+    notable_features:
+      - "Git sync for stacks"
+      - "Improved IaC Generator"
+      - "Stack-level tags"
+    capabilities_added:
+      - name: "git_sync"
+        status: "added"
+        description: "Auto-deploy stacks from Git repository changes"
+      - name: "iac_generator_improved"
+        status: "improved"
+        description: "Generate CloudFormation templates from existing resources"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations:
+      - "IaC Generator doesn't support all resource types"
+
+  - version: "2022-09"
+    release_date: "2022-09-01"
+    min_runtime: "N/A (AWS managed service)"
+    notable_features:
+      - "CloudFormation modules GA"
+      - "Hooks (pre-provision validation)"
+      - "Registry extensions"
+    capabilities_added:
+      - name: "cloudformation_hooks"
+        status: "added"
+        description: "Pre-provision hooks for custom validation before resource creation"
+      - name: "modules_ga"
+        status: "improved"
+        description: "CloudFormation Modules reached GA — reusable template components"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations:
+      - "Hooks have performance overhead"
+      - "Modules have limited nesting depth"
+
+  - version: "2021-01"
+    release_date: "2021-01-01"
+    min_runtime: "N/A (AWS managed service)"
+    notable_features:
+      - "CloudFormation modules (preview)"
+      - "AWS CDK v2 support"
+      - "Improved drift detection"
+    capabilities_added:
+      - name: "cdk_v2"
+        status: "added"
+        description: "AWS CDK v2 with consolidated constructs package"
+      - name: "modules_preview"
+        status: "added"
+        description: "Reusable template modules (preview)"
+    capabilities_deprecated:
+      - name: "cdk_v1"
+        status: "deprecated"
+        description: "AWS CDK v1 entering maintenance mode"
+        replacement: "AWS CDK v2 (single @aws-cdk/aws-* → aws-cdk-lib)"
+    breaking_changes:
+      - description: "CDK v1 to v2 requires import changes"
+        migration_effort: "medium"
+        affected_apis: ["@aws-cdk/aws-s3", "@aws-cdk/aws-lambda", "all @aws-cdk/* packages"]
+        workaround: "Replace all @aws-cdk/* imports with aws-cdk-lib: import { aws_s3 } from 'aws-cdk-lib'"
+    known_limitations:
+      - "CDK v1 to v2 migration requires updating all construct imports"
+
+  - version: "2019-01"
+    release_date: "2019-01-01"
+    eol_date: "2021-06-01"
+    min_runtime: "N/A (AWS managed service)"
+    notable_features:
+      - "StackSets for multi-account"
+      - "Drift detection"
+      - "Change sets"
+    capabilities_added:
+      - name: "drift_detection"
+        status: "added"
+        description: "Native drift detection for stack resources"
+      - name: "stacksets"
+        status: "improved"
+        description: "Multi-account, multi-region deployments via StackSets"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations:
+      - "Drift detection doesn't cover all resource properties"

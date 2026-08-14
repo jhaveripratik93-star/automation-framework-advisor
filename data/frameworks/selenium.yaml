@@ -73,3 +73,121 @@ limitations:
   - "No built-in reporting - requires Allure/ExtentReports"
   - "Higher maintenance cost due to synchronization issues"
   - "Shadow DOM support is limited in older versions"
+
+versions:
+  - version: "4.20"
+    release_date: "2024-04-15"
+    min_runtime: "Java 11+ / Python 3.8+"
+    notable_features:
+      - "Selenium Manager auto-downloads drivers"
+      - "Improved BiDi (WebDriver BiDirectional) protocol support"
+      - "Chrome DevTools Protocol integration stable"
+    capabilities_added:
+      - name: "selenium_manager"
+        status: "improved"
+        description: "Automatic browser driver management without manual downloads"
+      - name: "bidi_protocol"
+        status: "improved"
+        description: "WebDriver BiDi support for network interception and console events"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations:
+      - "BiDi protocol support varies by browser vendor"
+
+  - version: "4.0"
+    release_date: "2021-10-13"
+    min_runtime: "Java 8+ / Python 3.7+"
+    notable_features:
+      - "W3C WebDriver protocol (replaces JSON Wire Protocol)"
+      - "Relative locators (above, below, near, toLeftOf, toRightOf)"
+      - "Chrome DevTools Protocol (CDP) access"
+      - "New Window/Tab API"
+      - "Shadow DOM support"
+    capabilities_added:
+      - name: "w3c_protocol"
+        status: "added"
+        description: "Full W3C WebDriver standard compliance — replaces JSON Wire Protocol"
+      - name: "relative_locators"
+        status: "added"
+        description: "Locate elements relative to other elements (above, below, near)"
+      - name: "cdp_access"
+        status: "added"
+        description: "Direct Chrome DevTools Protocol access for network interception and performance"
+      - name: "shadow_dom"
+        status: "added"
+        description: "Native Shadow DOM element access via getShadowRoot()"
+      - name: "new_window_api"
+        status: "added"
+        description: "First-class API for opening new windows/tabs"
+    capabilities_deprecated:
+      - name: "json_wire_protocol"
+        status: "removed"
+        description: "JSON Wire Protocol removed in favor of W3C WebDriver"
+        replacement: "W3C WebDriver protocol"
+      - name: "desired_capabilities"
+        status: "deprecated"
+        description: "DesiredCapabilities class deprecated"
+        replacement: "Browser-specific Options classes (ChromeOptions, FirefoxOptions)"
+      - name: "find_element_by_*"
+        status: "removed"
+        description: "Python find_element_by_id/name/xpath etc. removed"
+        replacement: "find_element(By.ID, value)"
+    breaking_changes:
+      - description: "JSON Wire Protocol removed — all drivers must support W3C protocol"
+        migration_effort: "medium"
+        affected_apis: ["RemoteWebDriver", "DesiredCapabilities"]
+        workaround: "Replace DesiredCapabilities with Options classes"
+      - description: "Python find_element_by_* methods removed"
+        migration_effort: "high"
+        affected_apis: ["find_element_by_id", "find_element_by_name", "find_element_by_xpath", "find_element_by_css_selector"]
+        workaround: "Replace with find_element(By.ID, value) pattern"
+      - description: "Executable path parameter deprecated in driver constructors"
+        migration_effort: "low"
+        affected_apis: ["webdriver.Chrome(executable_path=...)", "webdriver.Firefox(executable_path=...)"]
+        workaround: "Use Service object: Service(executable_path=...) then pass to driver"
+    known_limitations:
+      - "Selenium Grid 4 requires different configuration than Grid 3"
+      - "Some third-party drivers lag behind W3C compliance"
+
+  - version: "3.141"
+    release_date: "2018-11-01"
+    eol_date: "2022-10-01"
+    min_runtime: "Java 8+ / Python 2.7+"
+    notable_features:
+      - "Final Selenium 3 release"
+      - "JSON Wire Protocol + W3C dual support"
+      - "Stable Grid 3"
+    capabilities_added: []
+    capabilities_deprecated:
+      - name: "json_wire_protocol"
+        status: "deprecated"
+        description: "JSON Wire Protocol deprecated in favor of W3C standard"
+        replacement: "W3C WebDriver protocol (Selenium 4)"
+    breaking_changes: []
+    known_limitations:
+      - "No Shadow DOM support"
+      - "No Chrome DevTools Protocol access"
+      - "No relative locators"
+      - "No native network interception"
+      - "Manual driver management required (ChromeDriver, GeckoDriver)"
+      - "find_element_by_* methods exist but will be removed in v4"
+
+  - version: "2.53"
+    release_date: "2016-03-22"
+    eol_date: "2018-11-01"
+    min_runtime: "Java 7+ / Python 2.6+"
+    notable_features:
+      - "Final Selenium 2 release"
+      - "WebDriver merged with Selenium RC"
+    capabilities_added: []
+    capabilities_deprecated:
+      - name: "selenium_rc"
+        status: "deprecated"
+        description: "Selenium RC (Remote Control) deprecated — use WebDriver"
+        replacement: "Selenium WebDriver API"
+    breaking_changes: []
+    known_limitations:
+      - "Selenium RC APIs deprecated and unreliable"
+      - "No W3C WebDriver support"
+      - "Significant flakiness with dynamic pages"
+      - "Limited browser support compared to later versions"

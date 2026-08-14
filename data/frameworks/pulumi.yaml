@@ -115,3 +115,81 @@ limitations:
   - "Less community content/tutorials than Terraform"
   - "Runtime SDK overhead compared to declarative HCL"
   - "Cannot test application behavior, only infrastructure code"
+
+versions:
+  - version: "3.100"
+    release_date: "2024-01-15"
+    min_runtime: "Node 18+ / Python 3.8+ / Go 1.21+ / .NET 6+"
+    notable_features:
+      - "Improved pulumi import"
+      - "Better state migration tools"
+      - "Transforms (resource transforms at deploy time)"
+    capabilities_added:
+      - name: "resource_transforms"
+        status: "added"
+        description: "Transform resource properties at deploy time via code hooks"
+      - name: "improved_import"
+        status: "improved"
+        description: "Import generates complete code for more resource types"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations:
+      - "Transforms API is still stabilizing"
+
+  - version: "3.0"
+    release_date: "2022-04-01"
+    min_runtime: "Node 14+ / Python 3.7+ / Go 1.17+ / .NET 6+"
+    notable_features:
+      - "Automation API GA"
+      - "Multi-language component support"
+      - "Improved Go SDK"
+    capabilities_added:
+      - name: "automation_api_ga"
+        status: "improved"
+        description: "Automation API (programmatic deployment) is now GA"
+      - name: "multi_lang_components"
+        status: "added"
+        description: "Write components in one language, consume from any other"
+    capabilities_deprecated:
+      - name: "pulumi_v2_sdk"
+        status: "deprecated"
+        description: "Pulumi 2.x SDK deprecated"
+        replacement: "Pulumi 3.x SDK (breaking type changes)"
+    breaking_changes:
+      - description: "SDK type system changes — some resource inputs/outputs changed"
+        migration_effort: "medium"
+        affected_apis: ["Resource input/output types", "Provider SDK constructors"]
+        workaround: "Follow per-provider migration guide and update type annotations"
+      - description: "Python SDK requires explicit output.apply() for some operations"
+        migration_effort: "low"
+        affected_apis: ["Output[T] chaining"]
+        workaround: "Use .apply(lambda) or Output.all() for multi-output operations"
+    known_limitations:
+      - "Not all Terraform providers have Pulumi equivalents"
+
+  - version: "2.0"
+    release_date: "2020-04-20"
+    eol_date: "2022-10-01"
+    min_runtime: "Node 10+ / Python 3.6+ / Go 1.14+ / .NET Core 3.1+"
+    notable_features:
+      - "Policy as Code (CrossGuard)"
+      - "Go SDK GA"
+      - "Improved .NET support"
+    capabilities_added:
+      - name: "crossguard"
+        status: "added"
+        description: "Policy as Code framework for compliance guardrails"
+      - name: "go_sdk_ga"
+        status: "added"
+        description: "Go SDK reached GA stability"
+      - name: "dotnet_support"
+        status: "improved"
+        description: ".NET SDK improved with better type support"
+    capabilities_deprecated: []
+    breaking_changes:
+      - description: "Pulumi 1.x state format not forward-compatible"
+        migration_effort: "low"
+        affected_apis: ["pulumi stack"]
+        workaround: "Run pulumi up once to auto-upgrade state format"
+    known_limitations:
+      - "Fewer providers than Terraform ecosystem"

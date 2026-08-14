@@ -78,3 +78,88 @@ limitations:
   - "No built-in reporting"
   - "Resource-intensive for CI/CD parallel execution"
   - "Driver compatibility issues across OS versions"
+
+versions:
+  - version: "2.4"
+    release_date: "2024-02-15"
+    min_runtime: "Node 16+"
+    notable_features:
+      - "Improved driver management via appium driver CLI"
+      - "Better plugin architecture"
+      - "Faster session creation"
+    capabilities_added:
+      - name: "driver_cli_improvements"
+        status: "improved"
+        description: "Better driver install/update/list commands"
+    capabilities_deprecated: []
+    breaking_changes: []
+    known_limitations:
+      - "Some community drivers may lag behind core updates"
+
+  - version: "2.0"
+    release_date: "2023-01-01"
+    min_runtime: "Node 16+"
+    notable_features:
+      - "Plugin architecture"
+      - "Driver-based ecosystem (install drivers separately)"
+      - "W3C WebDriver protocol only"
+      - "No bundled drivers"
+    capabilities_added:
+      - name: "plugin_system"
+        status: "added"
+        description: "Extensible plugin architecture for custom commands and middleware"
+      - name: "driver_ecosystem"
+        status: "added"
+        description: "Drivers installed separately via appium driver install"
+      - name: "w3c_only"
+        status: "improved"
+        description: "Full W3C WebDriver protocol compliance only"
+    capabilities_deprecated:
+      - name: "desired_capabilities"
+        status: "deprecated"
+        description: "DesiredCapabilities replaced by W3C capabilities format"
+        replacement: "W3C capabilities (appium:options prefix)"
+      - name: "bundled_drivers"
+        status: "removed"
+        description: "Drivers no longer bundled — must install separately"
+        replacement: "appium driver install uiautomator2/xcuitest"
+      - name: "old_locator_strategies"
+        status: "removed"
+        description: "Non-W3C locator strategies removed (accessibility id format changed)"
+        replacement: "Use appium:automationName capability"
+    breaking_changes:
+      - description: "All drivers must be installed separately (not bundled)"
+        migration_effort: "medium"
+        affected_apis: ["appium server start", "capability: automationName"]
+        workaround: "Run 'appium driver install uiautomator2' and 'appium driver install xcuitest'"
+      - description: "DesiredCapabilities replaced by W3C capabilities"
+        migration_effort: "high"
+        affected_apis: ["DesiredCapabilities", "desired_caps", "appium_capabilities"]
+        workaround: "Prefix all Appium caps with 'appium:' — e.g., appium:automationName, appium:deviceName"
+      - description: "Appium server no longer auto-starts drivers"
+        migration_effort: "medium"
+        affected_apis: ["appium", "appium --default-capabilities"]
+        workaround: "Use appium driver install and appium plugin install commands"
+    known_limitations:
+      - "Not all Appium 1.x community drivers ported to 2.x"
+      - "Some cloud providers may not support Appium 2.x yet"
+
+  - version: "1.22"
+    release_date: "2022-01-12"
+    eol_date: "2023-06-01"
+    min_runtime: "Node 14+"
+    notable_features:
+      - "Final Appium 1.x release"
+      - "All drivers bundled"
+      - "JSONWP + W3C dual protocol"
+    capabilities_added: []
+    capabilities_deprecated:
+      - name: "appium_1x"
+        status: "deprecated"
+        description: "Entire Appium 1.x architecture deprecated in favor of 2.x"
+        replacement: "Appium 2.x with plugin/driver architecture"
+    breaking_changes: []
+    known_limitations:
+      - "No longer maintained — security patches only"
+      - "Bundled drivers may have stale versions"
+      - "Does not support latest iOS/Android versions reliably"
