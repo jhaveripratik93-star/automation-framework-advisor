@@ -337,10 +337,8 @@
       "id": "java-language",
       "name": "Java",
       "entity_type": "Language",
-      "properties": {
-        "confidence": 0.5
-      },
-      "source": "user"
+      "properties": {},
+      "source": "yaml"
     },
     {
       "id": "javascript-language",
@@ -997,12 +995,15 @@
     },
     {
       "id": "k6-framework",
-      "name": "k6",
+      "name": "K6",
       "entity_type": "Framework",
       "properties": {
-        "confidence": 0.8
+        "vendor": "Grafana Labs",
+        "license": "AGPL-3.0",
+        "website": "https://k6.io",
+        "category": "test_automation"
       },
-      "source": "user"
+      "source": "yaml"
     },
     {
       "id": "typescript-via-bundler-language",
@@ -1242,12 +1243,9 @@
       "name": "Playwright",
       "entity_type": "Framework",
       "properties": {
-        "vendor": "Microsoft",
-        "license": "Apache-2.0",
-        "website": "https://playwright.dev",
-        "category": "test_automation"
+        "confidence": 0.8
       },
-      "source": "yaml"
+      "source": "user"
     },
     {
       "id": "no-native-mobile-app-testing-web-only-limitation",
@@ -1584,12 +1582,9 @@
       "name": "Robot Framework",
       "entity_type": "Framework",
       "properties": {
-        "vendor": "OpenSource (Robot Framework Foundation)",
-        "license": "Apache-2.0",
-        "website": "https://robotframework.org",
-        "category": "test_automation"
+        "confidence": 0.8
       },
-      "source": "yaml"
+      "source": "user"
     },
     {
       "id": "python-keyword-driven-dsl-language",
@@ -2004,12 +1999,20 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "accessibility_testing",
-          "file_upload_download",
           "test_recorder",
           "visual_regression",
+          "parallel_execution",
+          "file_upload_download",
+          "accessibility_testing",
           "auto_wait"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2023,9 +2026,17 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
           "test_recorder",
-          "code_generation"
+          "code_generation",
+          "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2040,6 +2051,14 @@
         ],
         "shared_capabilities": [
           "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2050,19 +2069,27 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "Java",
           "C#",
+          "Java",
           "Python",
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "accessibility_testing",
-          "file_upload_download",
           "test_recorder",
           "visual_regression",
           "code_generation",
+          "parallel_execution",
+          "file_upload_download",
+          "accessibility_testing",
           "auto_wait"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2073,14 +2100,22 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "Java",
           "C#",
+          "Java",
           "Python",
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "code_generation"
+          "code_generation",
+          "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2094,13 +2129,21 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "accessibility_testing",
-          "file_upload_download",
           "test_recorder",
           "visual_regression",
           "code_generation",
+          "parallel_execution",
+          "file_upload_download",
+          "accessibility_testing",
           "auto_wait"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2115,8 +2158,16 @@
           "Kotlin"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "file_upload_download"
+          "file_upload_download",
+          "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2127,20 +2178,28 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
+          "Ruby",
           "Kotlin",
-          "Python",
           "C#",
-          "JavaScript",
+          "Python",
           "Java",
-          "Ruby"
+          "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "accessibility_testing",
-          "file_upload_download",
           "test_recorder",
           "visual_regression",
-          "code_generation"
+          "code_generation",
+          "parallel_execution",
+          "file_upload_download",
+          "accessibility_testing"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2154,13 +2213,21 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "accessibility_testing",
-          "file_upload_download",
           "test_recorder",
           "visual_regression",
           "code_generation",
+          "parallel_execution",
+          "file_upload_download",
+          "accessibility_testing",
           "auto_wait"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2174,11 +2241,19 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "accessibility_testing",
-          "file_upload_download",
           "visual_regression",
+          "parallel_execution",
+          "file_upload_download",
+          "accessibility_testing",
           "auto_wait"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2192,8 +2267,16 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "test_recorder"
+          "test_recorder",
+          "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2208,18 +2291,26 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "accessibility_testing",
+          "test_recorder",
           "iframe_cross_origin",
           "canvas_webgl",
-          "file_upload_download",
+          "shadow_dom",
+          "visual_regression",
           "component_testing",
           "multi_domain",
-          "visual_regression",
-          "test_recorder",
-          "shadow_dom",
+          "parallel_execution",
+          "file_upload_download",
+          "accessibility_testing",
           "network_interception",
           "auto_wait"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2234,8 +2325,16 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "component_testing"
+          "component_testing",
+          "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2250,17 +2349,25 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "accessibility_testing",
+          "test_recorder",
           "iframe_cross_origin",
           "canvas_webgl",
-          "file_upload_download",
-          "multi_domain",
-          "visual_regression",
-          "test_recorder",
           "shadow_dom",
+          "visual_regression",
+          "multi_domain",
+          "parallel_execution",
+          "file_upload_download",
+          "accessibility_testing",
           "network_interception",
           "auto_wait"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2274,16 +2381,24 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "accessibility_testing",
+          "test_recorder",
           "iframe_cross_origin",
           "canvas_webgl",
-          "file_upload_download",
-          "multi_domain",
-          "visual_regression",
-          "test_recorder",
           "shadow_dom",
+          "visual_regression",
+          "multi_domain",
+          "parallel_execution",
+          "file_upload_download",
+          "accessibility_testing",
           "network_interception"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2298,17 +2413,25 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "accessibility_testing",
+          "test_recorder",
           "iframe_cross_origin",
           "canvas_webgl",
-          "file_upload_download",
-          "multi_domain",
-          "visual_regression",
-          "test_recorder",
           "shadow_dom",
+          "visual_regression",
+          "multi_domain",
+          "parallel_execution",
+          "file_upload_download",
+          "accessibility_testing",
           "network_interception",
           "auto_wait"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2323,17 +2446,25 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "accessibility_testing",
           "iframe_cross_origin",
           "canvas_webgl",
-          "file_upload_download",
+          "shadow_dom",
+          "visual_regression",
           "component_testing",
           "multi_domain",
-          "visual_regression",
-          "shadow_dom",
+          "parallel_execution",
+          "file_upload_download",
+          "accessibility_testing",
           "network_interception",
           "auto_wait"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2347,9 +2478,17 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
           "test_recorder",
-          "code_generation"
+          "code_generation",
+          "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2363,8 +2502,16 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "code_generation"
+          "code_generation",
+          "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2378,9 +2525,17 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
           "test_recorder",
-          "code_generation"
+          "code_generation",
+          "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2394,9 +2549,17 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
           "test_recorder",
-          "code_generation"
+          "code_generation",
+          "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2410,9 +2573,17 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
           "test_recorder",
-          "code_generation"
+          "code_generation",
+          "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2427,6 +2598,14 @@
         ],
         "shared_capabilities": [
           "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2441,6 +2620,14 @@
         ],
         "shared_capabilities": [
           "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2455,6 +2642,14 @@
         ],
         "shared_capabilities": [
           "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2469,6 +2664,14 @@
         ],
         "shared_capabilities": [
           "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2479,16 +2682,24 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "TypeScript",
-          "Python",
           "C#",
-          "JavaScript",
-          "Java"
+          "Python",
+          "Java",
+          "TypeScript",
+          "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
           "code_generation",
-          "component_testing"
+          "component_testing",
+          "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2503,19 +2714,27 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "accessibility_testing",
+          "test_recorder",
           "iframe_cross_origin",
           "canvas_webgl",
+          "shadow_dom",
+          "visual_regression",
+          "code_generation",
+          "multi_domain",
+          "parallel_execution",
           "multi_tab",
           "file_upload_download",
-          "multi_domain",
-          "visual_regression",
-          "test_recorder",
-          "shadow_dom",
+          "accessibility_testing",
           "network_interception",
-          "code_generation",
           "auto_wait"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2529,8 +2748,16 @@
           "Java"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "file_upload_download"
+          "file_upload_download",
+          "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2541,24 +2768,32 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "Java",
           "C#",
+          "Java",
           "Python",
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "accessibility_testing",
+          "test_recorder",
           "iframe_cross_origin",
           "canvas_webgl",
+          "shadow_dom",
+          "visual_regression",
+          "code_generation",
+          "multi_domain",
+          "parallel_execution",
           "multi_tab",
           "file_upload_download",
-          "multi_domain",
-          "visual_regression",
-          "test_recorder",
-          "shadow_dom",
-          "network_interception",
-          "code_generation"
+          "accessibility_testing",
+          "network_interception"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2573,19 +2808,27 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "accessibility_testing",
+          "test_recorder",
           "iframe_cross_origin",
           "canvas_webgl",
+          "shadow_dom",
+          "visual_regression",
+          "code_generation",
+          "multi_domain",
+          "parallel_execution",
           "multi_tab",
           "file_upload_download",
-          "multi_domain",
-          "visual_regression",
-          "test_recorder",
-          "shadow_dom",
+          "accessibility_testing",
           "network_interception",
-          "code_generation",
           "auto_wait"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2600,18 +2843,26 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "accessibility_testing",
           "iframe_cross_origin",
           "canvas_webgl",
-          "multi_tab",
-          "file_upload_download",
+          "shadow_dom",
+          "visual_regression",
           "component_testing",
           "multi_domain",
-          "visual_regression",
-          "shadow_dom",
+          "parallel_execution",
+          "multi_tab",
+          "file_upload_download",
+          "accessibility_testing",
           "network_interception",
           "auto_wait"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2626,8 +2877,16 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "code_generation"
+          "code_generation",
+          "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2642,6 +2901,14 @@
         ],
         "shared_capabilities": [
           "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2652,14 +2919,22 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "Java",
           "C#",
+          "Java",
           "Python",
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "code_generation"
+          "code_generation",
+          "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2674,8 +2949,16 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "code_generation"
+          "code_generation",
+          "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2690,8 +2973,16 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "component_testing"
+          "component_testing",
+          "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2705,18 +2996,26 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "accessibility_testing",
+          "test_recorder",
           "iframe_cross_origin",
           "canvas_webgl",
+          "shadow_dom",
+          "visual_regression",
+          "code_generation",
+          "multi_domain",
+          "parallel_execution",
           "multi_tab",
           "file_upload_download",
-          "multi_domain",
-          "visual_regression",
-          "test_recorder",
-          "shadow_dom",
-          "network_interception",
-          "code_generation"
+          "accessibility_testing",
+          "network_interception"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2731,19 +3030,27 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "accessibility_testing",
+          "test_recorder",
           "iframe_cross_origin",
           "canvas_webgl",
+          "shadow_dom",
+          "visual_regression",
+          "code_generation",
+          "multi_domain",
+          "parallel_execution",
           "multi_tab",
           "file_upload_download",
-          "multi_domain",
-          "visual_regression",
-          "test_recorder",
-          "shadow_dom",
+          "accessibility_testing",
           "network_interception",
-          "code_generation",
           "auto_wait"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2758,17 +3065,25 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "accessibility_testing",
           "iframe_cross_origin",
           "canvas_webgl",
+          "shadow_dom",
+          "visual_regression",
+          "multi_domain",
+          "parallel_execution",
           "multi_tab",
           "file_upload_download",
-          "multi_domain",
-          "visual_regression",
-          "shadow_dom",
+          "accessibility_testing",
           "network_interception",
           "auto_wait"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2783,8 +3098,16 @@
           "Kotlin"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "file_upload_download"
+          "file_upload_download",
+          "parallel_execution"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2798,18 +3121,26 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "accessibility_testing",
+          "test_recorder",
           "iframe_cross_origin",
           "canvas_webgl",
+          "shadow_dom",
+          "visual_regression",
+          "code_generation",
+          "multi_domain",
+          "parallel_execution",
           "multi_tab",
           "file_upload_download",
-          "multi_domain",
-          "visual_regression",
-          "test_recorder",
-          "shadow_dom",
-          "network_interception",
-          "code_generation"
+          "accessibility_testing",
+          "network_interception"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2823,16 +3154,24 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "accessibility_testing",
           "iframe_cross_origin",
           "canvas_webgl",
+          "shadow_dom",
+          "visual_regression",
+          "multi_domain",
+          "parallel_execution",
           "multi_tab",
           "file_upload_download",
-          "multi_domain",
-          "visual_regression",
-          "shadow_dom",
+          "accessibility_testing",
           "network_interception"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
@@ -2847,164 +3186,28 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "parallel_execution",
-          "accessibility_testing",
           "iframe_cross_origin",
           "canvas_webgl",
+          "shadow_dom",
+          "visual_regression",
+          "multi_domain",
+          "parallel_execution",
           "multi_tab",
           "file_upload_download",
-          "multi_domain",
-          "visual_regression",
-          "shadow_dom",
+          "accessibility_testing",
           "network_interception",
           "auto_wait"
+        ],
+        "shared_cicd": [
+          "azure_devops",
+          "github_actions",
+          "docker_support",
+          "jenkins",
+          "pre_built_docker_images",
+          "gitlab_ci"
         ]
       },
       "source": "yaml"
-    },
-    {
-      "id": "microservice-api-level-test-capability",
-      "name": "microservice api level test",
-      "entity_type": "Capability",
-      "properties": {
-        "confidence": 0.65
-      },
-      "source": "user"
-    },
-    {
-      "id": "ui-coverage-test-capability",
-      "name": "UI coverage test",
-      "entity_type": "Capability",
-      "properties": {
-        "confidence": 0.65
-      },
-      "source": "user"
-    },
-    {
-      "id": "microservice-api-language",
-      "name": "microservice api",
-      "entity_type": "Language",
-      "properties": {
-        "confidence": 0.65
-      },
-      "source": "user"
-    },
-    {
-      "id": "jmeter-framework",
-      "name": "JMeter",
-      "entity_type": "Framework",
-      "properties": {
-        "confidence": 0.8
-      },
-      "source": "user"
-    },
-    {
-      "id": "postman-capability",
-      "name": "Postman",
-      "entity_type": "Capability",
-      "properties": {
-        "confidence": 0.65
-      },
-      "source": "user"
-    },
-    {
-      "id": "katalon-studio-ci_cd_tool",
-      "name": "Katalon Studio",
-      "entity_type": "CI_CD_Tool",
-      "properties": {
-        "confidence": 0.8
-      },
-      "source": "user"
-    },
-    {
-      "id": "aws-cloudformation-cloud_provider",
-      "name": "AWS CloudFormation",
-      "entity_type": "Cloud_Provider",
-      "properties": {
-        "confidence": 0.65
-      },
-      "source": "user"
-    },
-    {
-      "id": "microservice-capability",
-      "name": "microservice",
-      "entity_type": "Capability",
-      "properties": {
-        "confidence": 0.8
-      },
-      "source": "user"
-    },
-    {
-      "id": "api-testing-framework-framework",
-      "name": "API Testing Framework",
-      "entity_type": "Framework",
-      "properties": {
-        "confidence": 0.8
-      },
-      "source": "user"
-    },
-    {
-      "id": "apitesting-framework",
-      "name": "apitesting",
-      "entity_type": "Framework",
-      "properties": {
-        "confidence": 0.65
-      },
-      "source": "user"
-    },
-    {
-      "id": "api-capability",
-      "name": "API",
-      "entity_type": "Capability",
-      "properties": {
-        "confidence": 0.8
-      },
-      "source": "user"
-    },
-    {
-      "id": "testing-framework",
-      "name": "testing",
-      "entity_type": "Framework",
-      "properties": {
-        "confidence": 0.65
-      },
-      "source": "user"
-    },
-    {
-      "id": "framework-framework",
-      "name": "framework",
-      "entity_type": "Framework",
-      "properties": {
-        "confidence": 0.8
-      },
-      "source": "user"
-    },
-    {
-      "id": "microservice-api-testing-framework-framework",
-      "name": "Microservice API Testing Framework",
-      "entity_type": "Framework",
-      "properties": {
-        "confidence": 0.5
-      },
-      "source": "user"
-    },
-    {
-      "id": "testing-framework-framework",
-      "name": "testing framework",
-      "entity_type": "Framework",
-      "properties": {
-        "confidence": 0.8
-      },
-      "source": "user"
-    },
-    {
-      "id": "testing-language",
-      "name": "testing",
-      "entity_type": "Language",
-      "properties": {
-        "confidence": 0.65
-      },
-      "source": "user"
     }
   ],
   "relationships": [
@@ -3572,7 +3775,7 @@
       "source_id": "appium-framework",
       "target_id": "cypress-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.75,
+      "confidence": 0.73,
       "source": "yaml",
       "properties": {
         "path_id": "appium-cypress-migration_path"
@@ -3582,7 +3785,7 @@
       "source_id": "appium-framework",
       "target_id": "k6-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.67,
+      "confidence": 0.69,
       "source": "yaml",
       "properties": {
         "path_id": "appium-k6-migration_path"
@@ -3592,7 +3795,7 @@
       "source_id": "appium-framework",
       "target_id": "locust-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.56,
+      "confidence": 0.64,
       "source": "yaml",
       "properties": {
         "path_id": "appium-locust-migration_path"
@@ -3602,7 +3805,7 @@
       "source_id": "appium-framework",
       "target_id": "playwright-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.75,
+      "confidence": 0.82,
       "source": "yaml",
       "properties": {
         "path_id": "appium-playwright-migration_path"
@@ -3612,7 +3815,7 @@
       "source_id": "appium-framework",
       "target_id": "pulumi-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.61,
+      "confidence": 0.71,
       "source": "yaml",
       "properties": {
         "path_id": "appium-pulumi-migration_path"
@@ -3622,7 +3825,7 @@
       "source_id": "appium-framework",
       "target_id": "puppeteer-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.77,
+      "confidence": 0.74,
       "source": "yaml",
       "properties": {
         "path_id": "appium-puppeteer-migration_path"
@@ -3632,7 +3835,7 @@
       "source_id": "appium-framework",
       "target_id": "rest-assured-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.61,
+      "confidence": 0.69,
       "source": "yaml",
       "properties": {
         "path_id": "appium-rest-assured-migration_path"
@@ -3642,7 +3845,7 @@
       "source_id": "appium-framework",
       "target_id": "selenium-webdriver-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.75,
+      "confidence": 0.88,
       "source": "yaml",
       "properties": {
         "path_id": "appium-selenium-webdriver-migration_path"
@@ -3652,7 +3855,7 @@
       "source_id": "appium-framework",
       "target_id": "testcafe-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.77,
+      "confidence": 0.74,
       "source": "yaml",
       "properties": {
         "path_id": "appium-testcafe-migration_path"
@@ -4528,7 +4731,7 @@
       "source_id": "cypress-framework",
       "target_id": "appium-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.75,
+      "confidence": 0.73,
       "source": "yaml",
       "properties": {
         "path_id": "appium-cypress-migration_path"
@@ -4538,7 +4741,7 @@
       "source_id": "cypress-framework",
       "target_id": "k6-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.58,
+      "confidence": 0.71,
       "source": "yaml",
       "properties": {
         "path_id": "cypress-k6-migration_path"
@@ -4548,7 +4751,7 @@
       "source_id": "cypress-framework",
       "target_id": "playwright-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.93,
+      "confidence": 0.86,
       "source": "yaml",
       "properties": {
         "path_id": "cypress-playwright-migration_path"
@@ -4558,7 +4761,7 @@
       "source_id": "cypress-framework",
       "target_id": "pulumi-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.58,
+      "confidence": 0.65,
       "source": "yaml",
       "properties": {
         "path_id": "cypress-pulumi-migration_path"
@@ -4568,7 +4771,7 @@
       "source_id": "cypress-framework",
       "target_id": "puppeteer-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.92,
+      "confidence": 0.96,
       "source": "yaml",
       "properties": {
         "path_id": "cypress-puppeteer-migration_path"
@@ -4578,7 +4781,7 @@
       "source_id": "cypress-framework",
       "target_id": "selenium-webdriver-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.92,
+      "confidence": 0.81,
       "source": "yaml",
       "properties": {
         "path_id": "cypress-selenium-webdriver-migration_path"
@@ -4588,7 +4791,7 @@
       "source_id": "cypress-framework",
       "target_id": "testcafe-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.92,
+      "confidence": 0.96,
       "source": "yaml",
       "properties": {
         "path_id": "cypress-testcafe-migration_path"
@@ -4598,7 +4801,7 @@
       "source_id": "cypress-framework",
       "target_id": "webdriverio-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.96,
+      "confidence": 0.98,
       "source": "yaml",
       "properties": {
         "path_id": "cypress-webdriverio-migration_path"
@@ -4776,7 +4979,7 @@
       "source_id": "k6-framework",
       "target_id": "appium-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.67,
+      "confidence": 0.69,
       "source": "yaml",
       "properties": {
         "path_id": "appium-k6-migration_path"
@@ -4786,7 +4989,7 @@
       "source_id": "k6-framework",
       "target_id": "cypress-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.58,
+      "confidence": 0.71,
       "source": "yaml",
       "properties": {
         "path_id": "cypress-k6-migration_path"
@@ -4796,7 +4999,7 @@
       "source_id": "k6-framework",
       "target_id": "playwright-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.61,
+      "confidence": 0.67,
       "source": "yaml",
       "properties": {
         "path_id": "k6-playwright-migration_path"
@@ -4806,7 +5009,7 @@
       "source_id": "k6-framework",
       "target_id": "pulumi-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.61,
+      "confidence": 0.63,
       "source": "yaml",
       "properties": {
         "path_id": "k6-pulumi-migration_path"
@@ -4816,7 +5019,7 @@
       "source_id": "k6-framework",
       "target_id": "puppeteer-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.62,
+      "confidence": 0.73,
       "source": "yaml",
       "properties": {
         "path_id": "k6-puppeteer-migration_path"
@@ -4826,7 +5029,7 @@
       "source_id": "k6-framework",
       "target_id": "selenium-webdriver-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.62,
+      "confidence": 0.67,
       "source": "yaml",
       "properties": {
         "path_id": "k6-selenium-webdriver-migration_path"
@@ -4836,7 +5039,7 @@
       "source_id": "k6-framework",
       "target_id": "testcafe-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.62,
+      "confidence": 0.73,
       "source": "yaml",
       "properties": {
         "path_id": "k6-testcafe-migration_path"
@@ -4846,43 +5049,11 @@
       "source_id": "k6-framework",
       "target_id": "webdriverio-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.54,
+      "confidence": 0.69,
       "source": "yaml",
       "properties": {
         "path_id": "k6-webdriverio-migration_path"
       }
-    },
-    {
-      "source_id": "k6-framework",
-      "target_id": "microservice-api-level-test-capability",
-      "relationship_type": "SUPPORTS_LANGUAGE",
-      "confidence": 0.5,
-      "source": "user",
-      "properties": {}
-    },
-    {
-      "source_id": "k6-framework",
-      "target_id": "ui-coverage-test-capability",
-      "relationship_type": "REQUIRES",
-      "confidence": 0.5,
-      "source": "user",
-      "properties": {}
-    },
-    {
-      "source_id": "k6-framework",
-      "target_id": "microservice-api-level-test-capability",
-      "relationship_type": "SUPPORTS_LANGUAGE",
-      "confidence": 0.5,
-      "source": "user",
-      "properties": {}
-    },
-    {
-      "source_id": "k6-framework",
-      "target_id": "microservice-api-level-test-capability",
-      "relationship_type": "SUPPORTS_LANGUAGE",
-      "confidence": 0.5,
-      "source": "user",
-      "properties": {}
     },
     {
       "source_id": "karate-framework",
@@ -5216,7 +5387,7 @@
       "source_id": "locust-framework",
       "target_id": "appium-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.56,
+      "confidence": 0.64,
       "source": "yaml",
       "properties": {
         "path_id": "appium-locust-migration_path"
@@ -5226,7 +5397,7 @@
       "source_id": "locust-framework",
       "target_id": "playwright-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.54,
+      "confidence": 0.63,
       "source": "yaml",
       "properties": {
         "path_id": "locust-playwright-migration_path"
@@ -5236,7 +5407,7 @@
       "source_id": "locust-framework",
       "target_id": "pulumi-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.56,
+      "confidence": 0.61,
       "source": "yaml",
       "properties": {
         "path_id": "locust-pulumi-migration_path"
@@ -5246,7 +5417,7 @@
       "source_id": "locust-framework",
       "target_id": "selenium-webdriver-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.54,
+      "confidence": 0.63,
       "source": "yaml",
       "properties": {
         "path_id": "locust-selenium-webdriver-migration_path"
@@ -5496,7 +5667,7 @@
       "source_id": "playwright-framework",
       "target_id": "appium-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.75,
+      "confidence": 0.82,
       "source": "yaml",
       "properties": {
         "path_id": "appium-playwright-migration_path"
@@ -5506,7 +5677,7 @@
       "source_id": "playwright-framework",
       "target_id": "cypress-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.93,
+      "confidence": 0.86,
       "source": "yaml",
       "properties": {
         "path_id": "cypress-playwright-migration_path"
@@ -5516,7 +5687,7 @@
       "source_id": "playwright-framework",
       "target_id": "k6-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.61,
+      "confidence": 0.67,
       "source": "yaml",
       "properties": {
         "path_id": "k6-playwright-migration_path"
@@ -5526,7 +5697,7 @@
       "source_id": "playwright-framework",
       "target_id": "locust-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.54,
+      "confidence": 0.63,
       "source": "yaml",
       "properties": {
         "path_id": "locust-playwright-migration_path"
@@ -5536,7 +5707,7 @@
       "source_id": "playwright-framework",
       "target_id": "pulumi-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.61,
+      "confidence": 0.73,
       "source": "yaml",
       "properties": {
         "path_id": "playwright-pulumi-migration_path"
@@ -5546,7 +5717,7 @@
       "source_id": "playwright-framework",
       "target_id": "puppeteer-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.96,
+      "confidence": 0.87,
       "source": "yaml",
       "properties": {
         "path_id": "playwright-puppeteer-migration_path"
@@ -5556,7 +5727,7 @@
       "source_id": "playwright-framework",
       "target_id": "rest-assured-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.57,
+      "confidence": 0.65,
       "source": "yaml",
       "properties": {
         "path_id": "playwright-rest-assured-migration_path"
@@ -5566,7 +5737,7 @@
       "source_id": "playwright-framework",
       "target_id": "selenium-webdriver-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.93,
+      "confidence": 0.91,
       "source": "yaml",
       "properties": {
         "path_id": "playwright-selenium-webdriver-migration_path"
@@ -5576,7 +5747,7 @@
       "source_id": "playwright-framework",
       "target_id": "testcafe-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.96,
+      "confidence": 0.87,
       "source": "yaml",
       "properties": {
         "path_id": "playwright-testcafe-migration_path"
@@ -5586,7 +5757,7 @@
       "source_id": "playwright-framework",
       "target_id": "webdriverio-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.93,
+      "confidence": 0.86,
       "source": "yaml",
       "properties": {
         "path_id": "playwright-webdriverio-migration_path"
@@ -5908,7 +6079,7 @@
       "source_id": "pulumi-framework",
       "target_id": "appium-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.61,
+      "confidence": 0.71,
       "source": "yaml",
       "properties": {
         "path_id": "appium-pulumi-migration_path"
@@ -5918,7 +6089,7 @@
       "source_id": "pulumi-framework",
       "target_id": "cypress-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.58,
+      "confidence": 0.65,
       "source": "yaml",
       "properties": {
         "path_id": "cypress-pulumi-migration_path"
@@ -5928,7 +6099,7 @@
       "source_id": "pulumi-framework",
       "target_id": "k6-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.61,
+      "confidence": 0.63,
       "source": "yaml",
       "properties": {
         "path_id": "k6-pulumi-migration_path"
@@ -5938,7 +6109,7 @@
       "source_id": "pulumi-framework",
       "target_id": "locust-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.56,
+      "confidence": 0.61,
       "source": "yaml",
       "properties": {
         "path_id": "locust-pulumi-migration_path"
@@ -5948,7 +6119,7 @@
       "source_id": "pulumi-framework",
       "target_id": "playwright-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.61,
+      "confidence": 0.73,
       "source": "yaml",
       "properties": {
         "path_id": "playwright-pulumi-migration_path"
@@ -5958,7 +6129,7 @@
       "source_id": "pulumi-framework",
       "target_id": "puppeteer-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.58,
+      "confidence": 0.64,
       "source": "yaml",
       "properties": {
         "path_id": "pulumi-puppeteer-migration_path"
@@ -5968,7 +6139,7 @@
       "source_id": "pulumi-framework",
       "target_id": "rest-assured-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.56,
+      "confidence": 0.61,
       "source": "yaml",
       "properties": {
         "path_id": "pulumi-rest-assured-migration_path"
@@ -5978,7 +6149,7 @@
       "source_id": "pulumi-framework",
       "target_id": "selenium-webdriver-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.58,
+      "confidence": 0.7,
       "source": "yaml",
       "properties": {
         "path_id": "pulumi-selenium-webdriver-migration_path"
@@ -5988,7 +6159,7 @@
       "source_id": "pulumi-framework",
       "target_id": "testcafe-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.58,
+      "confidence": 0.64,
       "source": "yaml",
       "properties": {
         "path_id": "pulumi-testcafe-migration_path"
@@ -5998,7 +6169,7 @@
       "source_id": "pulumi-framework",
       "target_id": "webdriverio-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.58,
+      "confidence": 0.65,
       "source": "yaml",
       "properties": {
         "path_id": "pulumi-webdriverio-migration_path"
@@ -6240,7 +6411,7 @@
       "source_id": "puppeteer-framework",
       "target_id": "appium-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.77,
+      "confidence": 0.74,
       "source": "yaml",
       "properties": {
         "path_id": "appium-puppeteer-migration_path"
@@ -6250,7 +6421,7 @@
       "source_id": "puppeteer-framework",
       "target_id": "cypress-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.92,
+      "confidence": 0.96,
       "source": "yaml",
       "properties": {
         "path_id": "cypress-puppeteer-migration_path"
@@ -6260,7 +6431,7 @@
       "source_id": "puppeteer-framework",
       "target_id": "k6-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.62,
+      "confidence": 0.73,
       "source": "yaml",
       "properties": {
         "path_id": "k6-puppeteer-migration_path"
@@ -6270,7 +6441,7 @@
       "source_id": "puppeteer-framework",
       "target_id": "playwright-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.96,
+      "confidence": 0.87,
       "source": "yaml",
       "properties": {
         "path_id": "playwright-puppeteer-migration_path"
@@ -6280,7 +6451,7 @@
       "source_id": "puppeteer-framework",
       "target_id": "pulumi-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.58,
+      "confidence": 0.64,
       "source": "yaml",
       "properties": {
         "path_id": "pulumi-puppeteer-migration_path"
@@ -6290,7 +6461,7 @@
       "source_id": "puppeteer-framework",
       "target_id": "selenium-webdriver-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.96,
+      "confidence": 0.83,
       "source": "yaml",
       "properties": {
         "path_id": "puppeteer-selenium-webdriver-migration_path"
@@ -6310,7 +6481,7 @@
       "source_id": "puppeteer-framework",
       "target_id": "webdriverio-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.92,
+      "confidence": 0.96,
       "source": "yaml",
       "properties": {
         "path_id": "puppeteer-webdriverio-migration_path"
@@ -6504,7 +6675,7 @@
       "source_id": "rest-assured-framework",
       "target_id": "appium-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.61,
+      "confidence": 0.69,
       "source": "yaml",
       "properties": {
         "path_id": "appium-rest-assured-migration_path"
@@ -6514,7 +6685,7 @@
       "source_id": "rest-assured-framework",
       "target_id": "playwright-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.57,
+      "confidence": 0.65,
       "source": "yaml",
       "properties": {
         "path_id": "playwright-rest-assured-migration_path"
@@ -6524,7 +6695,7 @@
       "source_id": "rest-assured-framework",
       "target_id": "pulumi-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.56,
+      "confidence": 0.61,
       "source": "yaml",
       "properties": {
         "path_id": "pulumi-rest-assured-migration_path"
@@ -6534,7 +6705,7 @@
       "source_id": "rest-assured-framework",
       "target_id": "selenium-webdriver-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.58,
+      "confidence": 0.68,
       "source": "yaml",
       "properties": {
         "path_id": "rest-assured-selenium-webdriver-migration_path"
@@ -6738,6 +6909,22 @@
       "relationship_type": "REQUIRES",
       "confidence": 1.0,
       "source": "yaml",
+      "properties": {}
+    },
+    {
+      "source_id": "robot-framework-framework",
+      "target_id": "playwright-framework",
+      "relationship_type": "COMPATIBLE_WITH",
+      "confidence": 0.5,
+      "source": "user",
+      "properties": {}
+    },
+    {
+      "source_id": "robot-framework-framework",
+      "target_id": "playwright-framework",
+      "relationship_type": "REPORTED_BY_USER",
+      "confidence": 0.5,
+      "source": "user",
       "properties": {}
     },
     {
@@ -7000,7 +7187,7 @@
       "source_id": "selenium-webdriver-framework",
       "target_id": "appium-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.75,
+      "confidence": 0.88,
       "source": "yaml",
       "properties": {
         "path_id": "appium-selenium-webdriver-migration_path"
@@ -7010,7 +7197,7 @@
       "source_id": "selenium-webdriver-framework",
       "target_id": "cypress-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.92,
+      "confidence": 0.81,
       "source": "yaml",
       "properties": {
         "path_id": "cypress-selenium-webdriver-migration_path"
@@ -7020,7 +7207,7 @@
       "source_id": "selenium-webdriver-framework",
       "target_id": "k6-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.62,
+      "confidence": 0.67,
       "source": "yaml",
       "properties": {
         "path_id": "k6-selenium-webdriver-migration_path"
@@ -7030,7 +7217,7 @@
       "source_id": "selenium-webdriver-framework",
       "target_id": "locust-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.54,
+      "confidence": 0.63,
       "source": "yaml",
       "properties": {
         "path_id": "locust-selenium-webdriver-migration_path"
@@ -7040,7 +7227,7 @@
       "source_id": "selenium-webdriver-framework",
       "target_id": "playwright-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.93,
+      "confidence": 0.91,
       "source": "yaml",
       "properties": {
         "path_id": "playwright-selenium-webdriver-migration_path"
@@ -7050,7 +7237,7 @@
       "source_id": "selenium-webdriver-framework",
       "target_id": "pulumi-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.58,
+      "confidence": 0.7,
       "source": "yaml",
       "properties": {
         "path_id": "pulumi-selenium-webdriver-migration_path"
@@ -7060,7 +7247,7 @@
       "source_id": "selenium-webdriver-framework",
       "target_id": "puppeteer-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.96,
+      "confidence": 0.83,
       "source": "yaml",
       "properties": {
         "path_id": "puppeteer-selenium-webdriver-migration_path"
@@ -7070,7 +7257,7 @@
       "source_id": "selenium-webdriver-framework",
       "target_id": "rest-assured-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.58,
+      "confidence": 0.68,
       "source": "yaml",
       "properties": {
         "path_id": "rest-assured-selenium-webdriver-migration_path"
@@ -7080,7 +7267,7 @@
       "source_id": "selenium-webdriver-framework",
       "target_id": "testcafe-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.96,
+      "confidence": 0.83,
       "source": "yaml",
       "properties": {
         "path_id": "selenium-webdriver-testcafe-migration_path"
@@ -7090,7 +7277,7 @@
       "source_id": "selenium-webdriver-framework",
       "target_id": "webdriverio-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.92,
+      "confidence": 0.81,
       "source": "yaml",
       "properties": {
         "path_id": "selenium-webdriver-webdriverio-migration_path"
@@ -7652,7 +7839,7 @@
       "source_id": "testcafe-framework",
       "target_id": "appium-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.77,
+      "confidence": 0.74,
       "source": "yaml",
       "properties": {
         "path_id": "appium-testcafe-migration_path"
@@ -7662,7 +7849,7 @@
       "source_id": "testcafe-framework",
       "target_id": "cypress-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.92,
+      "confidence": 0.96,
       "source": "yaml",
       "properties": {
         "path_id": "cypress-testcafe-migration_path"
@@ -7672,7 +7859,7 @@
       "source_id": "testcafe-framework",
       "target_id": "k6-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.62,
+      "confidence": 0.73,
       "source": "yaml",
       "properties": {
         "path_id": "k6-testcafe-migration_path"
@@ -7682,7 +7869,7 @@
       "source_id": "testcafe-framework",
       "target_id": "playwright-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.96,
+      "confidence": 0.87,
       "source": "yaml",
       "properties": {
         "path_id": "playwright-testcafe-migration_path"
@@ -7692,7 +7879,7 @@
       "source_id": "testcafe-framework",
       "target_id": "pulumi-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.58,
+      "confidence": 0.64,
       "source": "yaml",
       "properties": {
         "path_id": "pulumi-testcafe-migration_path"
@@ -7712,7 +7899,7 @@
       "source_id": "testcafe-framework",
       "target_id": "selenium-webdriver-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.96,
+      "confidence": 0.83,
       "source": "yaml",
       "properties": {
         "path_id": "selenium-webdriver-testcafe-migration_path"
@@ -7722,7 +7909,7 @@
       "source_id": "testcafe-framework",
       "target_id": "webdriverio-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.92,
+      "confidence": 0.96,
       "source": "yaml",
       "properties": {
         "path_id": "testcafe-webdriverio-migration_path"
@@ -7950,7 +8137,7 @@
       "source_id": "webdriverio-framework",
       "target_id": "cypress-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.96,
+      "confidence": 0.98,
       "source": "yaml",
       "properties": {
         "path_id": "cypress-webdriverio-migration_path"
@@ -7960,7 +8147,7 @@
       "source_id": "webdriverio-framework",
       "target_id": "k6-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.54,
+      "confidence": 0.69,
       "source": "yaml",
       "properties": {
         "path_id": "k6-webdriverio-migration_path"
@@ -7970,7 +8157,7 @@
       "source_id": "webdriverio-framework",
       "target_id": "playwright-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.93,
+      "confidence": 0.86,
       "source": "yaml",
       "properties": {
         "path_id": "playwright-webdriverio-migration_path"
@@ -7980,7 +8167,7 @@
       "source_id": "webdriverio-framework",
       "target_id": "pulumi-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.58,
+      "confidence": 0.65,
       "source": "yaml",
       "properties": {
         "path_id": "pulumi-webdriverio-migration_path"
@@ -7990,7 +8177,7 @@
       "source_id": "webdriverio-framework",
       "target_id": "puppeteer-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.92,
+      "confidence": 0.96,
       "source": "yaml",
       "properties": {
         "path_id": "puppeteer-webdriverio-migration_path"
@@ -8000,7 +8187,7 @@
       "source_id": "webdriverio-framework",
       "target_id": "selenium-webdriver-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.92,
+      "confidence": 0.81,
       "source": "yaml",
       "properties": {
         "path_id": "selenium-webdriver-webdriverio-migration_path"
@@ -8010,91 +8197,11 @@
       "source_id": "webdriverio-framework",
       "target_id": "testcafe-framework",
       "relationship_type": "MIGRATES_TO",
-      "confidence": 0.92,
+      "confidence": 0.96,
       "source": "yaml",
       "properties": {
         "path_id": "testcafe-webdriverio-migration_path"
       }
-    },
-    {
-      "source_id": "jmeter-framework",
-      "target_id": "java-language",
-      "relationship_type": "SUPPORTS_LANGUAGE",
-      "confidence": 0.5,
-      "source": "user",
-      "properties": {}
-    },
-    {
-      "source_id": "postman-capability",
-      "target_id": "java-language",
-      "relationship_type": "REQUIRES",
-      "confidence": 0.5,
-      "source": "user",
-      "properties": {}
-    },
-    {
-      "source_id": "katalon-studio-ci_cd_tool",
-      "target_id": "aws-cloudformation-cloud_provider",
-      "relationship_type": "INTEGRATES_WITH",
-      "confidence": 0.5,
-      "source": "user",
-      "properties": {}
-    },
-    {
-      "source_id": "api-testing-framework-framework",
-      "target_id": "microservice-capability",
-      "relationship_type": "HAS_CAPABILITY",
-      "confidence": 0.5,
-      "source": "user",
-      "properties": {}
-    },
-    {
-      "source_id": "apitesting-framework",
-      "target_id": "microservice-capability",
-      "relationship_type": "SUPPORTS_LANGUAGE",
-      "confidence": 0.5,
-      "source": "user",
-      "properties": {}
-    },
-    {
-      "source_id": "microservice-capability",
-      "target_id": "api-capability",
-      "relationship_type": "INTEGRATES_WITH",
-      "confidence": 0.5,
-      "source": "user",
-      "properties": {}
-    },
-    {
-      "source_id": "microservice-capability",
-      "target_id": "api-capability",
-      "relationship_type": "SUPPORTS_LANGUAGE",
-      "confidence": 0.5,
-      "source": "user",
-      "properties": {}
-    },
-    {
-      "source_id": "microservice-capability",
-      "target_id": "api-capability",
-      "relationship_type": "HAS_CAPABILITY",
-      "confidence": 0.5,
-      "source": "user",
-      "properties": {}
-    },
-    {
-      "source_id": "testing-framework",
-      "target_id": "framework-framework",
-      "relationship_type": "REQUIRES",
-      "confidence": 0.5,
-      "source": "user",
-      "properties": {}
-    },
-    {
-      "source_id": "microservice-api-testing-framework-framework",
-      "target_id": "api-capability",
-      "relationship_type": "SUPPORTS_LANGUAGE",
-      "confidence": 0.5,
-      "source": "user",
-      "properties": {}
     }
   ]
 }

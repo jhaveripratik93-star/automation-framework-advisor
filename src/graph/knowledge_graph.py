@@ -10,6 +10,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class EntityType(str, Enum):
@@ -19,7 +22,6 @@ class EntityType(str, Enum):
     """
 
     FRAMEWORK = "Framework"
-    VERSION = "Version"
     CAPABILITY = "Capability"
     LANGUAGE = "Language"
     CI_CD_TOOL = "CI_CD_Tool"
@@ -37,11 +39,6 @@ class RelationshipType(str, Enum):
 
     SUPPORTS_LANGUAGE = "SUPPORTS_LANGUAGE"
     HAS_CAPABILITY = "HAS_CAPABILITY"
-    HAS_VERSION = "HAS_VERSION"
-    ADDED_IN = "ADDED_IN"
-    DEPRECATED_IN = "DEPRECATED_IN"
-    REMOVED_IN = "REMOVED_IN"
-    BREAKING_CHANGE_IN = "BREAKING_CHANGE_IN"
     INTEGRATES_WITH = "INTEGRATES_WITH"
     MIGRATES_TO = "MIGRATES_TO"
     COMPATIBLE_WITH = "COMPATIBLE_WITH"
@@ -136,14 +133,8 @@ class KnowledgeGraph:
         self._name_index: dict[str, list[str]] = {}
 
     def add_entity(self, entity: Entity) -> None:
-        """Add an entity to the graph and update the name index.
-
-        If an entity with the same ID already exists, it is overwritten
-        and the name index is updated accordingly.
-
-        Args:
-            entity: The entity to add.
-        """
+        """Add an entity to the graph and update the name index."""
+        existed = entity.id in self._entities
         # If replacing an existing entity, remove old name index entry
         if entity.id in self._entities:
             old_entity = self._entities[entity.id]
@@ -163,41 +154,28 @@ class KnowledgeGraph:
             self._name_index[name_key] = []
         if entity.id not in self._name_index[name_key]:
             self._name_index[name_key].append(entity.id)
+        logger.info("KnowledgeGraph.add_entity: %s id=%s source=%s %s",
+                    entity.entity_type.value, entity.id, entity.source,
+                    "(updated)" if existed else "(new)")
 
     def add_relationship(self, relationship: Relationship) -> None:
-        """Add a relationship to the adjacency list keyed by source_id.
-
-        Args:
-            relationship: The relationship to add.
-        """
+        """Add a relationship to the adjacency list keyed by source_id."""
         if relationship.source_id not in self._adjacency:
             self._adjacency[relationship.source_id] = []
         self._adjacency[relationship.source_id].append(relationship)
+        logger.info("KnowledgeGraph.add_relationship: %s -> %s type=%s confidence=%.2f source=%s",
+                    relationship.source_id, relationship.target_id,
+                    relationship.relationship_type.value, relationship.confidence, relationship.source)
 
     def get_entity(self, entity_id: str) -> Entity | None:
-        """Retrieve an entity by its ID.
-
-        Args:
-            entity_id: The unique identifier of the entity.
-
-        Returns:
-            The entity if found, None otherwise.
-        """
-        return self._entities.get(entity_id)
+        """Retrieve an entity by its ID."""
+        entity = self._entities.get(entity_id)
+        logger.info("KnowledgeGraph.get_entity: id=%s found=%s", entity_id, entity is not None)
+        return entity
 
     def get_relationships(self, entity_id: str, hops: int = 1) -> list[Relationship]:
-        """Get all relationships reachable from an entity within N hops using BFS.
-
-        Traverses the graph starting from the given entity, collecting all
-        relationships encountered up to the specified hop depth.
-
-        Args:
-            entity_id: The starting entity ID.
-            hops: Maximum number of hops to traverse (default 1).
-
-        Returns:
-            List of all relationships found within the hop distance.
-        """
+        """Get all relationships reachable from an entity within N hops using BFS."""
+        logger.info("KnowledgeGraph.get_relationships: entity_id=%s hops=%d", entity_id, hops)
         if hops < 1:
             return []
 
@@ -218,49 +196,42 @@ class KnowledgeGraph:
                     visited.add(rel.target_id)
                     queue.append((rel.target_id, depth + 1))
 
+        logger.info("KnowledgeGraph.get_relationships: found=%d relationships", len(collected))
         return collected
 
     def find_entities_by_name(self, name: str) -> list[Entity]:
-        """Find entities by name using case-insensitive lookup via the reverse index.
-
-        Args:
-            name: The entity name to search for (case-insensitive).
-
-        Returns:
-            List of entities matching the given name.
-
-        Validates: Requirements 7.1
-        """
+        """Find entities by name using case-insensitive lookup."""
+        logger.info("KnowledgeGraph.find_entities_by_name: name='%s'", name)
         name_key = name.lower()
+        
+        # Try exact match first
         entity_ids = self._name_index.get(name_key, [])
-        return [self._entities[eid] for eid in entity_ids if eid in self._entities]
+        if entity_ids:
+            return [self._entities[eid] for eid in entity_ids if eid in self._entities]
+        
+        # Fall back to partial match, prioritizing Framework entities
+        candidates: list[Entity] = []
+        for key, eids in self._name_index.items():
+            if name_key in key or key in name_key:
+                for eid in eids:
+                    if eid in self._entities:
+                        candidates.append(self._entities[eid])
+        
+        # Sort: Frameworks first, then by name length (shorter = more specific match)
+        from src.graph.knowledge_graph import EntityType
+        candidates.sort(key=lambda e: (e.entity_type != EntityType.FRAMEWORK, len(e.name)))
+        logger.info("KnowledgeGraph.find_entities_by_name: name='%s' found=%d (partial match)", name, len(candidates))
+        return candidates
 
     def find_entities_by_type(self, entity_type: EntityType) -> list[Entity]:
-        """Find all entities of a given type.
-
-        Args:
-            entity_type: The entity type to filter by.
-
-        Returns:
-            List of entities matching the given type.
-        """
-        return [e for e in self._entities.values() if e.entity_type == entity_type]
+        """Find all entities of a given type."""
+        results = [e for e in self._entities.values() if e.entity_type == entity_type]
+        logger.info("KnowledgeGraph.find_entities_by_type: type=%s found=%d", entity_type.value, len(results))
+        return results
 
     def get_subgraph(self, entity_ids: list[str], max_hops: int = 2) -> SubGraph:
-        """Extract a subgraph by BFS from seed entities up to max_hops.
-
-        Collects all entities and relationships reachable from the seed entities
-        within the specified hop distance.
-
-        Args:
-            entity_ids: Seed entity IDs to start the BFS from.
-            max_hops: Maximum number of hops to traverse (default 2).
-
-        Returns:
-            A SubGraph containing the discovered entities and relationships.
-
-        Validates: Requirements 7.2
-        """
+        """Extract a subgraph by BFS from seed entities up to max_hops."""
+        logger.info("KnowledgeGraph.get_subgraph: seeds=%d max_hops=%d", len(entity_ids), max_hops)
         collected_entities: dict[str, Entity] = {}
         collected_relationships: list[Relationship] = []
         visited: set[str] = set()
@@ -287,10 +258,13 @@ class KnowledgeGraph:
                         collected_entities[rel.target_id] = self._entities[rel.target_id]
                     queue.append((rel.target_id, depth + 1))
 
-        return SubGraph(
+        result = SubGraph(
             entities=list(collected_entities.values()),
             relationships=collected_relationships,
         )
+        logger.info("KnowledgeGraph.get_subgraph: result entities=%d relationships=%d",
+                    len(result.entities), len(result.relationships))
+        return result
 
     def update_confidence(
         self,

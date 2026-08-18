@@ -13,6 +13,12 @@ logger = logging.getLogger(__name__)
 class KnowledgeBase:
     """Loads and manages framework data from YAML files."""
 
+    # Aliases for common framework name variations
+    ALIASES: dict[str, str] = {
+        "selenium": "selenium webdriver",
+        "webdriver": "selenium webdriver",
+    }
+
     def __init__(self, data_dir: str = "data/frameworks"):
         self.data_dir = Path(data_dir)
         self.frameworks: dict[str, FrameworkData] = {}
@@ -40,8 +46,11 @@ class KnowledgeBase:
         )
 
     def get(self, name: str) -> FrameworkData | None:
-        """Get a framework by name (case-insensitive)."""
-        return self.frameworks.get(name.lower())
+        """Get a framework by name (case-insensitive, with alias support)."""
+        key = name.lower()
+        # Check alias first
+        key = self.ALIASES.get(key, key)
+        return self.frameworks.get(key)
 
     def list_all(self) -> list[FrameworkData]:
         """Return all loaded frameworks."""

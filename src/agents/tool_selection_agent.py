@@ -1,58 +1,27 @@
-"""Tool Selection Agent — given a user query, selects the most appropriate
-tool(s) from the available tool definitions.
-
-Returns an ordered list of (tool_name, arguments) pairs to execute.
-"""
+"""Tool Selection Agent — uses the LLM to select tools and build arguments."""
 from __future__ import annotations
 
+import json
 import logging
-import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from src.llm.ollama_client import OllamaClient
 
 logger = logging.getLogger(__name__)
 
-# Mapping of intent keywords → tool name (order matters — first match wins)
-_INTENT_MAP: list[tuple[list[str], str]] = [
-    (["version", "upgrade", "compatible", "compatibility", "breaking change",
-      "deprecated", "deprecation", "v3", "v4", "v2", "1.40", "1.45", "1.30",
-      "api removed", "still supported"], "analyze_version_compatibility"),
-    (["compare", "vs", "versus", "difference between"], "run_framework_comparison"),
-    (["migrate", "migration", "path from", "move from"], "find_migration_paths"),
-    (["coverage", "test case", "analyze test"], "analyze_test_case_coverage"),
-    (["uploaded", "file", "case study", "document"], "analyze_uploaded_content"),
-    # Recommendation intent — must come before generic "details" catch-all
-    (["best", "recommend", "which framework", "what framework", "suggest",
-      "for microservice", "for api", "for mobile", "for web", "for performance",
-      "for load", "suitable", "ideal", "top framework"], "recommend_frameworks"),
-    (["details", "capabilities", "about", "tell me about", "what is"], "get_framework_details"),
-    (["search", "find", "look up"], "search_knowledge_graph"),
-]
-
-# Use-case keywords → capability filter for recommend_frameworks
-_USE_CASE_MAP: dict[str, str] = {
-    "api": "api_testing",
-    "microservice": "api_testing",
-    "rest": "api_testing",
-    "graphql": "graphql_support",
-    "web": "browser_testing",
-    "browser": "browser_testing",
-    "mobile": "mobile_testing",
-    "performance": "performance_testing",
-    "load": "load_testing",
-    "ui": "ui_testing",
-}
-
-# Framework names for argument extraction
-_KNOWN_FRAMEWORKS = [
-    "playwright", "cypress", "selenium", "webdriverio", "robot framework",
-    "testcafe", "puppeteer", "appium", "karate", "k6", "locust",
-    "rest assured", "terraform", "ansible", "chef", "pulumi",
-    "aws cloudformation",
-]
+_SYSTEM_PROMPT = (
+    "You are a tool selection agent for an automation framework advisor. "
+    "Given a user query and a list of available tools, select the most appropriate "
+    "tool(s) and construct their arguments.\n\n"
+    "Available tools:\n"
+    "- search_knowledge_graph(query, entity_types): search for frameworks by keyword\n"
+    "- get_framework_details(framework_name): full details for a single framework\n"
+    "- run_framework_comparison(frameworks, focus_criteria): side-by-side comparison\n"
+    "- recommend_frameworks(use_case, required_capability): ranked recommendations\n"
+    "- find_migration_paths(from_framework, to_frameworks): migration routes and effort\n"
+    "- analyze_test_case_coverage(test_cases, frameworks): coverage matrix\n"
+    "- analyze_uploaded_content(search_term, document_type): search uploaded files\n\n"
+    "Respond with a JSON array of tool calls, e.g.:\n"
+    '[{"tool_name": "run_framework_comparison", "arguments": {"frameworks": ["Playwright", "Cypress"]}}]'
+)
 
 
 @dataclass
@@ -69,117 +38,42 @@ class SelectionResult:
 
 
 class ToolSelectionAgent:
-    """Selects which tool(s) to call based on the user query."""
-
-    def __init__(self, llm_client: OllamaClient | None = None) -> None:
+    def __init__(self, llm_client=None) -> None:
         self._client = llm_client
 
     def select(self, user_message: str, available_tools: list[str]) -> SelectionResult:
-        msg_lower = user_message.lower()
-        tool_calls: list[ToolCall] = []
-
-        mentioned = [fw for fw in _KNOWN_FRAMEWORKS if fw in msg_lower]
-
-        matched_tool: str | None = None
-        for keywords, tool_name in _INTENT_MAP:
-            if tool_name not in available_tools:
-                continue
-            if any(kw in msg_lower for kw in keywords):
-                matched_tool = tool_name
-                break
-
-        if matched_tool == "run_framework_comparison":
-            if len(mentioned) >= 2:
-                tool_calls.append(ToolCall(
-                    tool_name="run_framework_comparison",
-                    arguments={"frameworks": [f.title() for f in mentioned[:4]]},
-                    reasoning=f"compare {mentioned}",
-                ))
-            else:
-                # No specific frameworks named — fall back to recommendation
-                matched_tool = "recommend_frameworks"
-
-        if matched_tool == "recommend_frameworks":
-            capability = next(
-                (cap for kw, cap in _USE_CASE_MAP.items() if kw in msg_lower), None
+        prompt = (
+            f"Available tools: {available_tools}\n\n"
+            f"User query: {user_message}\n\n"
+            "Select the appropriate tool(s) and return a JSON array."
+        )
+        try:
+            result = self._client.chat(
+                messages=[{"role": "user", "content": prompt}],
+                system=_SYSTEM_PROMPT,
             )
-            tool_calls.append(ToolCall(
-                tool_name="recommend_frameworks",
-                arguments={"use_case": msg_lower[:120], "required_capability": capability},
-                reasoning=f"recommendation query, capability={capability}",
-            ))
-
-        elif matched_tool == "find_migration_paths" and mentioned:
-            tool_calls.append(ToolCall(
-                tool_name="find_migration_paths",
-                arguments={"from_framework": mentioned[0].title(),
-                           "to_frameworks": [f.title() for f in mentioned[1:]] or None},
-                reasoning=f"migration from {mentioned[0]}",
-            ))
-
-        elif matched_tool == "get_framework_details" and mentioned:
-            for fw in mentioned[:2]:
-                tool_calls.append(ToolCall(
-                    tool_name="get_framework_details",
-                    arguments={"framework_name": fw.title()},
-                    reasoning=f"details for {fw}",
-                ))
-
-        elif matched_tool == "analyze_uploaded_content":
-            tool_calls.append(ToolCall(
-                tool_name="analyze_uploaded_content",
-                arguments={"search_term": user_message[:100], "document_type": "all"},
-                reasoning="uploaded content query",
-            ))
-
-        elif matched_tool == "analyze_test_case_coverage":
-            tool_calls.append(ToolCall(
-                tool_name="analyze_test_case_coverage",
-                arguments={"test_cases": [], "frameworks": [f.title() for f in mentioned] or None},
-                reasoning="coverage query",
-            ))
-
-        elif matched_tool == "analyze_version_compatibility":
-            # Extract version numbers from the message
-            version_pattern = re.findall(r"\b(\d+\.[\d.]+)\b", msg_lower)
-            fw_name = mentioned[0].title() if mentioned else ""
-            target_ver = ""
-            current_ver = ""
-            if len(version_pattern) >= 2:
-                current_ver = version_pattern[0]
-                target_ver = version_pattern[1]
-            elif len(version_pattern) == 1:
-                target_ver = version_pattern[0]
-            # Extract API patterns if mentioned (e.g. find_element_by_id)
-            api_patterns = re.findall(r"\b([a-z_]+(?:_[a-z_]+){2,})\b", msg_lower)
-            tool_calls.append(ToolCall(
-                tool_name="analyze_version_compatibility",
-                arguments={
-                    "framework_name": fw_name,
-                    "target_version": target_ver,
-                    "current_version": current_ver,
-                    "test_apis": api_patterns or None,
-                },
-                reasoning=f"version compatibility: {fw_name} {current_ver} → {target_ver}",
-            ))
-
-        elif matched_tool == "search_knowledge_graph":
-            tool_calls.append(ToolCall(
+            raw = result.get("content", "").strip()
+            # Extract JSON array from response
+            start, end = raw.find("["), raw.rfind("]") + 1
+            tool_calls = [
+                ToolCall(tool_name=tc["tool_name"], arguments=tc.get("arguments", {}))
+                for tc in json.loads(raw[start:end])
+                if tc.get("tool_name") in available_tools
+            ] if start != -1 else []
+        except Exception as exc:
+            logger.warning("ToolSelectionAgent: LLM call failed (%s) — using search fallback", exc)
+            tool_calls = [ToolCall(
                 tool_name="search_knowledge_graph",
-                arguments={"query": user_message, "entity_types": ["Framework", "Capability"]},
-                reasoning="explicit search query",
-            ))
+                arguments={"query": user_message},
+                reasoning="fallback",
+            )]
 
-        else:
-            # Unmatched — use recommend_frameworks as the safe default
-            capability = next(
-                (cap for kw, cap in _USE_CASE_MAP.items() if kw in msg_lower), None
-            )
-            tool_calls.append(ToolCall(
+        if not tool_calls:
+            tool_calls = [ToolCall(
                 tool_name="recommend_frameworks",
-                arguments={"use_case": user_message[:120], "required_capability": capability},
-                reasoning="default: no strong intent match, using recommendation",
-            ))
+                arguments={"use_case": user_message},
+                reasoning="fallback: empty LLM response",
+            )]
 
         reasoning = f"selected {len(tool_calls)} tool(s): {[tc.tool_name for tc in tool_calls]}"
         logger.info("ToolSelectionAgent: %s", reasoning)

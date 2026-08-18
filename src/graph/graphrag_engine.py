@@ -58,27 +58,25 @@ class GraphRAGEngine:
 
         Validates: Requirements 7.2, 7.3, 7.5
         """
-        logger.debug("GraphRAGEngine.retrieve_context: query_len=%d query='%.80s'", len(query), query)
+        logger.info("GraphRAGEngine.retrieve_context: START query='%.80s'", query)
 
         entity_ids = self._identify_entities(query)
-        logger.debug("GraphRAGEngine.retrieve_context: matched entity_ids=%s", entity_ids)
+        logger.info("GraphRAGEngine.retrieve_context: matched %d entities", len(entity_ids))
 
         if not entity_ids:
-            logger.debug("GraphRAGEngine.retrieve_context: no entities matched — using YAML fallback")
+            logger.info("GraphRAGEngine.retrieve_context: no entities matched — using YAML fallback")
             return self._yaml_fallback(query)
 
         subgraph = self._graph.get_subgraph(entity_ids, max_hops=self._max_hops)
-        logger.debug(
-            "GraphRAGEngine.retrieve_context: subgraph entities=%d relationships=%d",
-            len(subgraph.entities), len(subgraph.relationships),
-        )
+        logger.info("GraphRAGEngine.retrieve_context: subgraph entities=%d relationships=%d",
+                    len(subgraph.entities), len(subgraph.relationships))
 
         if not subgraph.relationships:
-            logger.debug("GraphRAGEngine.retrieve_context: subgraph has no relationships — using YAML fallback")
+            logger.info("GraphRAGEngine.retrieve_context: empty subgraph — using YAML fallback")
             return self._yaml_fallback(query)
 
         context = self._format_subgraph(subgraph)
-        logger.debug("GraphRAGEngine.retrieve_context: formatted context_len=%d", len(context))
+        logger.info("GraphRAGEngine.retrieve_context: DONE context_len=%d", len(context))
         return context
 
     def _identify_entities(self, query: str) -> list[str]:
@@ -91,7 +89,7 @@ class GraphRAGEngine:
             for t in query.split()
             if len(t) >= _MIN_TOKEN_LEN
         ]
-        logger.debug("GraphRAGEngine._identify_entities: tokens=%s", tokens)
+        logger.info("GraphRAGEngine._identify_entities: tokens=%s", tokens)
 
         matched_ids: list[str] = []
         seen: set[str] = set()
@@ -120,7 +118,7 @@ class GraphRAGEngine:
                                 token, name_key, score,
                             )
 
-        logger.debug("GraphRAGEngine._identify_entities: total matched=%d", len(matched_ids))
+        logger.info("GraphRAGEngine._identify_entities: total matched=%d", len(matched_ids))
         return matched_ids
 
     def _format_subgraph(self, subgraph: SubGraph) -> str:
@@ -161,5 +159,5 @@ class GraphRAGEngine:
                 )
 
         result = "\n".join(lines) if len(lines) > 1 else ""
-        logger.debug("GraphRAGEngine._yaml_fallback: matched %d frameworks context_len=%d", len(lines) - 1, len(result))
+        logger.info("GraphRAGEngine._yaml_fallback: matched %d frameworks context_len=%d", len(lines) - 1, len(result))
         return result

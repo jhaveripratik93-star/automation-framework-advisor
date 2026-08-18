@@ -1,6 +1,4 @@
-"""Format Agent — takes the evaluation agent's raw response and formats it
-for display on the dashboard (markdown, tables, structured sections).
-"""
+"""Format Agent — uses the LLM to format the evaluation response for display."""
 from __future__ import annotations
 
 import logging
@@ -8,59 +6,42 @@ from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
+_SYSTEM_PROMPT = (
+    "You are a formatting agent for an automation framework advisor. "
+    "Take the raw response and reformat it for clean markdown display. "
+    "Use tables for comparisons, numbered phases for migration plans, "
+    "and clear headings throughout. Do not add or remove factual content — "
+    "only improve structure and readability."
+)
+
 
 @dataclass
 class FormatResult:
     formatted: str
-    format_type: str   # "markdown" | "table" | "plain"
+    format_type: str = "markdown"
 
 
 class FormatAgent:
-    """Applies consistent formatting to the evaluation response."""
+    def __init__(self, llm_client=None) -> None:
+        self._client = llm_client
 
     def format(self, raw_response: str, user_message: str) -> FormatResult:
-        msg_lower = user_message.lower()
+        if not self._client or not raw_response.strip():
+            return FormatResult(formatted=raw_response, format_type="markdown")
 
-        # Detect what kind of output is expected
-        if any(w in msg_lower for w in ["compare", "vs", "versus"]):
-            formatted = self._ensure_table(raw_response)
-            fmt_type = "table"
-        elif any(w in msg_lower for w in ["migrate", "migration", "roadmap", "plan"]):
-            formatted = self._ensure_phases(raw_response)
-            fmt_type = "markdown"
-        elif any(w in msg_lower for w in ["coverage", "test case"]):
-            formatted = self._ensure_table(raw_response)
-            fmt_type = "table"
-        else:
-            formatted = self._clean_markdown(raw_response)
-            fmt_type = "markdown"
+        prompt = (
+            f"Original user question: {user_message}\n\n"
+            f"Raw response to format:\n{raw_response}"
+        )
+        try:
+            result = self._client.chat(
+                messages=[{"role": "user", "content": prompt}],
+                system=_SYSTEM_PROMPT,
+            )
+            formatted = result.get("content", "").strip() or raw_response
+        except Exception as exc:
+            logger.warning("FormatAgent: LLM call failed (%s) — returning raw response", exc)
+            formatted = raw_response
 
-        logger.info("FormatAgent: fmt_type=%s output_len=%d", fmt_type, len(formatted))
-        return FormatResult(formatted=formatted, format_type=fmt_type)
-
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _clean_markdown(text: str) -> str:
-        """Ensure the text starts with a heading if it doesn't already."""
-        stripped = text.strip()
-        if stripped and not stripped.startswith("#"):
-            stripped = "### Response\n\n" + stripped
-        return stripped
-
-    @staticmethod
-    def _ensure_table(text: str) -> str:
-        """If the response already has a markdown table, return as-is.
-        Otherwise wrap in a simple structure."""
-        if "|" in text and "---" in text:
-            return text.strip()
-        return "### Comparison\n\n" + text.strip()
-
-    @staticmethod
-    def _ensure_phases(text: str) -> str:
-        """Ensure migration responses have phase headings."""
-        if "Phase" in text or "phase" in text:
-            return text.strip()
-        return "### Migration Plan\n\n" + text.strip()
+        logger.info("FormatAgent: output_len=%d", len(formatted))
+        return FormatResult(formatted=formatted, format_type="markdown")

@@ -39,6 +39,7 @@ class EvaluationAgent:
         tool_results: list[dict[str, Any]],
         graph_context: str = "",
         profile_context: str = "",
+        reflection_critique: str = "",
     ) -> EvaluationResult:
         """Combine tool results and ask LLM to produce a final answer.
 
@@ -64,7 +65,8 @@ class EvaluationAgent:
         prompt = (
             f"User question: {user_message}\n\n"
             f"## Tool Results:{tool_block}\n\n"
-            "Based on the tool results above, provide a complete and specific answer."
+            + (f"## Revision Request:\n{reflection_critique}\n\n" if reflection_critique else "")
+            + "Based on the tool results above, provide a complete and specific answer."
         )
 
         logger.info(

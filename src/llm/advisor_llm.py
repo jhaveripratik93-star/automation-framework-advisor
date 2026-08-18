@@ -9,8 +9,6 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from src.graph.graphrag_engine import GraphRAGEngine
     from src.knowledge_base.loader import KnowledgeBase
-    from src.scoring.models import DecisionMatrix
-    from src.models import UserProfile
     from src.graph import KnowledgeGraph
 
 from src.agents.orchestrator import AgentOrchestrator
@@ -43,8 +41,6 @@ class AdvisorLLM:
         self._kb = knowledge_base
         self._kg = knowledge_graph
         self._history: deque[dict[str, Any]] = deque(maxlen=_HISTORY_MAXLEN)
-        self._profile: UserProfile | None = None
-        self._matrix: DecisionMatrix | None = None
 
         self._orchestrator: AgentOrchestrator | None = (
             AgentOrchestrator(
@@ -56,22 +52,20 @@ class AdvisorLLM:
             if knowledge_graph else None
         )
 
-    def set_context(self, profile: UserProfile | None, matrix: DecisionMatrix | None) -> None:
-        self._profile = profile
-        self._matrix = matrix
-        if self._orchestrator:
-            self._orchestrator.set_context(profile, matrix)
-
     # ── Pipeline entry point ──────────────────────────────────────────
 
     def run_pipeline(
-        self, user_message: str, uploaded_docs: str = "", case_study: str = ""
+        self, user_message: str, uploaded_docs: str = "", case_study: str = "",
+        weight_context: str = "", weight_profile=None,
     ) -> str:
         """Run the 5-agent pipeline and return the final response string."""
         if not self._orchestrator:
             raise RuntimeError("AgentOrchestrator not available (no knowledge_graph)")
         self._extract_entities_background(user_message)
-        response = self._orchestrator.run(user_message, uploaded_docs, case_study)
+        response = self._orchestrator.run(
+            user_message, uploaded_docs, case_study,
+            weight_context=weight_context, weight_profile=weight_profile,
+        )
         self._history.append({"role": "user", "content": user_message})
         self._history.append({"role": "assistant", "content": response})
         return response

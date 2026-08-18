@@ -58,7 +58,7 @@ class EntityExtractor:
 
         Validates: Requirements 5.1, 5.2, 5.4
         """
-        logger.debug("EntityExtractor.extract_from_yaml: framework=%s", fw_data.framework_name)
+        logger.info("EntityExtractor.extract_from_yaml: START framework=%s", fw_data.framework_name)
         entities: list[Entity] = []
         relationships: list[Relationship] = []
 
@@ -133,90 +133,8 @@ class EntityExtractor:
                 confidence=_YAML_CONFIDENCE, source="yaml",
             ))
 
-        # ── Version entities ──────────────────────────────────────────
-        for ver in fw_data.versions:
-            ver_name = f"{fw_data.framework_name} {ver.version}"
-            ver_id = _entity_id(ver_name, EntityType.VERSION)
-            entities.append(Entity(
-                id=ver_id, name=ver_name, entity_type=EntityType.VERSION,
-                properties={
-                    "version": ver.version,
-                    "release_date": ver.release_date,
-                    "eol_date": ver.eol_date,
-                    "is_lts": ver.is_lts,
-                    "min_runtime": ver.min_runtime,
-                    "notable_features": ver.notable_features,
-                    "known_limitations": ver.known_limitations,
-                },
-                source="yaml",
-            ))
-            relationships.append(Relationship(
-                source_id=fw_id, target_id=ver_id,
-                relationship_type=RelationshipType.HAS_VERSION,
-                confidence=_YAML_CONFIDENCE, source="yaml",
-            ))
-
-            # Capabilities added in this version
-            for cap in ver.capabilities_added:
-                cap_label = cap.name.replace("_", " ").title()
-                cap_id = _entity_id(cap_label, EntityType.CAPABILITY)
-                entities.append(Entity(
-                    id=cap_id, name=cap_label, entity_type=EntityType.CAPABILITY,
-                    properties={"status": cap.status, "description": cap.description},
-                    source="yaml",
-                ))
-                relationships.append(Relationship(
-                    source_id=cap_id, target_id=ver_id,
-                    relationship_type=RelationshipType.ADDED_IN,
-                    confidence=_YAML_CONFIDENCE, source="yaml",
-                    properties={"description": cap.description},
-                ))
-
-            # Capabilities deprecated/removed in this version
-            for cap in ver.capabilities_deprecated:
-                cap_label = cap.name.replace("_", " ").title()
-                cap_id = _entity_id(cap_label, EntityType.CAPABILITY)
-                entities.append(Entity(
-                    id=cap_id, name=cap_label, entity_type=EntityType.CAPABILITY,
-                    properties={"status": cap.status, "replacement": cap.replacement},
-                    source="yaml",
-                ))
-                rel_type = (
-                    RelationshipType.REMOVED_IN if cap.status == "removed"
-                    else RelationshipType.DEPRECATED_IN
-                )
-                relationships.append(Relationship(
-                    source_id=cap_id, target_id=ver_id,
-                    relationship_type=rel_type,
-                    confidence=_YAML_CONFIDENCE, source="yaml",
-                    properties={"replacement": cap.replacement, "description": cap.description},
-                ))
-
-            # Breaking changes in this version
-            for bc in ver.breaking_changes:
-                bc_label = bc.description[:60]
-                bc_id = _entity_id(bc_label, EntityType.LIMITATION)
-                entities.append(Entity(
-                    id=bc_id, name=bc.description, entity_type=EntityType.LIMITATION,
-                    properties={
-                        "migration_effort": bc.migration_effort,
-                        "affected_apis": bc.affected_apis,
-                        "workaround": bc.workaround,
-                    },
-                    source="yaml",
-                ))
-                relationships.append(Relationship(
-                    source_id=bc_id, target_id=ver_id,
-                    relationship_type=RelationshipType.BREAKING_CHANGE_IN,
-                    confidence=_YAML_CONFIDENCE, source="yaml",
-                    properties={
-                        "migration_effort": bc.migration_effort,
-                        "affected_apis": bc.affected_apis,
-                    },
-                ))
-
-        logger.debug(
-            "EntityExtractor.extract_from_yaml: %s -> entities=%d relationships=%d",
+        logger.info(
+            "EntityExtractor.extract_from_yaml: DONE %s -> entities=%d relationships=%d",
             fw_data.framework_name, len(entities), len(relationships),
         )
         return entities, relationships
@@ -228,39 +146,61 @@ class EntityExtractor:
     def detect_migration_paths(self, frameworks: list[FrameworkData]) -> tuple[list[Entity], list[Relationship]]:
         """Detect MIGRATES_TO relationships between framework pairs.
 
+        Confidence is calculated based on:
+          - 40% weight: Shared capabilities overlap
+          - 30% weight: Shared CI/CD tools overlap
+          - 30% weight: Shared languages overlap
+
         Validates: Requirements 5.3
         """
-        logger.debug("EntityExtractor.detect_migration_paths: frameworks=%d", len(frameworks))
+        logger.info("EntityExtractor.detect_migration_paths: START frameworks=%d", len(frameworks))
         entities: list[Entity] = []
         relationships: list[Relationship] = []
 
         def _caps(fw: FrameworkData) -> set[str]:
             return {k for k, v in fw.capabilities.items() if v and v is not False}
 
+        def _cicd(fw: FrameworkData) -> set[str]:
+            return {k for k, v in fw.cicd_integration.items() if v and v is not False}
+
         for i, fw_a in enumerate(frameworks):
             langs_a = set(fw_a.languages_supported)
             caps_a = _caps(fw_a)
+            cicd_a = _cicd(fw_a)
             fw_a_id = _entity_id(fw_a.framework_name, EntityType.FRAMEWORK)
 
             for fw_b in frameworks[i + 1:]:
                 langs_b = set(fw_b.languages_supported)
                 caps_b = _caps(fw_b)
+                cicd_b = _cicd(fw_b)
                 fw_b_id = _entity_id(fw_b.framework_name, EntityType.FRAMEWORK)
 
                 shared_langs = langs_a & langs_b
                 shared_caps = caps_a & caps_b
+                shared_cicd = cicd_a & cicd_b
 
                 if not shared_langs or not shared_caps:
                     continue
 
-                overlap = len(shared_caps) / max(len(caps_a), len(caps_b), 1)
-                confidence = min(_YAML_CONFIDENCE, round(0.5 + overlap * 0.5, 2))
+                # Weighted confidence calculation
+                caps_overlap = len(shared_caps) / max(len(caps_a), len(caps_b), 1)
+                cicd_overlap = len(shared_cicd) / max(len(cicd_a), len(cicd_b), 1) if (cicd_a or cicd_b) else 0
+                langs_overlap = len(shared_langs) / max(len(langs_a), len(langs_b), 1)
+
+                # Base 0.4 + weighted overlaps (caps 40%, cicd 30%, langs 30%)
+                confidence = min(_YAML_CONFIDENCE, round(
+                    0.4 + (caps_overlap * 0.24) + (cicd_overlap * 0.18) + (langs_overlap * 0.18), 2
+                ))
 
                 path_name = f"{fw_a.framework_name} \u2192 {fw_b.framework_name}"
                 path_id = _entity_id(path_name, EntityType.MIGRATION_PATH)
                 entities.append(Entity(
                     id=path_id, name=path_name, entity_type=EntityType.MIGRATION_PATH,
-                    properties={"shared_languages": list(shared_langs), "shared_capabilities": list(shared_caps)},
+                    properties={
+                        "shared_languages": list(shared_langs),
+                        "shared_capabilities": list(shared_caps),
+                        "shared_cicd": list(shared_cicd),
+                    },
                     source="yaml",
                 ))
                 relationships.append(Relationship(
@@ -274,12 +214,12 @@ class EntityExtractor:
                     confidence=confidence, source="yaml", properties={"path_id": path_id},
                 ))
                 logger.debug(
-                    "EntityExtractor.detect_migration_paths: %s <-> %s confidence=%.2f",
-                    fw_a.framework_name, fw_b.framework_name, confidence,
+                    "EntityExtractor.detect_migration_paths: %s <-> %s confidence=%.2f (caps=%.2f, cicd=%.2f, langs=%.2f)",
+                    fw_a.framework_name, fw_b.framework_name, confidence, caps_overlap, cicd_overlap, langs_overlap,
                 )
 
-        logger.debug(
-            "EntityExtractor.detect_migration_paths: total paths=%d relationships=%d",
+        logger.info(
+            "EntityExtractor.detect_migration_paths: DONE paths=%d relationships=%d",
             len(entities), len(relationships),
         )
         return entities, relationships
@@ -301,7 +241,7 @@ class EntityExtractor:
             logger.debug("EntityExtractor.extract_from_message: LLM unavailable, skipping extraction")
             return [], []
 
-        logger.debug("EntityExtractor.extract_from_message: message_len=%d model=%s", len(message), self._client.model)
+        logger.info("EntityExtractor.extract_from_message: START message_len=%d", len(message))
 
         prompt = (
             "Extract automation framework entities and relationships from the text below.\n"
@@ -316,10 +256,9 @@ class EntityExtractor:
 
         try:
             raw = self._client.generate(prompt=prompt)
-            logger.debug("EntityExtractor.extract_from_message: raw_response_len=%d", len(raw))
             entities, relationships = self._parse_llm_extraction(raw)
-            logger.debug(
-                "EntityExtractor.extract_from_message: parsed entities=%d relationships=%d",
+            logger.info(
+                "EntityExtractor.extract_from_message: DONE entities=%d relationships=%d",
                 len(entities), len(relationships),
             )
             return entities, relationships

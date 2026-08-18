@@ -1,6 +1,6 @@
 """Groq cloud LLM client — drop-in replacement for OllamaClient.
 
-Uses the Groq REST API (llama-3.1-70b-versatile by default).
+Uses the Groq REST API (llama3-8b-8192 by default).
 Exposes the same chat() / generate() interface so all agents work unchanged.
 """
 from __future__ import annotations
@@ -18,9 +18,8 @@ load_dotenv(Path(__file__).parent.parent.parent / "config" / ".env")
 logger = logging.getLogger(__name__)
 
 _API_BASE = "https://api.groq.com/openai/v1"
-_DEFAULT_MODEL = "llama-3.1-70b-versatile"
+_DEFAULT_MODEL = "openai/gpt-oss-120b"
 _TIMEOUT = 60.0
-
 
 class GroqClient:
     def __init__(
@@ -77,7 +76,9 @@ class GroqClient:
                 timeout=_TIMEOUT,
             )
             response.raise_for_status()
-            content = response.json()["choices"][0]["message"]["content"]
+            message = response.json()["choices"][0]["message"]
+            # reasoning models return content in "reasoning" when "content" is empty
+            content = message.get("content") or message.get("reasoning", "")
             logger.debug("GroqClient.chat: response_len=%d model=%s", len(content), self.model)
             return {"type": "text", "content": content}
         except httpx.HTTPStatusError as exc:
