@@ -1,4 +1,5 @@
 {
+  "schema_version": 2,
   "entities": [
     {
       "id": "ansible-framework",
@@ -1243,9 +1244,12 @@
       "name": "Playwright",
       "entity_type": "Framework",
       "properties": {
-        "confidence": 0.8
+        "vendor": "Microsoft",
+        "license": "Apache-2.0",
+        "website": "https://playwright.dev",
+        "category": "test_automation"
       },
-      "source": "user"
+      "source": "yaml"
     },
     {
       "id": "no-native-mobile-app-testing-web-only-limitation",
@@ -1582,9 +1586,12 @@
       "name": "Robot Framework",
       "entity_type": "Framework",
       "properties": {
-        "confidence": 0.8
+        "vendor": "OpenSource (Robot Framework Foundation)",
+        "license": "Apache-2.0",
+        "website": "https://robotframework.org",
+        "category": "test_automation"
       },
-      "source": "user"
+      "source": "yaml"
     },
     {
       "id": "python-keyword-driven-dsl-language",
@@ -1999,20 +2006,20 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "test_recorder",
           "visual_regression",
           "parallel_execution",
           "file_upload_download",
-          "accessibility_testing",
-          "auto_wait"
+          "test_recorder",
+          "auto_wait",
+          "accessibility_testing"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2026,17 +2033,17 @@
           "JavaScript"
         ],
         "shared_capabilities": [
+          "parallel_execution",
           "test_recorder",
-          "code_generation",
-          "parallel_execution"
+          "code_generation"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2054,11 +2061,11 @@
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2069,27 +2076,27 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "C#",
-          "Java",
+          "JavaScript",
           "Python",
-          "JavaScript"
+          "C#",
+          "Java"
         ],
         "shared_capabilities": [
-          "test_recorder",
           "visual_regression",
-          "code_generation",
           "parallel_execution",
           "file_upload_download",
+          "test_recorder",
+          "auto_wait",
           "accessibility_testing",
-          "auto_wait"
+          "code_generation"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2100,22 +2107,22 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "C#",
-          "Java",
+          "JavaScript",
           "Python",
-          "JavaScript"
+          "C#",
+          "Java"
         ],
         "shared_capabilities": [
-          "code_generation",
-          "parallel_execution"
+          "parallel_execution",
+          "code_generation"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2129,21 +2136,21 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "test_recorder",
           "visual_regression",
-          "code_generation",
           "parallel_execution",
           "file_upload_download",
+          "test_recorder",
+          "auto_wait",
           "accessibility_testing",
-          "auto_wait"
+          "code_generation"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2154,8 +2161,8 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "Java",
-          "Kotlin"
+          "Kotlin",
+          "Java"
         ],
         "shared_capabilities": [
           "file_upload_download",
@@ -2163,11 +2170,11 @@
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2178,28 +2185,28 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "Ruby",
           "Kotlin",
-          "C#",
+          "JavaScript",
           "Python",
-          "Java",
-          "JavaScript"
+          "Ruby",
+          "C#",
+          "Java"
         ],
         "shared_capabilities": [
-          "test_recorder",
           "visual_regression",
-          "code_generation",
           "parallel_execution",
           "file_upload_download",
-          "accessibility_testing"
+          "accessibility_testing",
+          "test_recorder",
+          "code_generation"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2213,21 +2220,21 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "test_recorder",
           "visual_regression",
-          "code_generation",
           "parallel_execution",
           "file_upload_download",
+          "test_recorder",
+          "auto_wait",
           "accessibility_testing",
-          "auto_wait"
+          "code_generation"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2249,11 +2256,11 @@
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2267,16 +2274,16 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "test_recorder",
-          "parallel_execution"
+          "parallel_execution",
+          "test_recorder"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2287,30 +2294,30 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "TypeScript",
-          "JavaScript"
+          "JavaScript",
+          "TypeScript"
         ],
         "shared_capabilities": [
-          "test_recorder",
-          "iframe_cross_origin",
-          "canvas_webgl",
           "shadow_dom",
           "visual_regression",
-          "component_testing",
-          "multi_domain",
+          "canvas_webgl",
           "parallel_execution",
+          "component_testing",
           "file_upload_download",
-          "accessibility_testing",
           "network_interception",
-          "auto_wait"
+          "multi_domain",
+          "auto_wait",
+          "test_recorder",
+          "accessibility_testing",
+          "iframe_cross_origin"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2321,20 +2328,20 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "TypeScript",
-          "JavaScript"
+          "JavaScript",
+          "TypeScript"
         ],
         "shared_capabilities": [
-          "component_testing",
-          "parallel_execution"
+          "parallel_execution",
+          "component_testing"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2345,29 +2352,29 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "TypeScript",
-          "JavaScript"
+          "JavaScript",
+          "TypeScript"
         ],
         "shared_capabilities": [
-          "test_recorder",
-          "iframe_cross_origin",
-          "canvas_webgl",
           "shadow_dom",
           "visual_regression",
-          "multi_domain",
+          "canvas_webgl",
           "parallel_execution",
           "file_upload_download",
-          "accessibility_testing",
           "network_interception",
-          "auto_wait"
+          "multi_domain",
+          "auto_wait",
+          "test_recorder",
+          "accessibility_testing",
+          "iframe_cross_origin"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2381,24 +2388,24 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "test_recorder",
-          "iframe_cross_origin",
-          "canvas_webgl",
           "shadow_dom",
           "visual_regression",
-          "multi_domain",
+          "canvas_webgl",
           "parallel_execution",
           "file_upload_download",
+          "network_interception",
+          "multi_domain",
+          "test_recorder",
           "accessibility_testing",
-          "network_interception"
+          "iframe_cross_origin"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2409,29 +2416,29 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "TypeScript",
-          "JavaScript"
+          "JavaScript",
+          "TypeScript"
         ],
         "shared_capabilities": [
-          "test_recorder",
-          "iframe_cross_origin",
-          "canvas_webgl",
           "shadow_dom",
           "visual_regression",
-          "multi_domain",
+          "canvas_webgl",
           "parallel_execution",
           "file_upload_download",
-          "accessibility_testing",
           "network_interception",
-          "auto_wait"
+          "multi_domain",
+          "auto_wait",
+          "test_recorder",
+          "accessibility_testing",
+          "iframe_cross_origin"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2442,29 +2449,29 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "TypeScript",
-          "JavaScript"
+          "JavaScript",
+          "TypeScript"
         ],
         "shared_capabilities": [
-          "iframe_cross_origin",
-          "canvas_webgl",
           "shadow_dom",
           "visual_regression",
-          "component_testing",
-          "multi_domain",
+          "canvas_webgl",
           "parallel_execution",
+          "component_testing",
           "file_upload_download",
-          "accessibility_testing",
           "network_interception",
-          "auto_wait"
+          "multi_domain",
+          "auto_wait",
+          "accessibility_testing",
+          "iframe_cross_origin"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2478,17 +2485,17 @@
           "JavaScript"
         ],
         "shared_capabilities": [
+          "parallel_execution",
           "test_recorder",
-          "code_generation",
-          "parallel_execution"
+          "code_generation"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2502,16 +2509,16 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "code_generation",
-          "parallel_execution"
+          "parallel_execution",
+          "code_generation"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2525,17 +2532,17 @@
           "JavaScript"
         ],
         "shared_capabilities": [
+          "parallel_execution",
           "test_recorder",
-          "code_generation",
-          "parallel_execution"
+          "code_generation"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2549,17 +2556,17 @@
           "JavaScript"
         ],
         "shared_capabilities": [
+          "parallel_execution",
           "test_recorder",
-          "code_generation",
-          "parallel_execution"
+          "code_generation"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2573,17 +2580,17 @@
           "JavaScript"
         ],
         "shared_capabilities": [
+          "parallel_execution",
           "test_recorder",
-          "code_generation",
-          "parallel_execution"
+          "code_generation"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2601,11 +2608,11 @@
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2623,11 +2630,11 @@
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2645,11 +2652,11 @@
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2667,11 +2674,11 @@
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2682,24 +2689,24 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "C#",
-          "Python",
-          "Java",
           "TypeScript",
-          "JavaScript"
+          "JavaScript",
+          "Python",
+          "C#",
+          "Java"
         ],
         "shared_capabilities": [
-          "code_generation",
+          "parallel_execution",
           "component_testing",
-          "parallel_execution"
+          "code_generation"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2710,31 +2717,31 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "TypeScript",
-          "JavaScript"
+          "JavaScript",
+          "TypeScript"
         ],
         "shared_capabilities": [
-          "test_recorder",
-          "iframe_cross_origin",
-          "canvas_webgl",
           "shadow_dom",
           "visual_regression",
-          "code_generation",
-          "multi_domain",
+          "canvas_webgl",
+          "iframe_cross_origin",
           "parallel_execution",
           "multi_tab",
           "file_upload_download",
-          "accessibility_testing",
           "network_interception",
-          "auto_wait"
+          "multi_domain",
+          "auto_wait",
+          "test_recorder",
+          "accessibility_testing",
+          "code_generation"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2753,11 +2760,11 @@
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2768,32 +2775,32 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "C#",
-          "Java",
+          "JavaScript",
           "Python",
-          "JavaScript"
+          "C#",
+          "Java"
         ],
         "shared_capabilities": [
-          "test_recorder",
-          "iframe_cross_origin",
-          "canvas_webgl",
           "shadow_dom",
           "visual_regression",
-          "code_generation",
-          "multi_domain",
+          "canvas_webgl",
+          "iframe_cross_origin",
           "parallel_execution",
           "multi_tab",
           "file_upload_download",
+          "network_interception",
+          "multi_domain",
+          "test_recorder",
           "accessibility_testing",
-          "network_interception"
+          "code_generation"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2804,31 +2811,31 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "TypeScript",
-          "JavaScript"
+          "JavaScript",
+          "TypeScript"
         ],
         "shared_capabilities": [
-          "test_recorder",
-          "iframe_cross_origin",
-          "canvas_webgl",
           "shadow_dom",
           "visual_regression",
-          "code_generation",
-          "multi_domain",
+          "canvas_webgl",
+          "iframe_cross_origin",
           "parallel_execution",
           "multi_tab",
           "file_upload_download",
-          "accessibility_testing",
           "network_interception",
-          "auto_wait"
+          "multi_domain",
+          "auto_wait",
+          "test_recorder",
+          "accessibility_testing",
+          "code_generation"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2839,30 +2846,30 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "TypeScript",
-          "JavaScript"
+          "JavaScript",
+          "TypeScript"
         ],
         "shared_capabilities": [
-          "iframe_cross_origin",
-          "canvas_webgl",
           "shadow_dom",
           "visual_regression",
-          "component_testing",
-          "multi_domain",
+          "canvas_webgl",
           "parallel_execution",
+          "component_testing",
           "multi_tab",
           "file_upload_download",
-          "accessibility_testing",
           "network_interception",
-          "auto_wait"
+          "multi_domain",
+          "auto_wait",
+          "accessibility_testing",
+          "iframe_cross_origin"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2873,20 +2880,20 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "TypeScript",
-          "JavaScript"
+          "JavaScript",
+          "TypeScript"
         ],
         "shared_capabilities": [
-          "code_generation",
-          "parallel_execution"
+          "parallel_execution",
+          "code_generation"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2904,11 +2911,11 @@
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2919,22 +2926,22 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "C#",
-          "Java",
+          "JavaScript",
           "Python",
-          "JavaScript"
+          "C#",
+          "Java"
         ],
         "shared_capabilities": [
-          "code_generation",
-          "parallel_execution"
+          "parallel_execution",
+          "code_generation"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2945,20 +2952,20 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "TypeScript",
-          "JavaScript"
+          "JavaScript",
+          "TypeScript"
         ],
         "shared_capabilities": [
-          "code_generation",
-          "parallel_execution"
+          "parallel_execution",
+          "code_generation"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2969,20 +2976,20 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "TypeScript",
-          "JavaScript"
+          "JavaScript",
+          "TypeScript"
         ],
         "shared_capabilities": [
-          "component_testing",
-          "parallel_execution"
+          "parallel_execution",
+          "component_testing"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -2996,26 +3003,26 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "test_recorder",
-          "iframe_cross_origin",
-          "canvas_webgl",
           "shadow_dom",
           "visual_regression",
-          "code_generation",
-          "multi_domain",
+          "canvas_webgl",
+          "iframe_cross_origin",
           "parallel_execution",
           "multi_tab",
           "file_upload_download",
+          "network_interception",
+          "multi_domain",
+          "test_recorder",
           "accessibility_testing",
-          "network_interception"
+          "code_generation"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -3026,31 +3033,31 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "TypeScript",
-          "JavaScript"
+          "JavaScript",
+          "TypeScript"
         ],
         "shared_capabilities": [
-          "test_recorder",
-          "iframe_cross_origin",
-          "canvas_webgl",
           "shadow_dom",
           "visual_regression",
-          "code_generation",
-          "multi_domain",
+          "canvas_webgl",
+          "iframe_cross_origin",
           "parallel_execution",
           "multi_tab",
           "file_upload_download",
-          "accessibility_testing",
           "network_interception",
-          "auto_wait"
+          "multi_domain",
+          "auto_wait",
+          "test_recorder",
+          "accessibility_testing",
+          "code_generation"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -3061,29 +3068,29 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "TypeScript",
-          "JavaScript"
+          "JavaScript",
+          "TypeScript"
         ],
         "shared_capabilities": [
-          "iframe_cross_origin",
-          "canvas_webgl",
           "shadow_dom",
           "visual_regression",
-          "multi_domain",
+          "canvas_webgl",
           "parallel_execution",
           "multi_tab",
           "file_upload_download",
-          "accessibility_testing",
           "network_interception",
-          "auto_wait"
+          "multi_domain",
+          "auto_wait",
+          "accessibility_testing",
+          "iframe_cross_origin"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -3094,8 +3101,8 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "Java",
-          "Kotlin"
+          "Kotlin",
+          "Java"
         ],
         "shared_capabilities": [
           "file_upload_download",
@@ -3103,11 +3110,11 @@
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -3121,26 +3128,26 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "test_recorder",
-          "iframe_cross_origin",
-          "canvas_webgl",
           "shadow_dom",
           "visual_regression",
-          "code_generation",
-          "multi_domain",
+          "canvas_webgl",
+          "iframe_cross_origin",
           "parallel_execution",
           "multi_tab",
           "file_upload_download",
+          "network_interception",
+          "multi_domain",
+          "test_recorder",
           "accessibility_testing",
-          "network_interception"
+          "code_generation"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -3154,24 +3161,24 @@
           "JavaScript"
         ],
         "shared_capabilities": [
-          "iframe_cross_origin",
-          "canvas_webgl",
           "shadow_dom",
           "visual_regression",
-          "multi_domain",
+          "canvas_webgl",
           "parallel_execution",
           "multi_tab",
           "file_upload_download",
+          "network_interception",
+          "multi_domain",
           "accessibility_testing",
-          "network_interception"
+          "iframe_cross_origin"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -3182,29 +3189,29 @@
       "entity_type": "Migration_Path",
       "properties": {
         "shared_languages": [
-          "TypeScript",
-          "JavaScript"
+          "JavaScript",
+          "TypeScript"
         ],
         "shared_capabilities": [
-          "iframe_cross_origin",
-          "canvas_webgl",
           "shadow_dom",
           "visual_regression",
-          "multi_domain",
+          "canvas_webgl",
           "parallel_execution",
           "multi_tab",
           "file_upload_download",
-          "accessibility_testing",
           "network_interception",
-          "auto_wait"
+          "multi_domain",
+          "auto_wait",
+          "accessibility_testing",
+          "iframe_cross_origin"
         ],
         "shared_cicd": [
           "azure_devops",
-          "github_actions",
+          "gitlab_ci",
+          "pre_built_docker_images",
           "docker_support",
           "jenkins",
-          "pre_built_docker_images",
-          "gitlab_ci"
+          "github_actions"
         ]
       },
       "source": "yaml"
@@ -6909,22 +6916,6 @@
       "relationship_type": "REQUIRES",
       "confidence": 1.0,
       "source": "yaml",
-      "properties": {}
-    },
-    {
-      "source_id": "robot-framework-framework",
-      "target_id": "playwright-framework",
-      "relationship_type": "COMPATIBLE_WITH",
-      "confidence": 0.5,
-      "source": "user",
-      "properties": {}
-    },
-    {
-      "source_id": "robot-framework-framework",
-      "target_id": "playwright-framework",
-      "relationship_type": "REPORTED_BY_USER",
-      "confidence": 0.5,
-      "source": "user",
       "properties": {}
     },
     {

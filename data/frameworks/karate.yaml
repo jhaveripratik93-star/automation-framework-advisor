@@ -65,6 +65,12 @@ maintainability:
   trace_viewer: false
   debugging_tools: "VS Code plugin"
 
+pip_packages: {}
+install_commands: []
+test_command: "mvn test"
+report_paths:
+  - "target/surefire-reports/"
+
 limitations:
   - "JVM dependency (Java runtime required)"
   - "DSL has a learning curve"

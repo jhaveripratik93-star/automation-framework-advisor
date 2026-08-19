@@ -66,6 +66,12 @@ maintainability:
   trace_viewer: false
   debugging_tools: "Java IDE debugging"
 
+pip_packages: {}
+install_commands: []
+test_command: "mvn test"
+report_paths:
+  - "target/surefire-reports/"
+
 limitations:
   - "Java/JVM ONLY"
   - "API testing only - no UI capabilities"

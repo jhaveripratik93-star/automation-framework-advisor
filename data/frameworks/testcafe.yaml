@@ -60,6 +60,12 @@ maintainability:
   trace_viewer: false
   debugging_tools: "good (live mode, screenshots)"
 
+pip_packages: {}
+install_commands: []
+test_command: "npx testcafe chrome tests/"
+report_paths:
+  - "test-results/"
+
 limitations:
   - "JavaScript/TypeScript ONLY"
   - "No WebDriver protocol (proxy-based injection)"

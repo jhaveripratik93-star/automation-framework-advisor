@@ -70,6 +70,13 @@ maintainability:
   grafana_integration: true
   prometheus_integration: true
 
+pip_packages: {}
+install_commands:
+  - "brew install k6  # or: apt-get install k6"
+test_command: "k6 run tests/load_test.js"
+report_paths:
+  - "k6-results.json"
+
 limitations:
   - "NOT a functional/UI test framework"
   - "JavaScript only for test scripts"

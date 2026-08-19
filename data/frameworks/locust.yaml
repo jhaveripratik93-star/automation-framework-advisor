@@ -66,6 +66,13 @@ maintainability:
   debugging_tools: "Python debugging"
   grafana_integration: "via plugins"
 
+pip_packages:
+  locust: ">=2.0"
+install_commands: []
+test_command: "locust -f tests/load_test.py --headless -u 10 -r 2 --run-time 1m"
+report_paths:
+  - "locust-results.csv"
+
 limitations:
   - "NOT a functional/UI test framework"
   - "Python only"

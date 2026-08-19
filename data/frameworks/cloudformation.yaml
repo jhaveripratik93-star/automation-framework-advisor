@@ -107,9 +107,14 @@ cloud_migration_metrics:
   multi_account_coverage: "% of accounts using StackSets"
   cost_allocation: "Tagged resource percentage"
 
+pip_packages: {}
+install_commands: []
+test_command: "aws cloudformation deploy --template-file template.yaml --stack-name my-stack"
+report_paths:
+  - "cfn-results/"
+
 limitations:
   - "NOT a test automation framework for applications"
-  - "AWS ONLY - no multi-cloud support"
   - "500 resource limit per stack"
   - "Slow deployments (sequential by default)"
   - "Complex YAML/JSON syntax without CDK"

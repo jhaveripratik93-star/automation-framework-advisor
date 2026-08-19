@@ -64,6 +64,17 @@ maintainability:
   trace_viewer: true
   debugging_tools: "excellent"
 
+pip_packages:
+  playwright: ">=1.40"
+  pytest-playwright: ">=0.4"
+  pytest: ">=7.0"
+install_commands:
+  - "playwright install --with-deps chromium"
+test_command: "pytest tests/"
+report_paths:
+  - "playwright-report/"
+  - "test-results/"
+
 limitations:
   - "No native mobile app testing (web-only)"
   - "Canvas/WebGL pixel-level validation is limited"

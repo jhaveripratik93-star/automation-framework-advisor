@@ -60,12 +60,10 @@ def _github_actions_yaml(stages: dict, fw: Any | None) -> str:
     lines.append("      # === RUN TESTS ===")
     lines.append("      - name: Run Tests")
     if fw:
-        if "playwright" in fw.framework_name.lower():
-            lines.append("        run: npx playwright test")
-        elif "Python" in fw.languages_supported:
-            lines.append("        run: pytest tests/ --html=report.html")
-        else:
-            lines.append("        run: npm test")
+        test_cmd = getattr(fw, "test_command", "") or (
+            "pytest tests/ --html=report.html" if "Python" in fw.languages_supported else "npm test"
+        )
+        lines.append(f"        run: {test_cmd}")
     else:
         lines.append("        run: pytest tests/")
     lines.append("")
@@ -105,8 +103,9 @@ def _gitlab_ci_yaml(stages: dict, fw: Any | None) -> str:
     lines.append("test:")
     lines.append("  stage: test")
     lines.append("  script:")
-    if fw and "playwright" in fw.framework_name.lower():
-        lines.append("    - npx playwright test")
+    if fw:
+        test_cmd = getattr(fw, "test_command", "") or "pytest tests/"
+        lines.append(f"    - {test_cmd}")
     else:
         lines.append("    - pytest tests/")
     lines.append("")
@@ -124,18 +123,23 @@ def _gitlab_ci_yaml(stages: dict, fw: Any | None) -> str:
 
 
 def generate_framework_hooks(plan: list[dict], fw: Any) -> str:
-    """Generate framework-specific hooks to run prerequisites."""
+    """Generate framework-specific hooks to run prerequisites.
+
+    Dispatch is driven by the framework's test_command YAML field so new
+    frameworks are picked up automatically without code changes.
+    """
+    cmd = getattr(fw, "test_command", "").lower()
     fw_name = fw.framework_name.lower()
-    
-    if "playwright" in fw_name:
+
+    if "playwright" in cmd or "playwright" in fw_name:
         return _playwright_hooks(plan)
-    elif "cypress" in fw_name:
+    elif "cypress" in cmd or "cypress" in fw_name:
         return _cypress_hooks(plan)
-    elif "robot" in fw_name:
+    elif "robot" in cmd or "robot" in fw_name:
         return _robot_hooks(plan)
-    elif "selenium" in fw_name:
+    elif "selenium" in fw_name:  # selenium uses pytest runner
         return _selenium_hooks(plan)
-    elif "python" in str(fw.languages_supported).lower():
+    elif "python" in str(fw.languages_supported).lower() or "pytest" in cmd:
         return _pytest_hooks(plan)
     return _generic_hooks(plan)
 

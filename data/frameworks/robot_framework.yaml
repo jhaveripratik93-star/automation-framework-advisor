@@ -60,6 +60,17 @@ maintainability:
   trace_viewer: false
   debugging_tools: "moderate (log files, listener interface)"
 
+pip_packages:
+  robotframework: ">=6.0"
+  robotframework-seleniumlibrary: ">=6.0"
+  pytest: ">=7.0"
+install_commands: []
+test_command: "robot tests/"
+report_paths:
+  - "output.xml"
+  - "report.html"
+  - "log.html"
+
 limitations:
   - "Keyword-driven syntax has a learning curve for developers"
   - "Slower execution than Playwright/Cypress"

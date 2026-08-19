@@ -109,9 +109,14 @@ cloud_migration_metrics:
   compliance_score: "% of resources passing policy checks"
   blast_radius_analysis: "Impact scope of plan changes"
 
+pip_packages: {}
+install_commands: []
+test_command: "terraform test"
+report_paths:
+  - "terraform.tfplan"
+
 limitations:
   - "NOT a test automation framework for applications"
-  - "HCL has a learning curve for developers"
   - "State management complexity (locking, drift)"
   - "BSL license change may concern some organizations"
   - "Slow feedback for large infrastructure (API rate limits)"

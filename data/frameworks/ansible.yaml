@@ -110,9 +110,16 @@ cloud_migration_metrics:
   idempotency_rate: "% of tasks reporting 'ok' on re-run"
   inventory_accuracy: "Dynamic inventory freshness"
 
+pip_packages:
+  ansible: ">=9.0"
+  ansible-lint: ">=6.0"
+install_commands: []
+test_command: "ansible-playbook playbook.yml --check"
+report_paths:
+  - "ansible-results/"
+
 limitations:
   - "NOT a test automation framework for applications"
-  - "Slower than Terraform for pure provisioning (SSH overhead)"
   - "YAML syntax can be error-prone and hard to debug"
   - "No true state management (desired-state, not tracked state)"
   - "Complex variable precedence (22 levels)"

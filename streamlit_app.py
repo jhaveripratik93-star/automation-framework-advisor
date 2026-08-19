@@ -1,10 +1,4 @@
-"""Automation Framework Migration & Coverage Advisor — Streamlit UI.
-
-Tabs:
-  🧭 Advisor      — LLM agent chat (existing)
-  🐍 Code Studio  — Python interpreter + test-case converter
-  📊 Coverage     — Excel test-case upload, coverage matrix, CI/CD export
-"""
+"""Automation Framework Migration & Coverage Advisor — Streamlit UI."""
 from __future__ import annotations
 
 import logging
@@ -107,150 +101,445 @@ _CRITERIA_LABELS = {
     "C7_license_cost":           "License & Cost",
 }
 
-_KNOWN_FRAMEWORKS = [
-    "Playwright", "Cypress", "Selenium WebDriver", "Robot Framework",
-    "WebdriverIO", "Puppeteer", "TestCafe", "Appium", "Karate",
-    "K6", "Locust", "REST Assured",
-]
+_KNOWN_FRAMEWORKS = kb.list_names()
 
-_PLAYGROUND_TEMPLATE = """\
-# Converted test will appear here after using the Convert button above.
-# You can also write or paste any Python code and click ▶ Run.
-
-print("Hello from the Framework Advisor sandbox!")
-"""
+_PAGES = ["home", "advisor", "studio", "coverage"]
 
 # ── Session state defaults ────────────────────────────────────────────
 _DEFAULTS: dict = {
+    "page": "home",
     "messages": [],
     "uploaded_docs_context": "",
     "case_study_context": "",
     "weight_profile": WeightProfile.default(),
     # Code Studio
-    "playground_code": _PLAYGROUND_TEMPLATE,
-    "playground_output": "",
-    "playground_install_log": "",
-    "playground_exit_code": 0,
-    "playground_timed_out": False,
-    "playground_packages": [],
+    "playground_code": "",
     "last_converted_code": "",
-    "auto_run_pending": False,
+    "multi_convert_result": None,
     # Coverage
     "excel_test_cases": [],
     "excel_summary": "",
     "coverage_result": "",
     "cicd_yaml": "",
+    # Loading state
+    "llm_busy": False,
+    "llm_step": 0,
 }
 for k, v in _DEFAULTS.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
 
-# ── Sidebar ───────────────────────────────────────────────────────────
+# ── Loading indicator ─────────────────────────────────────────────────
+def _render_loading(steps: list[str], current: int, title: str = "AI is thinking…") -> None:
+    """Render a step-by-step loading card. current = 0-based index of active step."""
+    dots = "".join(
+        f'<span class="pulse-dot" style="animation-delay:{i*0.2}s;margin-right:3px"></span>'
+        for i in range(3)
+    )
+    step_html = ""
+    for i, s in enumerate(steps):
+        if i < current:
+            cls = "done"
+            icon = "✓"
+        elif i == current:
+            cls = "active"
+            icon = "›"
+        else:
+            cls = ""
+            icon = "·"
+        step_html += (
+            f'<div class="step-item {cls}">'
+            f'<div class="step-dot"></div>{icon} {s}</div>'
+        )
+    pct = int((current / max(len(steps) - 1, 1)) * 100)
+    st.markdown(f"""
+    <div class="llm-loading">
+        <div class="llm-loading-header">
+            <div>{dots}</div>
+            <div>
+                <div class="llm-loading-title">{title}</div>
+                <div class="llm-loading-sub">This may take 10–30 seconds</div>
+            </div>
+        </div>
+        <div class="step-list">{step_html}</div>
+        <div class="progress-bar-wrap">
+            <div class="progress-bar-fill" style="width:{pct}%"></div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ── Top navigation bar ────────────────────────────────────────────────
+def _render_topnav() -> None:
+    page = st.session_state.page
+    nav_items = [
+        ("home",     "🏠", "Home"),
+        ("advisor",  "🧭", "Advisor"),
+        ("studio",   "🐍", "Code Studio"),
+        ("coverage", "📊", "Coverage"),
+    ]
+    # Build nav HTML
+    links_html = ""
+    for key, icon, label in nav_items:
+        active_cls = "active" if page == key else ""
+        links_html += (
+            f'<div class="nav-link {active_cls}" '
+            f'onclick="void(0)" id="nav_{key}">'
+            f'<span class="nav-icon">{icon}</span>{label}</div>'
+        )
+
+    st.markdown(f"""
+    <div class="top-nav">
+        <div class="top-nav-brand">
+            <div class="top-nav-logo">🧭</div>
+            <div>
+                <div class="top-nav-title">Framework Advisor</div>
+                <div class="top-nav-sub">AI-powered migration &amp; coverage</div>
+            </div>
+        </div>
+        <div class="top-nav-links">{links_html}</div>
+        <div class="top-nav-badge">GROQ LLM</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Streamlit buttons for actual navigation (hidden visually via columns trick)
+    cols = st.columns(len(nav_items))
+    for col, (key, icon, label) in zip(cols, nav_items):
+        with col:
+            if st.button(f"{icon} {label}", key=f"nav_btn_{key}",
+                         use_container_width=True,
+                         type="primary" if page == key else "secondary"):
+                st.session_state.page = key
+                st.rerun()
+
+
+# ── Sidebar — contextual per page ────────────────────────────────────
 def _render_sidebar() -> None:
+    page = st.session_state.page
     with st.sidebar:
+        # Brand
         st.markdown("""
-        <div style="
-             background: linear-gradient(135deg, #eef6f2, #faf5ed);
-             margin: -1rem -1rem 1rem -1rem;
-             padding: 1.1rem 1.25rem 1rem;
-             border-bottom: 1px solid #e5ebe7;
-             border-radius: 0 0 12px 12px;
-        ">
+        <div style="padding:1rem 0 0.75rem;border-bottom:1px solid #e8f0ee;margin-bottom:0.75rem;">
             <div style="display:flex;align-items:center;gap:0.6rem;">
-                <div style="
-                    width:34px;height:34px;
-                    background:#e2efe9;
-                    border:1px solid #cbded7;
-                    border-radius:8px;
-                    display:flex;align-items:center;justify-content:center;
-                    font-size:1.1rem;
-                ">🧭</div>
+                <div style="width:32px;height:32px;background:linear-gradient(135deg,#2d7d6f,#1f5c52);
+                     border-radius:8px;display:flex;align-items:center;justify-content:center;
+                     font-size:1rem;color:#fff;">🧭</div>
                 <div>
-                    <div style="color:#49635f;font-weight:800;font-size:0.88rem;line-height:1.2;">Framework Advisor</div>
-                    <div style="color:#788984;font-size:0.68rem;">AI Migration Planner</div>
+                    <div style="font-weight:800;font-size:0.85rem;color:#1e2d2b;">Framework Advisor</div>
+                    <div style="font-size:0.65rem;color:#8aaba5;">AI Migration Planner</div>
                 </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        # ── Scoring Weights ───────────────────────────────────────────
-        with st.expander("⚖️ Scoring Weights", expanded=False):
-            preset_names = list(PRESETS.keys())
-            current_preset = st.session_state.weight_profile.profile_name.replace("_adjusted", "")
-            if current_preset not in preset_names:
-                current_preset = "balanced"
-            selected_preset = st.selectbox(
-                "Preset", preset_names,
-                index=preset_names.index(current_preset),
-                key="weight_preset",
-            )
-            if selected_preset != current_preset:
-                st.session_state.weight_profile = WeightProfile.from_preset(selected_preset)
-                st.rerun()
-
-            st.markdown("**Fine-tune weights** (auto-normalised)")
-            raw_weights: dict[str, float] = {}
-            for cid in CRITERIA_IDS:
-                label = _CRITERIA_LABELS[cid]
-                current_val = st.session_state.weight_profile.weights.get(cid, 0.0)
-                raw_weights[cid] = st.slider(
-                    label, 0.0, 1.0, float(round(current_val, 2)),
-                    step=0.05, key=f"w_{cid}",
+        if page in ("home", "advisor"):
+            # ── Advisor context ───────────────────────────────────────
+            st.markdown('<div class="sidebar-section">Scoring Weights</div>',
+                        unsafe_allow_html=True)
+            with st.expander("⚖️ Adjust Weights", expanded=False):
+                preset_names = list(PRESETS.keys())
+                current_preset = st.session_state.weight_profile.profile_name.replace("_adjusted", "")
+                if current_preset not in preset_names:
+                    current_preset = "balanced"
+                selected_preset = st.selectbox(
+                    "Preset", preset_names,
+                    index=preset_names.index(current_preset),
+                    key="weight_preset",
                 )
+                if selected_preset != current_preset:
+                    st.session_state.weight_profile = WeightProfile.from_preset(selected_preset)
+                    st.rerun()
+                raw_weights: dict[str, float] = {}
+                for cid in CRITERIA_IDS:
+                    label = _CRITERIA_LABELS[cid]
+                    current_val = st.session_state.weight_profile.weights.get(cid, 0.0)
+                    raw_weights[cid] = st.slider(
+                        label, 0.0, 1.0, float(round(current_val, 2)),
+                        step=0.05, key=f"w_{cid}",
+                    )
+                if st.button("Apply Weights", key="apply_weights"):
+                    total = sum(raw_weights.values())
+                    normalised = (
+                        {k: v / total for k, v in raw_weights.items()} if total > 0
+                        else {k: 1 / len(raw_weights) for k in raw_weights}
+                    )
+                    st.session_state.weight_profile = WeightProfile(
+                        weights=normalised, profile_name="custom"
+                    )
+                    st.success("Weights applied ✓")
 
-            if st.button("Apply Weights", key="apply_weights"):
-                total = sum(raw_weights.values())
-                normalised = (
-                    {k: v / total for k, v in raw_weights.items()} if total > 0
-                    else {k: 1 / len(raw_weights) for k in raw_weights}
+            st.markdown('<div class="sidebar-section">Context Files</div>',
+                        unsafe_allow_html=True)
+            with st.expander("📁 Upload Test Files", expanded=True):
+                files = st.file_uploader(
+                    "Test files", type=["py", "js", "ts", "java", "yaml", "yml", "json"],
+                    accept_multiple_files=True, key="test_files",
                 )
-                st.session_state.weight_profile = WeightProfile(
-                    weights=normalised, profile_name="custom"
+                if files and st.button("🔍 Analyse", key="analyse_files"):
+                    content_parts = []
+                    for f in files:
+                        try:
+                            text = f.read().decode("utf-8")
+                            f.seek(0)
+                            content_parts.append(f"### {f.name}\n" + "\n".join(text.split("\n")[:300]))
+                        except Exception:
+                            pass
+                    st.session_state.uploaded_docs_context = "\n\n".join(content_parts)
+                    st.success(f"✓ {len(files)} file(s) loaded")
+
+            with st.expander("📚 Upload Case Study", expanded=False):
+                cs_file = st.file_uploader(
+                    "Case study (txt/md)", type=["txt", "md"], key="case_study",
                 )
-                st.success("Weights applied ✓")
-
-        st.markdown("### 📂 Input Sources")
-
-        with st.expander("📁 Upload Test Files", expanded=True):
-            files = st.file_uploader(
-                "Test files", type=["py", "js", "ts", "java", "yaml", "yml", "json"],
-                accept_multiple_files=True, key="test_files",
-            )
-            if files and st.button("🔍 Analyse", key="analyse_files"):
-                content_parts = []
-                for f in files:
+                if cs_file and st.button("📖 Parse", key="parse_cs"):
                     try:
-                        text = f.read().decode("utf-8")
-                        f.seek(0)
-                        content_parts.append(f"### {f.name}\n" + "\n".join(text.split("\n")[:300]))
-                    except Exception:
-                        pass
-                st.session_state.uploaded_docs_context = "\n\n".join(content_parts)
-                st.success(f"✓ {len(files)} file(s) loaded")
+                        text = cs_file.read().decode("utf-8")
+                        st.session_state.case_study_context = text
+                        st.success(f"✓ {len(text)} chars parsed")
+                    except Exception as exc:
+                        st.error(str(exc))
 
-        with st.expander("📚 Upload Case Study", expanded=False):
-            cs_file = st.file_uploader(
-                "Case study (txt/md)", type=["txt", "md"], key="case_study",
-            )
-            if cs_file and st.button("📖 Parse", key="parse_cs"):
-                try:
-                    text = cs_file.read().decode("utf-8")
-                    st.session_state.case_study_context = text
-                    st.success(f"✓ {len(text)} chars parsed")
-                except Exception as exc:
-                    st.error(str(exc))
+        elif page == "studio":
+            # ── Code Studio context ───────────────────────────────────
+            st.markdown('<div class="sidebar-section">Conversion</div>',
+                        unsafe_allow_html=True)
+            st.caption("Select frameworks in the main panel. Upload files or paste code to convert.")
+
+            if st.session_state.multi_convert_result:
+                result = st.session_state.multi_convert_result
+                gaps = result.get("gaps", [])
+                st.markdown('<div class="sidebar-section">Last Result</div>',
+                            unsafe_allow_html=True)
+                st.markdown(f"**Files converted:** {len(result.get('converted', {}))}")
+                st.markdown(f"**Helper scripts:** {len(result.get('helpers', {}))}")
+                if gaps:
+                    st.warning(f"⚠️ {len(gaps)} capability gap(s)")
+                else:
+                    st.success("✓ Full coverage")
+                if st.button("🗑 Clear results", key="sb_clear_multi"):
+                    st.session_state.pop("multi_convert_result", None)
+                    st.rerun()
+
+        elif page == "coverage":
+            # ── Coverage context ──────────────────────────────────────
+            st.markdown('<div class="sidebar-section">Analysis</div>',
+                        unsafe_allow_html=True)
+            tcs = st.session_state.excel_test_cases
+            if tcs:
+                caps = list({tc.get("required_capability", "") for tc in tcs if tc.get("required_capability")})
+                st.markdown(f"**Test cases loaded:** {len(tcs)}")
+                st.markdown(f"**Capabilities:** {len(caps)}")
+                st.markdown("**Detected:**")
+                for c in caps[:8]:
+                    st.markdown(f"  · {c}")
+                if len(caps) > 8:
+                    st.caption(f"…and {len(caps)-8} more")
+                st.markdown("---")
+                if st.button("🗑 Clear all", key="sb_clear_cov"):
+                    for k in ("excel_test_cases", "excel_summary", "coverage_result", "cicd_yaml"):
+                        st.session_state[k] = [] if k == "excel_test_cases" else ""
+                    st.rerun()
+            else:
+                st.caption("No test cases loaded yet. Upload an Excel file or enter manually.")
+
+            st.markdown('<div class="sidebar-section">Quick Tips</div>',
+                        unsafe_allow_html=True)
+            st.caption("• Excel columns: Test ID, Description, Capability, Steps, Expected Result")
+            st.caption("• Capability field drives analysis — 'smoke', 'e2e', 'api' all work")
+            st.caption("• Leave framework filter empty to compare all 17 frameworks")
+
+
+# ── Home page ─────────────────────────────────────────────────────────
+def _render_home() -> None:
+    fw_count = len(kb.list_all())
+    st.markdown(f"""
+    <div class="home-hero">
+        <div class="home-hero-title">Automation Framework Advisor</div>
+        <div class="home-hero-sub">
+            AI-powered tool to evaluate, migrate, and verify test automation frameworks.
+            Compare {fw_count} frameworks, convert test suites, and analyse coverage gaps — all in one place.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Stats bar
+    st.markdown(f"""
+    <div class="home-stats">
+        <div style="text-align:center">
+            <div class="home-stat-value">{fw_count}</div>
+            <div class="home-stat-label">Frameworks</div>
+        </div>
+        <div style="text-align:center">
+            <div class="home-stat-value">AI</div>
+            <div class="home-stat-label">Powered by Groq LLM</div>
+        </div>
+        <div style="text-align:center">
+            <div class="home-stat-value">3</div>
+            <div class="home-stat-label">Core Features</div>
+        </div>
+        <div style="text-align:center">
+            <div class="home-stat-value">100%</div>
+            <div class="home-stat-label">Coverage Parity</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Feature cards
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown("""
+        <div class="feature-card">
+            <span class="feature-card-icon">🧭</span>
+            <div class="feature-card-title">Framework Advisor</div>
+            <div class="feature-card-desc">
+                Chat with an AI agent to compare frameworks, get migration plans,
+                and receive scored recommendations tailored to your project.
+            </div>
+            <div class="feature-card-tags">
+                <span class="feature-tag">LLM Chat</span>
+                <span class="feature-tag">Scoring Matrix</span>
+                <span class="feature-tag">Migration Plan</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("Open Advisor →", key="home_go_advisor", use_container_width=True):
+            st.session_state.page = "advisor"
+            st.rerun()
+
+    with c2:
+        st.markdown("""
+        <div class="feature-card">
+            <span class="feature-card-icon">🐍</span>
+            <div class="feature-card-title">Code Studio</div>
+            <div class="feature-card-desc">
+                Convert test files between frameworks automatically.
+                Supports single-file paste or full repo upload with
+                gap-bridging helper scripts and CI/CD config.
+            </div>
+            <div class="feature-card-tags">
+                <span class="feature-tag">Auto Convert</span>
+                <span class="feature-tag">Multi-file</span>
+                <span class="feature-tag">ZIP Download</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("Open Code Studio →", key="home_go_studio", use_container_width=True):
+            st.session_state.page = "studio"
+            st.rerun()
+
+    with c3:
+        st.markdown("""
+        <div class="feature-card">
+            <span class="feature-card-icon">📊</span>
+            <div class="feature-card-title">Coverage Analyser</div>
+            <div class="feature-card-desc">
+                Upload your test cases via Excel or JSON. Get a full
+                coverage matrix across all frameworks, best-fit recommendations,
+                and a ready-to-download CI/CD pipeline.
+            </div>
+            <div class="feature-card-tags">
+                <span class="feature-tag">Excel Upload</span>
+                <span class="feature-tag">Coverage Matrix</span>
+                <span class="feature-tag">CI/CD Export</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("Open Coverage →", key="home_go_coverage", use_container_width=True):
+            st.session_state.page = "coverage"
+            st.rerun()
+
+    # Quick start guide
+    st.markdown("---")
+    st.markdown("#### 🚀 Quick Start")
+    qa, qb, qc = st.columns(3)
+    with qa:
+        st.markdown("""
+        **New to the tool?**
+        1. Start with **Advisor** — ask which framework fits your project
+        2. Get a scored comparison and migration roadmap
+        3. Export the CI/CD pipeline
+        """)
+    with qb:
+        st.markdown("""
+        **Migrating a test suite?**
+        1. Go to **Code Studio**
+        2. Upload your existing test files
+        3. Download the converted project as a ZIP
+        """)
+    with qc:
+        st.markdown("""
+        **Verifying coverage?**
+        1. Go to **Coverage Analyser**
+        2. Upload your test case Excel sheet
+        3. See which frameworks cover 100% of your needs
+        """)
+
+
+# ── Input guardrail ─────────────────────────────────────────────────
+_TOPIC_KEYWORDS = {
+    # frameworks & tools
+    "playwright", "cypress", "selenium", "webdriverio", "puppeteer", "testcafe",
+    "robot", "appium", "karate", "k6", "locust", "rest assured", "restassured",
+    "pytest", "junit", "mocha", "jest", "jasmine", "cucumber", "behave",
+    "terraform", "ansible", "pulumi", "chef", "cloudformation",
+    # testing concepts
+    "test", "testing", "automation", "framework", "migrate", "migration",
+    "coverage", "e2e", "end-to-end", "ui", "api", "mobile", "performance",
+    "load", "smoke", "regression", "integration", "functional", "unit",
+    "assertion", "selector", "locator", "fixture", "mock", "stub", "spy",
+    "browser", "headless", "parallel", "flaky", "retry", "report",
+    # ci/cd & infra
+    "ci", "cd", "cicd", "pipeline", "github actions", "gitlab", "azure devops",
+    "jenkins", "docker", "container", "deploy", "build", "artifact",
+    # scoring / comparison
+    "compare", "comparison", "recommend", "recommendation",
+    "framework score", "scoring matrix", "weighted score",
+    "best framework", "choose framework", "which framework",
+    "pros and cons", "tradeoff", "trade-off",
+    "convert", "boilerplate", "template", "setup", "install", "config",
+    # general dev
+    "python", "javascript", "typescript", "java", "node", "npm", "pip",
+    "package", "dependency", "library", "plugin", "extension",
+}
+
+_OFF_TOPIC_REPLY = (
+    "I'm specialised in **test automation frameworks, migrations, and coverage analysis**. "
+    "I can't help with that topic, but I'm happy to assist with:\n"
+    "- Comparing or recommending automation frameworks\n"
+    "- Planning a migration (e.g. Selenium → Playwright)\n"
+    "- Analysing test coverage gaps\n"
+    "- CI/CD pipeline setup for test suites\n\n"
+    "What would you like to know about test automation?"
+)
+
+
+def _is_off_topic(text: str) -> bool:
+    """Return True if the message contains no automation/testing-related keywords."""
+    lowered = text.lower()
+    return not any(kw in lowered for kw in _TOPIC_KEYWORDS)
 
 
 # ── Tab: Advisor ──────────────────────────────────────────────────────
 def _render_advisor_tab() -> None:
+    st.markdown("""
+    <div class="page-header">
+        <div class="page-header-left">
+            <div class="breadcrumb"><span>Home</span><span class="breadcrumb-sep">›</span><span>Advisor</span></div>
+            <div class="page-title">🧭 Framework Advisor</div>
+            <div class="page-subtitle">Ask anything about frameworks, migrations, or scoring</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     if not st.session_state.messages:
         st.session_state.messages.append({"role": "assistant", "content": (
             "👋 Hi! I'm your **Framework Migration Advisor**.\n\n"
+            "Try asking me:\n"
             "- *'Compare Robot Framework vs Playwright'*\n"
             "- *'Best Python API testing framework'*\n"
-            "- *'Migrate from Selenium to Playwright'*\n"
-            "- Upload test files in the sidebar for context-aware recommendations"
+            "- *'Migrate from Selenium to Playwright'*\n\n"
+            "Upload test files in the sidebar for context-aware recommendations."
         )})
 
     for msg in st.session_state.messages:
@@ -262,14 +551,33 @@ def _render_advisor_tab() -> None:
         with st.chat_message("user", avatar="👤"):
             st.markdown(user_input)
 
+        if _is_off_topic(user_input):
+            with st.chat_message("assistant", avatar="🧭"):
+                st.markdown(_OFF_TOPIC_REPLY)
+            st.session_state.messages.append({"role": "assistant", "content": _OFF_TOPIC_REPLY})
+            st.stop()
+
         wp = st.session_state.weight_profile
         weight_context = "Active scoring weights: " + ", ".join(
             f"{_CRITERIA_LABELS.get(k, k)}={v:.0%}"
             for k, v in wp.weights.items() if k in CRITERIA_IDS
         )
 
-        try:
-            with st.spinner("🤖 Agents processing…"):
+        _ADVISOR_STEPS = [
+            "Parsing your question",
+            "Searching knowledge graph",
+            "Running agent pipeline",
+            "Synthesising response",
+        ]
+
+        with st.chat_message("assistant", avatar="🧭"):
+            loading_slot = st.empty()
+            for step_i in range(len(_ADVISOR_STEPS)):
+                with loading_slot.container():
+                    _render_loading(_ADVISOR_STEPS, step_i, "Advisor is thinking…")
+                import time; time.sleep(0.4)
+
+            try:
                 response = advisor.run_pipeline(
                     user_input,
                     st.session_state.uploaded_docs_context,
@@ -277,235 +585,345 @@ def _render_advisor_tab() -> None:
                     weight_context=weight_context,
                     weight_profile=st.session_state.weight_profile,
                 )
-        except Exception as exc:
-            logger.warning("Pipeline failed (%s) — direct respond", exc)
-            response = advisor.respond(
-                user_input,
-                st.session_state.uploaded_docs_context,
-                st.session_state.case_study_context,
-            )
+            except Exception as exc:
+                logger.warning("Pipeline failed (%s) — direct respond", exc)
+                response = advisor.respond(
+                    user_input,
+                    st.session_state.uploaded_docs_context,
+                    st.session_state.case_study_context,
+                )
 
-        st.session_state.messages.append({"role": "assistant", "content": response})
-        with st.chat_message("assistant", avatar="🧭"):
+            loading_slot.empty()
             st.markdown(response)
 
+        st.session_state.messages.append({"role": "assistant", "content": response})
 
-# ── Tab: Code Studio ─────────────────────────────────────────────────
+
+# ── Tab: Code Studio ──────────────────────────────────────────────────
 def _render_code_studio_tab() -> None:
     import re as _re
-    from src.tools.code_sandbox import (
-        run_code, install_and_run, get_venv_info,
-        detect_required_packages, uninstall_packages,
-    )
+    import io
+    import zipfile
 
-    # ── Converter section ─────────────────────────────────────────────
-    st.markdown("### 🔄 Test Case Converter")
-    st.caption(
-        "Convert test cases from any framework to Python. "
-        "Converted code loads into the editor and runs automatically."
-    )
+    st.markdown("""
+    <div class="page-header">
+        <div class="page-header-left">
+            <div class="breadcrumb"><span>Home</span><span class="breadcrumb-sep">›</span><span>Code Studio</span></div>
+            <div class="page-title">🐍 Code Studio</div>
+            <div class="page-subtitle">Convert test suites between frameworks automatically</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    col1, col2, col3 = st.columns([2, 2, 1])
+    col1, col2 = st.columns(2)
     with col1:
         from_fw = st.selectbox("From framework", _KNOWN_FRAMEWORKS, index=3, key="convert_from")
     with col2:
         to_options = [f for f in _KNOWN_FRAMEWORKS if f != from_fw]
-        to_fw = st.selectbox("To framework (Python)", to_options, index=0, key="convert_to")
-    with col3:
-        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        do_convert = st.button("🔄 Convert", key="btn_convert", use_container_width=True)
+        to_fw = st.selectbox("To framework", to_options, index=0, key="convert_to")
 
-    source_code = st.text_area(
-        "Paste source test code here",
-        height=160,
-        placeholder=f"Paste your {from_fw} test code here…",
-        key="convert_source",
+    # Breadcrumb trail showing current conversion
+    if from_fw and to_fw:
+        st.markdown(
+            f'<div class="breadcrumb" style="margin:0.25rem 0 0.75rem;">'
+            f'<span>{from_fw}</span><span class="breadcrumb-sep">→</span>'
+            f'<span style="color:#2d7d6f;font-weight:700;">{to_fw}</span></div>',
+            unsafe_allow_html=True,
+        )
+
+    mode = st.radio(
+        "Conversion mode",
+        ["Single file (paste)", "Multi-file (upload repo)"],
+        horizontal=True,
+        key="converter_mode",
     )
+    st.markdown("---")
 
-    if do_convert:
-        if not source_code.strip():
-            st.warning("Paste some source test code first.")
-        else:
-            with st.spinner(f"Converting {from_fw} → {to_fw} (Python)…"):
+    if mode == "Single file (paste)":
+        # Empty state when no code pasted
+        if not st.session_state.get("last_converted_code"):
+            st.markdown("""
+            <div class="empty-state">
+                <span class="empty-state-icon">📋</span>
+                <div class="empty-state-title">Paste your test code below</div>
+                <div class="empty-state-desc">
+                    Paste a single test file, select source and target frameworks above,
+                    then click Convert.
+                </div>
+                <span class="empty-state-hint">⬇ Paste code in the text area below</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+        source_code = st.text_area(
+            "Paste source test code here", height=200,
+            placeholder=f"Paste your {from_fw} test code here…",
+            key="convert_source",
+        )
+        do_convert = st.button("🔄 Convert", key="btn_convert", type="primary")
+
+        if do_convert:
+            if not source_code.strip():
+                st.warning("Paste some source test code first.")
+            else:
+                _CONVERT_STEPS = [
+                    "Parsing source code",
+                    "Detecting capability gaps",
+                    "Generating converted code",
+                    "Building CI/CD snippet",
+                ]
+                loading_slot = st.empty()
                 try:
                     from src.tools.executor import ToolExecutor
-                    executor = ToolExecutor(
-                        knowledge_base=kb,
-                        knowledge_graph=_graph,
-                        graphrag_engine=_graphrag,
-                    )
+                    executor = ToolExecutor(knowledge_base=kb, knowledge_graph=_graph,
+                                           graphrag_engine=_graphrag)
                     executor._llm = _client
+
+                    for step_i in range(len(_CONVERT_STEPS) - 1):
+                        with loading_slot.container():
+                            _render_loading(_CONVERT_STEPS, step_i,
+                                            f"Converting {from_fw} → {to_fw}…")
+                        import time; time.sleep(0.3)
+
                     full_result = executor.execute("convert_test_cases", {
                         "source_code": source_code,
                         "from_framework": from_fw,
                         "to_framework": to_fw,
                         "language": "python",
                     })
-                    # Extract first ```python ... ``` block as runnable code
+
+                    with loading_slot.container():
+                        _render_loading(_CONVERT_STEPS, len(_CONVERT_STEPS) - 1,
+                                        "Finalising…")
+                    import time; time.sleep(0.2)
+                    loading_slot.empty()
+
                     code_blocks = _re.findall(r"```(?:python)?\n(.*?)```", full_result, _re.DOTALL)
                     runnable = code_blocks[0].strip() if code_blocks else full_result
-                    st.session_state.playground_code = runnable
                     st.session_state.last_converted_code = full_result
-                    # Auto-run the converted code
-                    st.session_state.auto_run_pending = True
-                    st.success(f"✓ Converted — running in interpreter…")
-                    with st.expander("📄 Full conversion output (gaps + CI/CD)", expanded=False):
+                    st.success("✓ Converted successfully")
+                    with st.expander("📄 Full conversion output (gaps + CI/CD)", expanded=True):
                         st.markdown(full_result)
+                    st.download_button(
+                        label="⬇ Download converted file",
+                        data=runnable,
+                        file_name="test_converted.py",
+                        mime="text/x-python",
+                        key="btn_dl_single",
+                    )
                 except Exception as exc:
+                    loading_slot.empty()
                     st.error(f"Conversion failed: {exc}")
                     logger.error("Conversion error: %s", exc)
-
-    # ── Interpreter section ───────────────────────────────────────────
-    st.markdown("---")
-    st.markdown("### 🐍 Python Interpreter")
-
-    # Venv status badge
-    venv_info = get_venv_info()
-    if venv_info["exists"]:
-        st.caption(
-            f"🟢 Sandbox venv ready · {venv_info['count']} packages installed · "
-            f"`{venv_info['venv_path']}`"
-        )
     else:
-        st.caption("🟡 Sandbox venv will be created on first run.")
+        # Multi-file mode
+        uploaded_files = st.file_uploader(
+            "Upload test files",
+            type=["py", "js", "ts", "java", "robot", "feature", "yml", "yaml"],
+            accept_multiple_files=True,
+            key="multi_convert_files",
+        )
 
-    st.caption(
-        "Required packages are detected from your imports and installed automatically. "
-        f"Execution timeout: {60}s."
-    )
+        if not uploaded_files and not st.session_state.get("multi_convert_result"):
+            st.markdown("""
+            <div class="empty-state">
+                <span class="empty-state-icon">📂</span>
+                <div class="empty-state-title">Upload your test repository</div>
+                <div class="empty-state-desc">
+                    Upload multiple test files. Each is converted with shared cross-file context.
+                    Helper scripts are auto-generated for capability gaps.
+                </div>
+                <span class="empty-state-hint">⬆ Use the file uploader above</span>
+            </div>
+            """, unsafe_allow_html=True)
 
-    code = st.text_area(
-        "Python code",
-        value=st.session_state.playground_code,
-        height=300,
-        key="editor_code",
-        label_visibility="collapsed",
-    )
+        if uploaded_files:
+            st.caption(f"{len(uploaded_files)} file(s) selected: " +
+                       ", ".join(f.name for f in uploaded_files))
 
+        do_multi = st.button(
+            f"🔄 Convert {len(uploaded_files) if uploaded_files else 0} file(s)",
+            key="btn_multi_convert",
+            disabled=not uploaded_files,
+            type="primary",
+        )
 
-    # Detect packages needed by current code and show as a log
-    required_pkgs = detect_required_packages(code) if code.strip() else []
-    if required_pkgs:
-        pkg_lines = "\n".join(f"  [required] {p}" for p in required_pkgs)
-        st.code(f"[packages] The following will be installed on Run:\n{pkg_lines}", language="text")
+        if do_multi and uploaded_files:
+            files_payload = []
+            for uf in uploaded_files:
+                try:
+                    files_payload.append({
+                        "filename": uf.name,
+                        "content": uf.read().decode("utf-8", errors="replace"),
+                    })
+                except Exception as exc:
+                    st.warning(f"Could not read {uf.name}: {exc}")
 
-    run_col, clear_col, end_col, _ = st.columns([1, 1, 1, 4])
-    with run_col:
-        run_clicked = st.button("▶ Run", key="btn_run", use_container_width=True)
-    with clear_col:
-        if st.button("🗑 Clear", key="btn_clear", use_container_width=True):
-            st.session_state.playground_code = _PLAYGROUND_TEMPLATE
-            st.session_state.playground_output = ""
-            st.session_state.playground_install_log = ""
-            st.session_state.auto_run_pending = False
-            st.rerun()
-    with end_col:
-        end_clicked = st.button("🔴 END", key="btn_end", use_container_width=True)
+            if files_payload:
+                _MULTI_STEPS = [
+                    "Reading source files",
+                    "Analysing capability gaps",
+                    f"Converting {len(files_payload)} file(s)",
+                    "Generating helper scripts",
+                    "Building conftest & requirements",
+                ]
+                loading_slot = st.empty()
+                try:
+                    from src.tools.executor import ToolExecutor
+                    executor = ToolExecutor(knowledge_base=kb, knowledge_graph=_graph,
+                                           graphrag_engine=_graphrag)
+                    executor._llm = _client
 
-    # END: uninstall all session-installed packages
-    if end_clicked:
-        session_pkgs = st.session_state.get("playground_packages", [])
-        if session_pkgs:
-            with st.spinner("Uninstalling packages…"):
-                uninstall_log = uninstall_packages(session_pkgs)
-            st.session_state.playground_packages = []
-            st.session_state.playground_install_log = uninstall_log
-            st.session_state.playground_output = ""
-            st.code(uninstall_log, language="text")
-        else:
-            st.info("No session packages to uninstall.")
+                    for step_i in range(len(_MULTI_STEPS) - 1):
+                        with loading_slot.container():
+                            _render_loading(_MULTI_STEPS, step_i,
+                                            f"Converting {from_fw} → {to_fw}…")
+                        import time; time.sleep(0.35)
 
-    # Trigger: manual Run button OR auto-run after conversion
-    should_run = run_clicked or st.session_state.get("auto_run_pending", False)
+                    result = executor.convert_multi_file(
+                        files=files_payload,
+                        from_framework=from_fw,
+                        to_framework=to_fw,
+                    )
 
-    if should_run:
-        run_code_val = code if run_clicked else st.session_state.playground_code
-        if not run_code_val.strip():
-            st.warning("Nothing to run.")
-        else:
-            st.session_state.playground_code = run_code_val
-            st.session_state.auto_run_pending = False
+                    with loading_slot.container():
+                        _render_loading(_MULTI_STEPS, len(_MULTI_STEPS) - 1, "Done!")
+                    import time; time.sleep(0.2)
+                    loading_slot.empty()
 
-            pkgs_to_install = detect_required_packages(run_code_val)
+                    st.session_state["multi_convert_result"] = result
+                    st.session_state["multi_convert_from"] = from_fw
+                    st.session_state["multi_convert_to"] = to_fw
+                    st.rerun()
+                except Exception as exc:
+                    loading_slot.empty()
+                    st.error(f"Multi-file conversion failed: {exc}")
+                    logger.error("Multi-file conversion error: %s", exc)
 
-            if pkgs_to_install:
-                install_preview = "[packages] Installing required packages:\n" + \
-                    "\n".join(f"  [install] {p}" for p in pkgs_to_install)
-                st.code(install_preview, language="text")
+        result = st.session_state.get("multi_convert_result")
+        if result:
+            to_label = st.session_state.get("multi_convert_to", "")
+            st.markdown("---")
+            st.markdown(result["summary"])
+            st.markdown("### 📂 Converted Project Files")
+            all_files: dict[str, str] = {}
 
-            status_placeholder = st.empty()
-            status_placeholder.info("⏳ Running…")
+            with st.expander("📄 `conftest.py`", expanded=False):
+                st.code(result["conftest"], language="python")
+                st.download_button("⬇ conftest.py", result["conftest"],
+                                   file_name="conftest.py", mime="text/x-python",
+                                   key="dl_conftest")
+            all_files["conftest.py"] = result["conftest"]
 
-            sandbox_result = install_and_run(run_code_val, pkgs_to_install)
+            with st.expander("📄 `requirements.txt`", expanded=False):
+                st.code(result["requirements"], language="text")
+                st.download_button("⬇ requirements.txt", result["requirements"],
+                                   file_name="requirements.txt", mime="text/plain",
+                                   key="dl_requirements")
+            all_files["requirements.txt"] = result["requirements"]
 
-            # Accumulate session packages (for END cleanup)
-            existing = st.session_state.get("playground_packages", [])
-            new_pkgs = [p for p in sandbox_result.packages_installed if p not in existing]
-            st.session_state.playground_packages = existing + new_pkgs
+            if result["converted"]:
+                st.markdown("#### 🧪 Converted Test Files")
+                for path, code in sorted(result["converted"].items()):
+                    with st.expander(f"📄 `{path}`", expanded=False):
+                        st.code(code, language="python")
+                        st.download_button(f"⬇ {Path(path).name}", code,
+                                           file_name=Path(path).name, mime="text/x-python",
+                                           key=f"dl_{path.replace('/', '_')}")
+                    all_files[path] = code
 
-            st.session_state.playground_install_log = sandbox_result.install_log
-            st.session_state.playground_output = (
-                sandbox_result.stdout or sandbox_result.stderr or "(no output)"
+            if result["helpers"]:
+                st.markdown("#### 🔧 Gap-Bridging Helper Scripts")
+                st.caption(f"Auto-generated to cover capabilities {to_label} cannot handle natively.")
+                for path, code in sorted(result["helpers"].items()):
+                    with st.expander(f"📄 `{path}`", expanded=False):
+                        st.code(code, language="python")
+                        st.download_button(f"⬇ {Path(path).name}", code,
+                                           file_name=Path(path).name, mime="text/x-python",
+                                           key=f"dl_{path.replace('/', '_')}")
+                    all_files[path] = code
+
+            st.markdown("---")
+            zip_buf = io.BytesIO()
+            with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                for path, code in all_files.items():
+                    zf.writestr(path, code)
+            zip_buf.seek(0)
+            folder_name = f"converted_{to_label.lower().replace(' ', '_')}"
+            st.download_button(
+                label=f"⬇ Download all as {folder_name}.zip",
+                data=zip_buf.getvalue(),
+                file_name=f"{folder_name}.zip",
+                mime="application/zip",
+                key="btn_dl_zip",
             )
-            st.session_state.playground_exit_code = sandbox_result.exit_code
-            st.session_state.playground_timed_out = sandbox_result.timed_out
-
-            if sandbox_result.timed_out:
-                status_placeholder.error("⏱ Timed out after 60s")
-            elif sandbox_result.success:
-                pkg_note = (
-                    f" · installed: {', '.join(sandbox_result.packages_installed)}"
-                    if sandbox_result.packages_installed else ""
-                )
-                status_placeholder.success(f"✅ Ran successfully{pkg_note}")
-            else:
-                status_placeholder.error(f"❌ Exit code {sandbox_result.exit_code}")
-
-    # ── Output display ────────────────────────────────────────────────
-    install_log = st.session_state.get("playground_install_log", "")
-    output      = st.session_state.get("playground_output", "")
-
-    if install_log:
-        with st.expander("📦 Package log", expanded=False):
-            st.code(install_log, language="text")
-
-    if output:
-        st.markdown("**Output:**")
-        exit_code = st.session_state.get("playground_exit_code", 0)
-        timed_out = st.session_state.get("playground_timed_out", False)
-        if timed_out:
-            st.error(f"⏱ Timed out\n\n{output}")
-        else:
-            st.code(output, language="text")
 
 
+# ── Tab: Coverage Analyser ────────────────────────────────────────────
 def _render_coverage_tab() -> None:
-    st.markdown("### 📊 Test Case Coverage Analyser")
-    st.caption(
-        "Upload an Excel file with your test cases. "
-        "The tool maps each test to framework capabilities, shows a coverage matrix, "
-        "recommends the best framework combination, and generates a CI/CD pipeline you can download."
-    )
+    st.markdown("""
+    <div class="page-header">
+        <div class="page-header-left">
+            <div class="breadcrumb"><span>Home</span><span class="breadcrumb-sep">›</span><span>Coverage Analyser</span></div>
+            <div class="page-title">📊 Coverage Analyser</div>
+            <div class="page-subtitle">Map test cases to framework capabilities and find the best fit</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # ── Excel upload ──────────────────────────────────────────────────
-    with st.expander("📥 Upload Test Cases (Excel)", expanded=True):
+    # ── Metric cards when data is loaded ─────────────────────────────
+    tcs = st.session_state.excel_test_cases
+    if tcs:
+        caps = list({tc.get("required_capability", "") for tc in tcs if tc.get("required_capability")})
+        # Parse best framework from coverage_result if available
+        best_fw = "—"
+        cov_pct = "—"
+        result_text = st.session_state.coverage_result
+        if result_text:
+            import re as _re2
+            m = _re2.search(r"\*\*(.+?)\*\*.*?(\d+\.?\d*)%", result_text)
+            if m:
+                best_fw = m.group(1)[:18]
+                cov_pct = f"{m.group(2)}%"
+
+        st.markdown(f"""
+        <div class="metric-row">
+            <div class="metric-card">
+                <span class="metric-card-icon">🧪</span>
+                <div class="metric-card-value">{len(tcs)}</div>
+                <div class="metric-card-label">Test Cases</div>
+            </div>
+            <div class="metric-card">
+                <span class="metric-card-icon">🎯</span>
+                <div class="metric-card-value">{len(caps)}</div>
+                <div class="metric-card-label">Capabilities</div>
+            </div>
+            <div class="metric-card">
+                <span class="metric-card-icon">🏆</span>
+                <div class="metric-card-value" style="font-size:1.1rem">{best_fw}</div>
+                <div class="metric-card-label">Best Framework</div>
+            </div>
+            <div class="metric-card">
+                <span class="metric-card-icon">📈</span>
+                <div class="metric-card-value">{cov_pct}</div>
+                <div class="metric-card-label">Top Coverage</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── Upload section ────────────────────────────────────────────────
+    with st.expander("📥 Upload Test Cases (Excel)", expanded=not bool(tcs)):
         st.markdown(
             "Expected columns *(order & case don't matter)*: "
             "`Test ID` · `Description` · `Capability` · `Steps` · `Expected Result`"
         )
-        xl_file = st.file_uploader(
-            "Excel file (.xlsx)", type=["xlsx"], key="xl_upload"
-        )
-
+        xl_file = st.file_uploader("Excel file (.xlsx)", type=["xlsx"], key="xl_upload")
         col_parse, col_reset = st.columns([1, 1])
         with col_parse:
             parse_clicked = st.button("📂 Parse Excel", key="btn_parse_xl", use_container_width=True)
         with col_reset:
             if st.button("🗑 Clear", key="btn_clear_xl", use_container_width=True):
-                st.session_state.excel_test_cases = []
-                st.session_state.excel_summary = ""
-                st.session_state.coverage_result = ""
-                st.session_state.cicd_yaml = ""
+                for k in ("excel_test_cases", "excel_summary", "coverage_result", "cicd_yaml"):
+                    st.session_state[k] = [] if k == "excel_test_cases" else ""
                 st.rerun()
 
         if parse_clicked:
@@ -527,57 +945,80 @@ def _render_coverage_tab() -> None:
         if st.session_state.excel_summary:
             st.markdown(st.session_state.excel_summary)
 
-    # ── Framework filter ──────────────────────────────────────────────
-    if st.session_state.excel_test_cases:
+    # ── Empty state when no data ──────────────────────────────────────
+    if not tcs:
+        st.markdown("""
+        <div class="empty-state">
+            <span class="empty-state-icon">📊</span>
+            <div class="empty-state-title">No test cases loaded yet</div>
+            <div class="empty-state-desc">
+                Upload an Excel file with your test cases above, or enter them manually below.
+                The tool will map each test to framework capabilities and show you the best fit.
+            </div>
+            <span class="empty-state-hint">⬆ Upload Excel or use manual entry below</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── Analysis options ──────────────────────────────────────────────
+    if tcs:
         st.markdown("---")
         st.markdown("#### ⚙️ Analysis Options")
 
+        # Framework filter as chips-style multiselect
         selected_fws = st.multiselect(
-            "Frameworks to include (leave empty = all)",
-            options=_KNOWN_FRAMEWORKS,
-            default=[],
-            key="coverage_fw_filter",
+            "Frameworks to include (leave empty = all 17)",
+            options=_KNOWN_FRAMEWORKS, default=[], key="coverage_fw_filter",
         )
-
         cicd_platform = st.selectbox(
             "CI/CD platform for export",
             ["GitHub Actions", "GitLab CI", "Azure DevOps"],
             key="cicd_platform",
         )
-
-        analyse_clicked = st.button("🔍 Analyse Coverage", key="btn_analyse_cov", use_container_width=False)
+        analyse_clicked = st.button("🔍 Analyse Coverage", key="btn_analyse_cov", type="primary")
 
         if analyse_clicked:
-            with st.spinner("Analysing coverage across frameworks…"):
-                try:
-                    from src.tools.executor import ToolExecutor
-                    executor = ToolExecutor(knowledge_base=kb, knowledge_graph=_graph)
-                    result = executor.execute("analyze_test_case_coverage", {
-                        "test_cases": st.session_state.excel_test_cases,
-                        "frameworks": selected_fws if selected_fws else None,
-                    })
-                    st.session_state.coverage_result = result
+            _COV_STEPS = [
+                "Loading test cases",
+                "Building capability map",
+                "Scoring frameworks",
+                "Finding best combinations",
+                "Generating report",
+            ]
+            loading_slot = st.empty()
+            try:
+                from src.tools.executor import ToolExecutor
+                executor = ToolExecutor(knowledge_base=kb, knowledge_graph=_graph)
 
-                    # Build CI/CD YAML for the top recommended framework
-                    cicd_yaml = _build_cicd_yaml(
-                        st.session_state.excel_test_cases,
-                        cicd_platform,
-                    )
-                    st.session_state.cicd_yaml = cicd_yaml
-                except Exception as exc:
-                    st.error(f"Analysis failed: {exc}")
-                    logger.error("Coverage analysis error: %s", exc)
+                for step_i in range(len(_COV_STEPS) - 1):
+                    with loading_slot.container():
+                        _render_loading(_COV_STEPS, step_i, "Analysing coverage…")
+                    import time; time.sleep(0.3)
 
-    # ── Coverage results ──────────────────────────────────────────────
+                result = executor.execute("analyze_test_case_coverage", {
+                    "test_cases": tcs,
+                    "frameworks": selected_fws if selected_fws else None,
+                })
+
+                with loading_slot.container():
+                    _render_loading(_COV_STEPS, len(_COV_STEPS) - 1, "Done!")
+                import time; time.sleep(0.2)
+                loading_slot.empty()
+
+                st.session_state.coverage_result = result
+                st.session_state.cicd_yaml = _build_cicd_yaml(tcs, cicd_platform)
+                st.rerun()
+            except Exception as exc:
+                loading_slot.empty()
+                st.error(f"Analysis failed: {exc}")
+                logger.error("Coverage analysis error: %s", exc)
+
     if st.session_state.coverage_result:
         st.markdown("---")
         st.markdown(st.session_state.coverage_result)
 
-    # ── CI/CD export ──────────────────────────────────────────────────
     if st.session_state.cicd_yaml:
         st.markdown("---")
         st.markdown("### ⬇️ CI/CD Pipeline Export")
-
         platform = st.session_state.get("cicd_platform", "GitHub Actions")
         filename_map = {
             "GitHub Actions": "github-actions.yml",
@@ -585,7 +1026,6 @@ def _render_coverage_tab() -> None:
             "Azure DevOps":   "azure-pipelines.yml",
         }
         filename = filename_map.get(platform, "ci-pipeline.yml")
-
         st.code(st.session_state.cicd_yaml, language="yaml")
         st.download_button(
             label=f"⬇ Download {filename}",
@@ -595,63 +1035,117 @@ def _render_coverage_tab() -> None:
             key="btn_download_cicd",
         )
 
-    # ── Manual test case entry fallback ──────────────────────────────
-    if not st.session_state.excel_test_cases:
+    # ── Manual entry ──────────────────────────────────────────────────
+    if not tcs:
         st.markdown("---")
-        with st.expander("✏️ Or enter test cases manually (JSON)", expanded=False):
+        with st.expander("✏️ Or enter test cases manually", expanded=False):
             st.caption(
-                'Format: `[{"id":"TC001","description":"Login","required_capability":"ui automation"}]`'
+                "Same fields as Excel: `id`, `description`, `capability`, "
+                "`steps`, `expected_result`. Capability drives analysis — "
+                "`smoke`, `regression`, `e2e` all work via semantic matching."
             )
-            manual_json = st.text_area("Test cases JSON", height=150, key="manual_tc_json")
-            if st.button("▶ Analyse Manual Input", key="btn_manual_analyse"):
+            st.markdown("**Quick template:**")
+            tcol1, tcol2, tcol3 = st.columns([1, 2, 1])
+            with tcol1:
+                tmpl_count = st.number_input(
+                    "# test cases", min_value=1, max_value=20, value=3, key="tmpl_count"
+                )
+            with tcol2:
+                tmpl_cap = st.selectbox(
+                    "Capability",
+                    ["ui automation", "api testing", "mobile testing",
+                     "performance testing", "visual testing",
+                     "accessibility testing", "network mocking",
+                     "cross browser", "parallel execution", "e2e testing"],
+                    key="tmpl_cap",
+                )
+            with tcol3:
+                st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+                if st.button("📝 Generate", key="btn_gen_tmpl"):
+                    import json as _json
+                    st.session_state["manual_tc_prefill"] = _json.dumps([
+                        {
+                            "id": f"TC{i+1:03d}",
+                            "description": f"Test case {i+1} description",
+                            "capability": tmpl_cap,
+                            "steps": "Step 1\nStep 2",
+                            "expected_result": "Expected outcome",
+                        }
+                        for i in range(int(tmpl_count))
+                    ], indent=2)
+
+            manual_json = st.text_area(
+                "Test cases JSON",
+                value=st.session_state.get("manual_tc_prefill", ""),
+                height=220,
+                key="manual_tc_json",
+                placeholder='[{"id":"TC001","description":"Login test","capability":"ui automation","steps":"Open browser","expected_result":"User is logged in"}]',
+            )
+
+            if st.button("▶ Analyse Manual Input", key="btn_manual_analyse", type="primary"):
                 import json
                 try:
-                    tcs = json.loads(manual_json)
-                    if not isinstance(tcs, list):
+                    raw_tcs = json.loads(manual_json)
+                    if not isinstance(raw_tcs, list):
                         raise ValueError("Must be a JSON array")
+                    normalised = []
+                    for tc in raw_tcs:
+                        normalised.append({
+                            "id": tc.get("id") or tc.get("test_id") or "",
+                            "description": tc.get("description") or tc.get("desc") or "",
+                            "required_capability": (
+                                tc.get("required_capability")
+                                or tc.get("capability")
+                                or tc.get("type")
+                                or "ui automation"
+                            ).lower(),
+                            "steps": tc.get("steps") or "",
+                            "expected_result": tc.get("expected_result") or "",
+                        })
                     from src.tools.executor import ToolExecutor
+                    from src.tools.excel_parser import summarise_excel
                     executor = ToolExecutor(knowledge_base=kb, knowledge_graph=_graph)
-                    result = executor.execute("analyze_test_case_coverage", {"test_cases": tcs})
+                    result = executor.execute("analyze_test_case_coverage", {"test_cases": normalised})
                     st.session_state.coverage_result = result
-                    st.session_state.cicd_yaml = _build_cicd_yaml(tcs, "GitHub Actions")
+                    st.session_state.cicd_yaml = _build_cicd_yaml(normalised, "GitHub Actions")
+                    st.session_state.excel_summary = summarise_excel(normalised)
+                    st.session_state.excel_test_cases = normalised
                     st.rerun()
                 except Exception as exc:
                     st.error(f"Invalid input: {exc}")
 
 
-# ── CI/CD YAML builder ────────────────────────────────────────────────
+# ── CI/CD YAML builders ───────────────────────────────────────────────
 def _build_cicd_yaml(test_cases: list[dict], platform: str) -> str:
-    """Generate a CI/CD YAML string for the given platform."""
     caps = list({tc.get("required_capability", "ui automation") for tc in test_cases})
-    needs_playwright = any(c in caps for c in ["ui automation", "network mocking", "visual testing"])
-    needs_pytest     = True
-    needs_locust     = any("performance" in c or "load" in c for c in caps)
-    needs_appium     = any("mobile" in c for c in caps)
+    install_parts: list[str] = ["pip install -r requirements.txt"]
+    test_cmd_parts: list[str] = []
+    report_paths: list[str] = ["test-results/"]
 
-    test_cmd_parts = []
-    install_parts  = ["pip install -r requirements.txt"]
+    for fw in kb.list_all():
+        fw_caps = set(fw.capabilities.keys())
+        if any(c.replace(" ", "_") in fw_caps or c in fw_caps for c in caps):
+            install_parts.extend(fw.install_commands)
+            if fw.test_command and fw.test_command not in test_cmd_parts:
+                test_cmd_parts.append(fw.test_command)
+            report_paths.extend(fw.report_paths)
 
-    if needs_playwright:
-        install_parts.append("playwright install --with-deps chromium")
-        test_cmd_parts.append("pytest tests/ -m ui")
-    if needs_locust:
-        test_cmd_parts.append("locust -f tests/load_test.py --headless -u 10 -r 2 --run-time 1m")
-    if needs_appium:
-        test_cmd_parts.append("pytest tests/ -m mobile")
     if not test_cmd_parts:
         test_cmd_parts.append("pytest tests/")
+    report_paths = list(dict.fromkeys(report_paths))
 
     if platform == "GitHub Actions":
-        return _gh_actions_yaml(install_parts, test_cmd_parts)
+        return _gh_actions_yaml(install_parts, test_cmd_parts, report_paths)
     elif platform == "GitLab CI":
-        return _gitlab_yaml(install_parts, test_cmd_parts)
+        return _gitlab_yaml(install_parts, test_cmd_parts, report_paths)
     else:
-        return _azure_yaml(install_parts, test_cmd_parts)
+        return _azure_yaml(install_parts, test_cmd_parts, report_paths)
 
 
-def _gh_actions_yaml(install_parts: list[str], test_cmds: list[str]) -> str:
+def _gh_actions_yaml(install_parts: list[str], test_cmds: list[str], report_paths: list[str] | None = None) -> str:
     install_str = "\n".join(f"          {cmd}" for cmd in install_parts)
     test_str    = "\n".join(f"          {cmd}" for cmd in test_cmds)
+    artifact_str = "\n".join(f"            {p}" for p in (report_paths or ["test-results/"]))
     return f"""\
 name: Automated Tests
 
@@ -684,14 +1178,14 @@ jobs:
         with:
           name: test-results
           path: |
-            test-results/
-            playwright-report/
+{artifact_str}
 """
 
 
-def _gitlab_yaml(install_parts: list[str], test_cmds: list[str]) -> str:
-    install_str = "\n".join(f"    - {cmd}" for cmd in install_parts)
-    test_str    = "\n".join(f"    - {cmd}" for cmd in test_cmds)
+def _gitlab_yaml(install_parts: list[str], test_cmds: list[str], report_paths: list[str] | None = None) -> str:
+    install_str  = "\n".join(f"    - {cmd}" for cmd in install_parts)
+    test_str     = "\n".join(f"    - {cmd}" for cmd in test_cmds)
+    artifact_str = "\n".join(f"      - {p}" for p in (report_paths or ["test-results/"]))
     return f"""\
 stages:
   - install
@@ -714,12 +1208,11 @@ test:
   artifacts:
     when: always
     paths:
-      - test-results/
-      - playwright-report/
+{artifact_str}
 """
 
 
-def _azure_yaml(install_parts: list[str], test_cmds: list[str]) -> str:
+def _azure_yaml(install_parts: list[str], test_cmds: list[str], report_paths: list[str] | None = None) -> str:
     install_str = "\n".join(f"          {cmd}" for cmd in install_parts)
     test_str    = "\n".join(f"          {cmd}" for cmd in test_cmds)
     return f"""\
@@ -752,40 +1245,20 @@ steps:
 """
 
 
-# ── App header ────────────────────────────────────────────────────────
-def _render_header() -> None:
-    st.markdown("""
-    <div class="app-header">
-        <div class="app-header-left">
-            <div class="app-header-logo">&#x1F9ED;</div>
-            <div>
-                <p class="app-header-title">Automation Framework Advisor</p>
-                <p class="app-header-sub">AI-powered migration planning · Python interpreter · Coverage analysis</p>
-            </div>
-        </div>
-        <div class="app-header-badge">POWERED BY GROQ LLM</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-
 # ── Main ──────────────────────────────────────────────────────────────
 def main() -> None:
     _render_sidebar()
-    _render_header()
+    _render_topnav()
 
-    tab_advisor, tab_studio, tab_coverage = st.tabs([
-        "🧭 Advisor",
-        "🐍 Code Studio",
-        "📊 Coverage Analyser",
-    ])
+    page = st.session_state.page
 
-    with tab_advisor:
+    if page == "home":
+        _render_home()
+    elif page == "advisor":
         _render_advisor_tab()
-
-    with tab_studio:
+    elif page == "studio":
         _render_code_studio_tab()
-
-    with tab_coverage:
+    elif page == "coverage":
         _render_coverage_tab()
 
 

@@ -64,6 +64,15 @@ maintainability:
   trace_viewer: false
   debugging_tools: "moderate"
 
+pip_packages:
+  selenium: ">=4.0"
+  webdriver-manager: ">=4.0"
+  pytest: ">=7.0"
+install_commands: []
+test_command: "pytest tests/"
+report_paths:
+  - "test-results/"
+
 limitations:
   - "No built-in auto-wait (flaky tests common)"
   - "Requires explicit waits for dynamic content"

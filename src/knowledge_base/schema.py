@@ -25,3 +25,8 @@ class FrameworkData(BaseModel):
     maintainability: dict[str, Any] = {}
     cloud_migration_metrics: dict[str, Any] = {}  # Cloud migration KPIs
     limitations: list[str] = []
+    # Runtime / CI metadata — used by executor and CI/CD builders
+    pip_packages: dict[str, str] = {}       # {"pytest": ">=7.0", ...}
+    install_commands: list[str] = []        # extra install steps (e.g. playwright install)
+    test_command: str = ""                  # default CLI test command
+    report_paths: list[str] = []            # artifact paths for CI upload

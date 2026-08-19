@@ -59,6 +59,12 @@ maintainability:
   trace_viewer: "Chrome DevTools"
   debugging_tools: "good (DevTools Protocol)"
 
+pip_packages: {}
+install_commands: []
+test_command: "npx jest"
+report_paths:
+  - "coverage/"
+
 limitations:
   - "Chromium-only (no Firefox/WebKit native support)"
   - "JavaScript/TypeScript ONLY"

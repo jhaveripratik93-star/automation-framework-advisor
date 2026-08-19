@@ -106,9 +106,15 @@ cloud_migration_metrics:
   code_reuse_ratio: "% of infra using shared components"
   type_safety_coverage: "Compile-time errors caught"
 
+pip_packages:
+  pulumi: ">=3.0"
+install_commands: []
+test_command: "pulumi up --yes"
+report_paths:
+  - "pulumi-results/"
+
 limitations:
   - "NOT a test automation framework for applications"
-  - "Pulumi Cloud required for team collaboration features"
   - "Smaller provider ecosystem than Terraform"
   - "State management tied to Pulumi Cloud or self-managed backends"
   - "Import from existing infrastructure is partial"

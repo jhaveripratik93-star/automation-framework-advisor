@@ -110,9 +110,14 @@ cloud_migration_metrics:
   audit_coverage: "% of CIS/SOC2 controls automated"
   resource_coverage: "% of infrastructure resources in cookbooks"
 
+pip_packages: {}
+install_commands: []
+test_command: "kitchen test"
+report_paths:
+  - "kitchen-results/"
+
 limitations:
   - "NOT a test automation framework for applications"
-  - "Ruby knowledge required (steeper learning curve)"
   - "Agent-based architecture (requires client on every node)"
   - "Chef Server adds operational complexity"
   - "Smaller community than Ansible/Terraform"

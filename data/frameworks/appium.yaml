@@ -68,6 +68,16 @@ maintainability:
   trace_viewer: false
   debugging_tools: "Appium Inspector, logs"
 
+pip_packages:
+  Appium-Python-Client: ">=3.0"
+  pytest: ">=7.0"
+install_commands:
+  - "appium driver install uiautomator2"
+  - "appium driver install xcuitest"
+test_command: "pytest tests/"
+report_paths:
+  - "test-results/"
+
 limitations:
   - "Slow test execution (device startup overhead)"
   - "Complex environment setup (Android SDK, Xcode)"

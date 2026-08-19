@@ -61,6 +61,12 @@ maintainability:
   trace_viewer: false
   debugging_tools: "good (REPL, devtools protocol)"
 
+pip_packages: {}
+install_commands: []
+test_command: "npx wdio run wdio.conf.ts"
+report_paths:
+  - "allure-results/"
+
 limitations:
   - "JavaScript/TypeScript ONLY - no Python/Java support"
   - "Steeper learning curve for non-JS teams"

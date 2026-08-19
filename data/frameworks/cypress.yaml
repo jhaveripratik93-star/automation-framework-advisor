@@ -60,6 +60,13 @@ maintainability:
   trace_viewer: false
   debugging_tools: "excellent (time-travel)"
 
+pip_packages: {}
+install_commands: []
+test_command: "npx cypress run"
+report_paths:
+  - "cypress/screenshots/"
+  - "cypress/videos/"
+
 limitations:
   - "JavaScript/TypeScript ONLY - no Python/Java support"
   - "Single browser tab execution model"

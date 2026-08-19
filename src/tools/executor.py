@@ -27,6 +27,7 @@ from src.tools.formatters import (
     format_version_info,
     resolve_framework,
 )
+from pathlib import Path
 from src.tools.prerequisites import PREREQ_PATTERNS, generate_script, match_prereq_pattern
 
 if TYPE_CHECKING:
@@ -608,202 +609,14 @@ class ToolExecutor:
         frameworks: list[str] | None = None,
         prerequisites: list[dict] | None = None,
     ) -> str:
-        """Coverage matrix with gap analysis and recommended framework combos.
-
-        Workflow:
-          1. Build capability_map (capability label → YAML keys).
-          2. Build matrix[tc_id] = {support: {fw_name: bool}}.
-          3. Calculate per-framework coverage counts.
-          4. Render summary table.
-          5. Gap analysis per framework (top 5) with alternatives.
-          6. Greedy set-cover for recommended combinations.
-          7. Case-study relevance for the capabilities being tested (NEW).
-        """
-        capability_map = {
-            "ui automation": ["shadow_dom", "iframe_cross_origin", "multi_tab", "auto_wait", "browser_testing"],
-            "api testing": ["api_testing", "rest_api", "graphql_support", "schema_validation", "json_path_support"],
-            "performance testing": ["performance_testing", "load_testing", "parallel_execution"],
-            "load testing": ["load_testing", "performance_testing"],
-            "mobile testing": ["gesture_support", "device_farm_support"],
-            "visual testing": ["visual_regression"],
-            "accessibility testing": ["accessibility_testing"],
-            "network mocking": ["network_interception"],
-            "cross browser": ["cross_browser", "multi_browser"],
-            "parallel execution": ["parallel_execution"],
-        }
-        arch_map = {
-            "api testing": ["api_testing", "microservices"],
-            "mobile testing": ["native_mobile", "hybrid_mobile"],
-        }
-
-        all_fw_list = self.kb.list_all()
-        fw_names = frameworks or [fw.framework_name for fw in all_fw_list]
-
-        # Step 2 — build matrix (tolerant of any field names)
-        def _tc_id(tc: dict, idx: int) -> str:
-            for k in ("id", "test_id", "testid", "no", "#"):
-                if tc.get(k):
-                    return str(tc[k])
-            return f"TC{idx+1:03d}"
-
-        def _tc_cap(tc: dict) -> str:
-            for k in ("required_capability", "capability", "type", "category",
-                      "test_type", "area", "feature"):
-                if tc.get(k):
-                    return str(tc[k]).lower()
-            # Fall back: scan all string values for known capability keywords
-            known = list(capability_map.keys())
-            for v in tc.values():
-                v_low = str(v).lower()
-                for cap in known:
-                    if cap in v_low:
-                        return cap
-            return "ui automation"
-
-        matrix: dict[str, dict] = {}
-        for _idx, tc in enumerate(test_cases):
-            tc_id = _tc_id(tc, _idx)
-            cap = _tc_cap(tc)
-            keywords = capability_map.get(cap, [cap.replace(" ", "_")])
-            matrix[tc_id] = {
-                "description": tc.get("description", tc.get("desc", tc.get("name", ""))),
-                "capability": cap,
-                "support": {},
-                "extra_fields": {k: v for k, v in tc.items()
-                                 if k not in ("id", "description", "required_capability",
-                                              "capability", "steps", "expected_result")},
-            }
-            for name in fw_names:
-                fw = self.kb.get(name.lower())
-                if not fw:
-                    continue
-                cap_ok = any(
-                    fw.capabilities.get(kw) is True
-                    or (isinstance(fw.capabilities.get(kw), str)
-                        and fw.capabilities.get(kw) not in ("", "false", "no"))
-                    for kw in keywords
-                )
-                arch_ok = any(
-                    fw.architecture_fit.get(kw) is True
-                    or (isinstance(fw.architecture_fit.get(kw), str)
-                        and fw.architecture_fit.get(kw) not in ("", "false", "no"))
-                    for kw in arch_map.get(cap, [])
-                ) if arch_map.get(cap) else False
-                matrix[tc_id]["support"][fw.framework_name] = cap_ok or arch_ok
-
-        # Step 3 — per-framework counts
-        coverage: dict[str, dict] = {}
-        for name in fw_names:
-            fw = self.kb.get(name.lower())
-            if not fw:
-                continue
-            covered = [t for t, d in matrix.items() if d["support"].get(fw.framework_name)]
-            uncovered = [t for t, d in matrix.items() if not d["support"].get(fw.framework_name)]
-            pct = len(covered) / len(test_cases) * 100 if test_cases else 0
-            coverage[fw.framework_name] = {
-                "covered": covered,
-                "uncovered": uncovered,
-                "count": len(covered),
-                "pct": pct,
-            }
-
-        total = len(test_cases)
-        lines = ["# Test Case Coverage Analysis\n"]
-
-        # Step 4 — summary table
-        lines += ["## Coverage Summary\n", "| Framework | Covered | Total | % | Status |", "|---|---|---|---|---|"]
-        sorted_cov = sorted(coverage.items(), key=lambda x: -x[1]["pct"])
-        for fw_name, data in sorted_cov:
-            status = "✅ FULL" if data["pct"] == 100 else "⚠️ PARTIAL" if data["pct"] >= 50 else "❌ LOW"
-            lines.append(f"| **{fw_name}** | {data['count']} | {total} | {data['pct']:.0f}% | {status} |")
-        lines.append("")
-
-        # Step 5 — gap analysis (top 5 frameworks)
-        lines.append("## Gap Analysis\n")
-        for fw_name, data in sorted_cov[:5]:
-            if not data["uncovered"]:
-                continue
-            lines.append(f"### {fw_name} — {data['pct']:.0f}% coverage\n**⚠️ Uncovered Test Cases:**")
-            uncovered_by_cap: dict[str, list] = {}
-            for tc_id in data["uncovered"]:
-                cap = matrix[tc_id].get("capability", "unknown")
-                uncovered_by_cap.setdefault(cap, []).append(tc_id)
-
-            for cap, tc_ids in uncovered_by_cap.items():
-                cap_kw = capability_map.get(cap.lower(), [cap.lower().replace(" ", "_")])
-                alts = [
-                    f.framework_name for f in all_fw_list
-                    if f.framework_name != fw_name
-                    and any(
-                        f.capabilities.get(kw) is True
-                        or (isinstance(f.capabilities.get(kw), str)
-                            and f.capabilities.get(kw) not in ("", "false", "no"))
-                        for kw in cap_kw
-                    )
-                ][:3]
-                alt_text = f" → Use: **{', '.join(alts)}**" if alts else ""
-                lines.append(f"  - **{cap}** ({len(tc_ids)} tests){alt_text}")
-            lines.append("")
-
-        # Step 6 — recommended combinations
-        lines.append("## Recommended Combinations for 100% Coverage\n")
-        combos = self._find_coverage_combinations(matrix, coverage)
-        for i, combo in enumerate(combos[:3], 1):
-            names = [c[0] for c in combo]
-            cov = self._calc_combo_coverage(names, matrix)
-            lines.append(f"### Option {i}: {' + '.join(names)}")
-            lines.append(f"**Coverage:** {cov['pct']:.0f}% ({cov['count']}/{total})\n")
-            for fw_name, caps in combo:
-                lines.append(f"  - **{fw_name}**: {', '.join(list(set(caps))[:4])}")
-            if cov["uncovered"]:
-                lines.append(f"\n**Still uncovered:** {', '.join(cov['uncovered'][:3])}")
-            lines.append("")
-
-        # Step 7 — case-study relevance for the capabilities being tested
-        all_caps = list({d["capability"] for d in matrix.values()})
-        note = self._find_case_study_relevance(all_caps)
-        if note:
-            lines.append(note)
-
-        return "\n".join(lines)
-    
-    def _find_coverage_combinations(self, matrix: dict, coverage: dict) -> list:
-        """Greedy set-cover: find minimal framework combos for full coverage."""
-        combinations = []
-        all_tc = set(matrix.keys())
-        sorted_fw = sorted(coverage.items(), key=lambda x: -x[1]["pct"])
-
-        for start_fw, start_data in sorted_fw[:3]:
-            combo = [(start_fw, [matrix[t]["capability"] for t in start_data["covered"]])]
-            covered = set(start_data["covered"])
-            remaining = all_tc - covered
-
-            while remaining and len(combo) < 4:
-                best_fw, best_covers = None, []
-                for fw_name, fw_data in coverage.items():
-                    if fw_name in [c[0] for c in combo]:
-                        continue
-                    new = set(fw_data["covered"]) & remaining
-                    if len(new) > len(best_covers):
-                        best_fw, best_covers = fw_name, list(new)
-                if best_fw and best_covers:
-                    combo.append((best_fw, [matrix[t]["capability"] for t in best_covers]))
-                    covered.update(best_covers)
-                    remaining -= set(best_covers)
-                else:
-                    break
-            combinations.append(combo)
-
-        return sorted(combinations, key=lambda c: (len(c), -sum(len(caps) for _, caps in c)))
-
-    def _calc_combo_coverage(self, fw_names: list, matrix: dict) -> dict:
-        covered = {t for t, d in matrix.items() if any(d["support"].get(fw) for fw in fw_names)}
-        uncovered = [t for t in matrix if t not in covered]
-        return {
-            "count": len(covered),
-            "pct": len(covered) / len(matrix) * 100 if matrix else 0,
-            "uncovered": uncovered,
-        }
+        """Delegates to coverage_engine — fully generic, YAML-derived."""
+        from src.tools.coverage_engine import analyze_coverage, render_coverage_report
+        analysis = analyze_coverage(test_cases, self.kb, frameworks)
+        report = render_coverage_report(analysis, len(test_cases))
+        note = self._find_case_study_relevance(
+            list({d["capability"] for d in analysis["matrix"].values()})
+        )
+        return report + ("\n" + note if note else "")
     def _analyze_uploaded_content(self, search_term: str, document_type: str = "all") -> str:
         results = []
         term = search_term.lower()
@@ -911,6 +724,111 @@ class ToolExecutor:
 
         return "\n".join(lines)
 
+    # ── Shared gap/helper utilities ───────────────────────────────────
+
+    _HELPER_MAP: dict[str, str] = {
+        "network_interception": "Use `httpx` mock transport or `responses` library",
+        "visual_regression": "Use `Pillow` + `pixelmatch-python` for screenshot diff",
+        "performance_testing": "Use `locust` or `k6` via subprocess",
+        "load_testing": "Use `locust` programmatic API",
+        "accessibility_testing": "Use `axe-selenium-python` or `playwright-axe`",
+        "component_testing": "Use `pytest` + `playwright` component fixtures",
+        "test_recorder": "Manual — no programmatic equivalent",
+        "shadow_dom": "Use `playwright` evaluate() to pierce shadow roots",
+        "iframe_cross_origin": "Use `playwright` frame_locator() for cross-origin iframes",
+        "gesture_support": "Use `appium-python-client` for mobile gestures",
+        "device_farm_support": "Use `BrowserStack` or `Sauce Labs` REST API",
+    }
+
+    def _build_gap_notes(self, from_fw: Any, to_fw: Any, to_name: str) -> tuple[str, list[str]]:
+        """Return (gap_notes_for_prompt, sorted_gap_list)."""
+        if not (from_fw and to_fw):
+            return "", []
+        from_caps = {k for k, v in from_fw.capabilities.items() if v and v is not False}
+        to_caps = {k for k, v in to_fw.capabilities.items() if v and v is not False}
+        gaps = sorted(from_caps - to_caps)
+        if not gaps:
+            return "", []
+        note = (
+            f"\n\nNote: {to_name} does NOT natively support: "
+            + ", ".join(g.replace("_", " ") for g in gaps)
+            + ". For those capabilities, generate a standalone Python helper "
+            "script using `requests`/`httpx`/`subprocess` and show how to "
+            "call it from a pytest fixture."
+        )
+        return note, gaps
+
+    def _build_system_prompt(self, from_name: str, to_name: str, gap_notes: str,
+                              shared_context: str = "") -> str:
+        ctx = f"\n\nShared project context (page objects / base classes):\n{shared_context[:2000]}" if shared_context else ""
+        return (
+            f"You are an expert test automation engineer.{ctx}\n"
+            f"Convert the following test code from {from_name} to {to_name} using Python.\n"
+            f"Rules:\n"
+            f"1. Output ONLY valid, runnable Python code using {to_name}'s Python API.\n"
+            f"2. Preserve all test intent and assertions.\n"
+            f"3. Use pytest as the test runner.\n"
+            f"4. Resolve any imports that reference other files in the shared context above.\n"
+            f"5. For any capability {to_name} cannot handle natively, generate a "
+            f"   helper script in a `# === HELPER SCRIPT: <name> ===` section and show a "
+            f"   pytest fixture that calls it.\n"
+            f"6. End with a `# === CI/CD INTEGRATION ===` comment block showing "
+            f"   the GitHub Actions step to run the converted tests."
+            + gap_notes
+        )
+
+    def _llm_convert(self, prompt: str, system: str) -> str:
+        """Call LLM and return content string, or error string."""
+        if not getattr(self, "_llm", None):
+            return "LLM client not available. Pass `llm_client` to ToolExecutor."
+        try:
+            result = self._llm.chat(
+                messages=[{"role": "user", "content": prompt}],
+                system=system,
+            )
+            return result.get("content") or result.get("reasoning", "")
+        except Exception as exc:
+            logger.error("LLM call failed: %s", exc)
+            return f"LLM conversion failed: {exc}"
+
+    def _gap_table_lines(self, gaps: list[str], to_name: str) -> list[str]:
+        if not gaps:
+            return []
+        rows = [
+            "\n---\n### ⚠️ Capabilities Requiring Python Helper Scripts",
+            "| Capability | Reason | Helper Approach |",
+            "|---|---|---|",
+        ]
+        for gap in gaps:
+            label = gap.replace("_", " ").title()
+            hint = self._HELPER_MAP.get(gap, "Custom Python script via `subprocess`")
+            rows.append(f"| {label} | Not in {to_name} | {hint} |")
+        return rows
+
+    def _generate_helper_scripts(self, gaps: list[str], to_name: str) -> dict[str, str]:
+        """Generate standalone helper .py files for each capability gap."""
+        if not getattr(self, "_llm", None) or not gaps:
+            return {}
+        helpers: dict[str, str] = {}
+        for gap in gaps:
+            label = gap.replace("_", " ").title()
+            hint = self._HELPER_MAP.get(gap, "Custom Python script via subprocess")
+            prompt = (
+                f"Generate a complete, runnable Python helper script that implements "
+                f"'{label}' support for a {to_name} test suite.\n"
+                f"Approach: {hint}\n"
+                f"Requirements:\n"
+                f"1. Provide a pytest fixture in conftest.py style.\n"
+                f"2. Include all imports and a usage example.\n"
+                f"3. Output ONLY the Python code block."
+            )
+            system = "You are an expert Python test automation engineer. Output only valid Python code."
+            code = self._llm_convert(prompt, system)
+            import re
+            blocks = re.findall(r"```(?:python)?\n(.*?)```", code, re.DOTALL)
+            helpers[f"helpers/{gap}_helper.py"] = blocks[0].strip() if blocks else code
+        return helpers
+
     def _convert_test_cases(
         self,
         source_code: str,
@@ -918,100 +836,151 @@ class ToolExecutor:
         to_framework: str,
         language: str = "python",
     ) -> str:
-        """Convert test cases from one framework to another using the LLM.
-
-        Returns a markdown block containing:
-          - Converted Python test code (runnable)
-          - A list of capabilities that could NOT be directly converted
-            (with generated Python helper scripts for each gap)
-          - A CI/CD snippet wiring the helper scripts as pre-test steps
-        """
+        """Single-file conversion — preserves existing behaviour."""
         from_fw = self._resolve_framework(from_framework)
         to_fw = self._resolve_framework(to_framework)
-
         from_name = from_fw.framework_name if from_fw else from_framework
         to_name = to_fw.framework_name if to_fw else to_framework
 
-        # Identify capability gaps so we can tell the LLM what needs helpers
-        gap_notes = ""
-        if from_fw and to_fw:
-            from_caps = {k for k, v in from_fw.capabilities.items() if v and v is not False}
-            to_caps = {k for k, v in to_fw.capabilities.items() if v and v is not False}
-            gaps = from_caps - to_caps
-            if gaps:
-                gap_notes = (
-                    f"\n\nNote: {to_name} does NOT natively support: "
-                    + ", ".join(g.replace("_", " ") for g in sorted(gaps))
-                    + ". For those capabilities, generate a standalone Python helper "
-                    "script using `requests`/`httpx`/`subprocess` and show how to "
-                    "call it from a pytest fixture."
-                )
-
-        system = (
-            f"You are an expert test automation engineer. "
-            f"Convert the following test code from {from_name} to {to_name} using Python. "
-            f"Rules:\n"
-            f"1. Output ONLY valid, runnable Python code using {to_name}'s Python API.\n"
-            f"2. Preserve all test intent and assertions.\n"
-            f"3. Use pytest as the test runner.\n"
-            f"4. For any capability {to_name} cannot handle natively, generate a "
-            f"   helper script in a `# === HELPER SCRIPT ===` section and show a "
-            f"   pytest fixture that calls it.\n"
-            f"5. End with a `# === CI/CD INTEGRATION ===` comment block showing "
-            f"   the GitHub Actions step to run the converted tests."
-            + gap_notes
-        )
-
+        gap_notes, gaps = self._build_gap_notes(from_fw, to_fw, to_name)
+        system = self._build_system_prompt(from_name, to_name, gap_notes)
         prompt = (
             f"Convert this {from_name} test code to {to_name} (Python):\n\n"
             f"```\n{source_code[:4000]}\n```"
         )
-
-        if not hasattr(self, "_llm") or self._llm is None:
-            return (
-                f"## Conversion: {from_name} → {to_name}\n\n"
-                "LLM client not available in ToolExecutor. "
-                "Pass `llm_client` to ToolExecutor to enable conversion."
-            )
-
-        try:
-            result = self._llm.chat(
-                messages=[{"role": "user", "content": prompt}],
-                system=system,
-            )
-            converted = result.get("content") or result.get("reasoning", "")
-        except Exception as exc:
-            logger.error("convert_test_cases LLM call failed: %s", exc)
-            converted = f"LLM conversion failed: {exc}"
-
-        lines = [
-            f"## 🔄 Converted: {from_name} → {to_name} (Python)\n",
-            converted,
-        ]
-        if from_fw and to_fw:
-            from_caps = {k for k, v in from_fw.capabilities.items() if v and v is not False}
-            to_caps = {k for k, v in to_fw.capabilities.items() if v and v is not False}
-            gaps = sorted(from_caps - to_caps)
-            if gaps:
-                lines += [
-                    "\n---\n### ⚠️ Capabilities Requiring Python Helper Scripts",
-                    "| Capability | Reason | Helper Approach |",
-                    "|---|---|---|",
-                ]
-                _helper_map = {
-                    "network_interception": "Use `httpx` mock transport or `responses` library",
-                    "visual_regression": "Use `Pillow` + `pixelmatch-python` for screenshot diff",
-                    "performance_testing": "Use `locust` or `k6` via subprocess",
-                    "load_testing": "Use `locust` programmatic API",
-                    "accessibility_testing": "Use `axe-selenium-python` or `playwright-axe`",
-                    "component_testing": "Use `pytest` + `playwright` component fixtures",
-                    "test_recorder": "Manual — no programmatic equivalent",
-                }
-                for gap in gaps:
-                    label = gap.replace("_", " ").title()
-                    hint = _helper_map.get(gap, "Custom Python script via `subprocess`")
-                    lines.append(f"| {label} | Not in {to_name} | {hint} |")
+        converted = self._llm_convert(prompt, system)
+        lines = [f"## 🔄 Converted: {from_name} → {to_name} (Python)\n", converted]
+        lines += self._gap_table_lines(gaps, to_name)
         return "\n".join(lines)
+
+    def convert_multi_file(
+        self,
+        files: list[dict],          # [{"filename": str, "content": str}, ...]
+        from_framework: str,
+        to_framework: str,
+    ) -> dict:
+        """Convert multiple source files to the target framework.
+
+        Returns a dict:
+          {
+            "converted": {"tests/<name>.py": code, ...},
+            "helpers":   {"helpers/<gap>_helper.py": code, ...},
+            "conftest":  str,          # conftest.py content
+            "requirements": str,       # requirements.txt content
+            "gaps":      [str, ...],   # capability gap names
+            "summary":   str,          # markdown summary
+          }
+        """
+        from_fw = self._resolve_framework(from_framework)
+        to_fw = self._resolve_framework(to_framework)
+        from_name = from_fw.framework_name if from_fw else from_framework
+        to_name = to_fw.framework_name if to_fw else to_framework
+
+        gap_notes, gaps = self._build_gap_notes(from_fw, to_fw, to_name)
+
+        # Build shared context: first 100 lines of each file (for cross-file imports)
+        shared_context = "\n\n".join(
+            f"# --- {f['filename']} ---\n" + "\n".join(f['content'].splitlines()[:100])
+            for f in files
+        )
+
+        system = self._build_system_prompt(from_name, to_name, gap_notes, shared_context)
+
+        converted: dict[str, str] = {}
+        import re
+
+        for file in files:
+            fname = file["filename"]
+            content = file["content"]
+
+            # Chunk large files at 4000 chars, convert each chunk, join
+            chunks = [content[i:i+4000] for i in range(0, max(len(content), 1), 4000)]
+            file_parts: list[str] = []
+            for idx, chunk in enumerate(chunks):
+                chunk_note = f" (part {idx+1}/{len(chunks)})" if len(chunks) > 1 else ""
+                prompt = (
+                    f"Convert this {from_name} file '{fname}'{chunk_note} to {to_name} (Python):\n\n"
+                    f"```\n{chunk}\n```\n"
+                    f"Output ONLY the Python code block, no explanation."
+                )
+                raw = self._llm_convert(prompt, system)
+                blocks = re.findall(r"```(?:python)?\n(.*?)```", raw, re.DOTALL)
+                file_parts.append(blocks[0].strip() if blocks else raw)
+
+            # Derive output filename: keep stem, force .py, put under tests/
+            stem = Path(fname).stem
+            out_name = f"tests/{stem}.py" if not stem.startswith("conftest") else "conftest.py"
+            converted[out_name] = "\n\n".join(file_parts)
+
+        # Generate helper scripts for every capability gap
+        helpers = self._generate_helper_scripts(gaps, to_name)
+
+        # Generate conftest.py that imports all helpers
+        conftest = self._generate_conftest(to_name, gaps, list(helpers.keys()))
+
+        # Generate requirements.txt
+        requirements = self._generate_requirements(to_name, gaps)
+
+        # Markdown summary
+        summary_lines = [
+            f"## 🔄 Multi-File Conversion: {from_name} → {to_name}",
+            f"**{len(files)} source file(s) converted · {len(helpers)} helper script(s) generated**\n",
+            "### 📁 Output Structure",
+            "```",
+            f"converted_{to_name.lower().replace(' ', '_')}/",
+            "├── conftest.py",
+            "├── requirements.txt",
+        ]
+        for path in sorted(converted):
+            summary_lines.append(f"├── {path}")
+        for path in sorted(helpers):
+            summary_lines.append(f"├── {path}")
+        summary_lines.append("```")
+
+        if gaps:
+            summary_lines += self._gap_table_lines(gaps, to_name)
+
+        return {
+            "converted": converted,
+            "helpers": helpers,
+            "conftest": conftest,
+            "requirements": requirements,
+            "gaps": gaps,
+            "summary": "\n".join(summary_lines),
+        }
+
+    def _generate_conftest(self, to_name: str, gaps: list[str], helper_paths: list[str]) -> str:
+        imports = "\n".join(
+            f"from {p.replace('/', '.').removesuffix('.py')} import *  # noqa"
+            for p in helper_paths
+        )
+        return (
+            f"# conftest.py — auto-generated for {to_name} migration\n"
+            f"# Imports all gap-bridging helper fixtures\n"
+            f"import pytest\n"
+            + (imports + "\n" if imports else "")
+            + "\n\n"
+            f"# Add any project-wide fixtures below\n"
+        )
+
+    def _generate_requirements(self, to_name: str, gaps: list[str]) -> str:
+        base = {"pytest": ">=7.0", "pytest-asyncio": ">=0.21"}
+        # Read pip_packages from YAML — no hardcoded framework list
+        fw = self._resolve_framework(to_name)
+        fw_deps = dict(fw.pip_packages) if fw else {}
+        gap_deps: dict[str, dict[str, str]] = {
+            "network_interception": {"responses": ">=0.24", "httpx": ">=0.25"},
+            "visual_regression": {"Pillow": ">=10.0", "pixelmatch": ">=0.3"},
+            "performance_testing": {"locust": ">=2.0"},
+            "load_testing": {"locust": ">=2.0"},
+            "accessibility_testing": {"axe-selenium-python": ">=2.1"},
+            "gesture_support": {"Appium-Python-Client": ">=3.0"},
+            "device_farm_support": {"requests": ">=2.31"},
+        }
+        deps = {**base, **fw_deps}
+        for gap in gaps:
+            deps.update(gap_deps.get(gap, {}))
+        return "\n".join(f"{pkg}{ver}" for pkg, ver in sorted(deps.items()))
 
     def _score_frameworks(
         self,
