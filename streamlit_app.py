@@ -234,10 +234,11 @@ def _render_sidebar() -> None:
         """, unsafe_allow_html=True)
 
         if page in ("home", "advisor"):
-            # ── Advisor context ───────────────────────────────────────
-            st.markdown('<div class="sidebar-section">Scoring Weights</div>',
+            # ── Scoring Weights ───────────────────────────────────────────
+            st.markdown('<div class="sidebar-section">⚖️ Scoring Weights</div>',
                         unsafe_allow_html=True)
-            with st.expander("⚖️ Adjust Weights", expanded=False):
+
+            with st.expander("⚖️ Adjust Weights", expanded=True):
                 preset_names = list(PRESETS.keys())
                 current_preset = st.session_state.weight_profile.profile_name.replace("_adjusted", "")
                 if current_preset not in preset_names:
@@ -246,19 +247,26 @@ def _render_sidebar() -> None:
                     "Preset", preset_names,
                     index=preset_names.index(current_preset),
                     key="weight_preset",
+                    label_visibility="collapsed",
                 )
                 if selected_preset != current_preset:
                     st.session_state.weight_profile = WeightProfile.from_preset(selected_preset)
                     st.rerun()
+
+                st.caption("Set weights (0.0–1.0). Click Apply to normalise & save.")
                 raw_weights: dict[str, float] = {}
                 for cid in CRITERIA_IDS:
-                    label = _CRITERIA_LABELS[cid]
-                    current_val = st.session_state.weight_profile.weights.get(cid, 0.0)
-                    raw_weights[cid] = st.slider(
-                        label, 0.0, 1.0, float(round(current_val, 2)),
-                        step=0.05, key=f"w_{cid}",
+                    raw_weights[cid] = st.number_input(
+                        _CRITERIA_LABELS[cid],
+                        min_value=0.0,
+                        max_value=1.0,
+                        value=float(round(st.session_state.weight_profile.weights.get(cid, 0.0), 2)),
+                        step=0.05,
+                        format="%.2f",
+                        key=f"w_{cid}",
                     )
-                if st.button("Apply Weights", key="apply_weights"):
+
+                if st.button("Apply Weights", key="apply_weights", use_container_width=True):
                     total = sum(raw_weights.values())
                     normalised = (
                         {k: v / total for k, v in raw_weights.items()} if total > 0
@@ -269,9 +277,11 @@ def _render_sidebar() -> None:
                     )
                     st.success("Weights applied ✓")
 
+            st.markdown("---")
+
             st.markdown('<div class="sidebar-section">Context Files</div>',
                         unsafe_allow_html=True)
-            with st.expander("📁 Upload Test Files", expanded=True):
+            with st.expander("📁 Upload Test Files", expanded=False):
                 files = st.file_uploader(
                     "Test files", type=["py", "js", "ts", "java", "yaml", "yml", "json"],
                     accept_multiple_files=True, key="test_files",
@@ -697,19 +707,47 @@ def _render_code_studio_tab() -> None:
                     import time; time.sleep(0.2)
                     loading_slot.empty()
 
-                    code_blocks = _re.findall(r"```(?:python)?\n(.*?)```", full_result, _re.DOTALL)
-                    runnable = code_blocks[0].strip() if code_blocks else full_result
-                    st.session_state.last_converted_code = full_result
+                    # ── Split output into 3 sections ──────────────────
+                    cicd_marker   = "# === CI/CD INTEGRATION ==="
+                    gap_marker    = "### ⚠️ Capabilities Requiring"
+
+                    cicd_split  = full_result.split(cicd_marker, 1)
+                    pre_cicd    = cicd_split[0]
+                    cicd_block  = (cicd_marker + cicd_split[1]) if len(cicd_split) > 1 else ""
+
+                    gap_split   = pre_cicd.split(gap_marker, 1)
+                    code_part   = gap_split[0]
+                    gap_block   = (gap_marker + gap_split[1]) if len(gap_split) > 1 else ""
+
+                    # Also strip gap table from cicd_block if LLM put it there
+                    if gap_marker in cicd_block and not gap_block:
+                        cicd_gap = cicd_block.split(gap_marker, 1)
+                        cicd_block = cicd_gap[0]
+                        gap_block  = gap_marker + cicd_gap[1]
+
+                    code_blocks = _re.findall(r"```(?:python)?\n(.*?)```", code_part, _re.DOTALL)
+                    runnable = code_blocks[0].strip() if code_blocks else code_part.strip()
+
+                    st.session_state.last_converted_code = runnable
                     st.success("✓ Converted successfully")
-                    with st.expander("📄 Full conversion output (gaps + CI/CD)", expanded=True):
-                        st.markdown(full_result)
-                    st.download_button(
-                        label="⬇ Download converted file",
-                        data=runnable,
-                        file_name="test_converted.py",
-                        mime="text/x-python",
-                        key="btn_dl_single",
-                    )
+
+                    with st.expander("🐍 Converted Test Code", expanded=True):
+                        st.code(runnable, language="python")
+                        st.download_button(
+                            label="⬇ Download converted file",
+                            data=runnable,
+                            file_name="test_converted.py",
+                            mime="text/x-python",
+                            key="btn_dl_single",
+                        )
+
+                    if gap_block.strip():
+                        with st.expander("⚠️ Capability Gaps & Helper Scripts", expanded=True):
+                            st.markdown(gap_block.strip())
+
+                    if cicd_block.strip():
+                        with st.expander("⚙️ CI/CD Integration", expanded=False):
+                            st.markdown(cicd_block.strip())
                 except Exception as exc:
                     loading_slot.empty()
                     st.error(f"Conversion failed: {exc}")
@@ -911,7 +949,7 @@ def _render_coverage_tab() -> None:
         """, unsafe_allow_html=True)
 
     # ── Upload section ────────────────────────────────────────────────
-    with st.expander("📥 Upload Test Cases (Excel)", expanded=not bool(tcs)):
+    with st.expander("📥 Upload Test Cases (Excel)", expanded=False):
         st.markdown(
             "Expected columns *(order & case don't matter)*: "
             "`Test ID` · `Description` · `Capability` · `Steps` · `Expected Result`"
@@ -945,19 +983,19 @@ def _render_coverage_tab() -> None:
         if st.session_state.excel_summary:
             st.markdown(st.session_state.excel_summary)
 
-    # ── Empty state when no data ──────────────────────────────────────
-    if not tcs:
-        st.markdown("""
-        <div class="empty-state">
-            <span class="empty-state-icon">📊</span>
-            <div class="empty-state-title">No test cases loaded yet</div>
-            <div class="empty-state-desc">
-                Upload an Excel file with your test cases above, or enter them manually below.
-                The tool will map each test to framework capabilities and show you the best fit.
-            </div>
-            <span class="empty-state-hint">⬆ Upload Excel or use manual entry below</span>
-        </div>
-        """, unsafe_allow_html=True)
+    # # ── Empty state when no data ──────────────────────────────────────
+    # if not tcs:
+    #     st.markdown("""
+    #     <div class="empty-state">
+    #         <span class="empty-state-icon">📊</span>
+    #         <div class="empty-state-title">No test cases loaded yet</div>
+    #         <div class="empty-state-desc">
+    #             Upload an Excel file with your test cases above, or enter them manually below.
+    #             The tool will map each test to framework capabilities and show you the best fit.
+    #         </div>
+    #         <span class="empty-state-hint">⬆ Upload Excel or use manual entry below</span>
+    #     </div>
+    #     """, unsafe_allow_html=True)
 
     # ── Analysis options ──────────────────────────────────────────────
     if tcs:
