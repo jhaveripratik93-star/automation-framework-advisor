@@ -21,6 +21,8 @@ from src.graph.knowledge_graph import (
 
 logger = logging.getLogger(__name__)
 
+_SCHEMA_VERSION = 2  # bump this whenever graph structure changes
+
 
 class GraphStore:
     """Persists and loads a KnowledgeGraph to/from a JSON file.
@@ -44,6 +46,7 @@ class GraphStore:
         logger.debug("GraphStore.save: entities=%d relationships=%d -> %s", entity_count, rel_count, self._path)
 
         data = {
+            "schema_version": _SCHEMA_VERSION,
             "entities": [
                 {
                     "id": e.id,
@@ -143,6 +146,9 @@ class GraphStore:
         try:
             with open(self._path, encoding="utf-8") as f:
                 data = json.load(f)
+            if data.get("schema_version", 1) < _SCHEMA_VERSION:
+                logger.info("GraphStore.is_valid: schema version mismatch — will re-seed")
+                return False
             return "entities" in data and "relationships" in data
         except (json.JSONDecodeError, OSError) as exc:
             logger.debug("GraphStore.is_valid: invalid file %s — %s", self._path, exc)

@@ -66,6 +66,7 @@ class ToolExecutor:
         self.uploaded_docs = uploaded_docs_context
         self.case_study = case_study_context
         self.weight_profile = weight_profile or WeightProfile.default()
+        self._llm: Any | None = None  # injected by orchestrator when available
 
         self.tools: dict[str, Callable] = {
             "search_knowledge_graph": self._search_knowledge_graph,
@@ -77,6 +78,7 @@ class ToolExecutor:
             "analyze_uploaded_content": self._analyze_uploaded_content,
             "analyze_prerequisites": self._analyze_prerequisites,
             "score_frameworks": self._score_frameworks,
+            "convert_test_cases": self._convert_test_cases,
         }
 
     # ── Dispatch ──────────────────────────────────────────────────────
@@ -357,74 +359,116 @@ class ToolExecutor:
     def _recommend_frameworks(
         self, use_case: str, required_capability: str | None = None
     ) -> str:
-        """Rank frameworks by capability match for a given use case.
+        """Rank frameworks using ScoringEngine + active WeightProfile.
 
-        Workflow:
-          1. Build cap_keywords from required_capability + use_case inference.
-          2. Score each framework by keyword-capability matches.
-          3. Sort by score descending; fall back to all frameworks if no match.
-          4. Render top-8 as markdown table.
-          5. Case-study relevance for matched capability terms (NEW).
+        Renders:
+          - Weight priority header  (e.g. CI/CD(30%) > Maintainability(20%) > ...)
+          - Per-criterion score table with weighted total
+          - Best-fit badge on top scorer
+          - Case-study relevance
         """
-        all_frameworks = self.kb.list_all()
+        from src.scoring.engine import ScoringEngine
+        from src.models import UserProfile, ArchitectureType, ExperienceLevel
+
         use_case_lower = use_case.lower()
 
-        cap_keywords: list[str] = []
-        if required_capability:
-            cap_keywords.append(required_capability)
-
-        _infer = {
-            "api": ["api_testing", "rest_api"],
-            "microservice": ["api_testing", "rest_api", "contract_testing"],
-            "web": ["browser_testing", "ui_testing", "cross_browser"],
-            "mobile": ["mobile_testing", "cross_platform"],
-            "performance": ["performance_testing", "load_testing"],
-            "load": ["load_testing", "performance_testing"],
-            "graphql": ["graphql_support"],
-            "cloud": ["cloud_testing"],
+        # Infer architecture from use-case keywords
+        arch_map = {
+            "api": ArchitectureType.API_ONLY,
+            "microservice": ArchitectureType.MICROSERVICES,
+            "mobile": ArchitectureType.NATIVE_MOBILE,
+            "performance": ArchitectureType.WEB_SPA,
+            "load": ArchitectureType.WEB_SPA,
         }
-        for kw, caps in _infer.items():
-            if kw in use_case_lower:
-                cap_keywords.extend(caps)
+        arch = next(
+            (v for k, v in arch_map.items() if k in use_case_lower),
+            ArchitectureType.WEB_SPA,
+        )
 
-        matched: list[tuple[int, Any]] = []
-        for fw in all_frameworks:
-            if not cap_keywords:
-                matched.append((1, fw))
-                continue
-            score = sum(
-                1 for cap in cap_keywords
-                if fw.capabilities.get(cap) is True
-                or (isinstance(fw.capabilities.get(cap), str)
-                    and fw.capabilities.get(cap) not in ("", "false", "no"))
-            )
-            if score > 0:
-                matched.append((score, fw))
+        profile = UserProfile(
+            project_name="advisor_query",
+            architecture_types=[arch],
+            primary_language="python",
+            team_size=5,
+            automation_experience=ExperienceLevel.INTERMEDIATE,
+            ci_cd_tool="github_actions",
+        )
 
-        matched.sort(key=lambda x: -x[0])
+        engine = ScoringEngine(knowledge_base=self.kb, weight_profile=self.weight_profile)
+        matrix = engine.evaluate(profile)
+        rankings = matrix.rankings[:8]
 
-        if not matched:
-            matched = [(0, fw) for fw in all_frameworks]
+        # Criterion display config: id → short label
+        _criteria = [
+            ("C1_language_compatibility", "Language"),
+            ("C2_api_validation",         "API"),
+            ("C3_performance_load",        "Perf"),
+            ("C4_cicd_integration",        "CI/CD"),
+            ("C5_maintainability",         "Maint."),
+            ("C6_cloud_readiness",         "Cloud"),
+            ("C7_license_cost",            "Cost"),
+        ]
+        active = [(cid, lbl) for cid, lbl in _criteria if self.weight_profile.get(cid) > 0]
 
+        # ── Weight priority header ────────────────────────────────────
+        sorted_weights = sorted(
+            [(lbl, self.weight_profile.get(cid)) for cid, lbl in active],
+            key=lambda x: -x[1],
+        )
+        priority_str = " > ".join(f"{lbl}({w:.0%})" for lbl, w in sorted_weights)
         lines = [
             f"## Recommended Frameworks for: {use_case}\n",
-            "| Framework | Category | Languages | Key Capabilities |",
-            "|---|---|---|---|",
+            f"**You prioritized:** {priority_str}\n",
         ]
-        for score, fw in matched[:8]:
-            caps = [
-                k.replace("_", " ").title()
-                for k, v in fw.capabilities.items()
-                if v is True or (isinstance(v, str) and v not in ("", "false"))
-            ][:4]
+
+        # ── Per-criterion score table ─────────────────────────────────
+        col_headers = " | ".join(lbl for _, lbl in active)
+        col_sep     = " | ".join("---" for _ in active)
+        lines += [
+            f"| Rank | Framework | {col_headers} | Weighted Score |",
+            f"|---|---|{col_sep}|---|",
+        ]
+
+        for i, r in enumerate(rankings):
+            scores_dict = r.criteria_scores.model_dump()
+            cell_values = " | ".join(str(scores_dict.get(cid, 0)) for cid, _ in active)
+            badge = " ✅ Best fit" if i == 0 else ""
             lines.append(
-                f"| **{fw.framework_name}** | {fw.category} "
-                f"| {', '.join(fw.languages_supported[:3])} "
-                f"| {', '.join(caps)} |"
+                f"| {r.rank} | **{r.framework}** | {cell_values} "
+                f"| **{r.overall_score}**{badge} |"
             )
 
-        # Case-study relevance for the use-case terms
-        note = self._find_case_study_relevance(cap_keywords + use_case_lower.split())
+        # ── Score legend ─────────────────────────────────────────
+        lines += [
+            "\n### 📖 Score Guide",
+            "| Range | Rating | What it means |",
+            "|---|---|---|",
+            "| 85–100 | 🟢 Excellent | Best-in-class for this criterion — no gaps |",
+            "| 65–84  | 🟡 Good     | Solid support — minor workarounds may be needed |",
+            "| 40–64  | 🟠 Fair     | Partial support — plan for extra setup or plugins |",
+            "| 0–39   | 🔴 Poor     | Significant gap — consider a complementary tool |",
+        ]
+
+        # ── Per-criterion breakdown for top 3 ────────────────────────────
+        lines.append("\n### 🔍 What Each Score Means For You")
+        for r in rankings[:3]:
+            lines.append(f"\n**{r.framework}** ({r.overall_score}/100)")
+            lines.append(r.explanation)
+
+        # ── Top pick explanation ──────────────────────────────────────
+        if rankings:
+            top = rankings[0]
+            lines += [
+                f"\n### 🏆 Top Pick: {top.framework} ({top.overall_score}/100)",
+                top.explanation,
+            ]
+            if top.pros:
+                lines.append("**Strengths:** " + " · ".join(top.pros[:3]))
+            if top.cons:
+                lines.append("**Watch out for:** " + " · ".join(top.cons[:2]))
+
+        # ── Case-study relevance ──────────────────────────────────────
+        note = self._find_case_study_relevance(use_case_lower.split())
         if note:
             lines.append(note)
 
@@ -595,16 +639,39 @@ class ToolExecutor:
         all_fw_list = self.kb.list_all()
         fw_names = frameworks or [fw.framework_name for fw in all_fw_list]
 
-        # Step 2 — build matrix
+        # Step 2 — build matrix (tolerant of any field names)
+        def _tc_id(tc: dict, idx: int) -> str:
+            for k in ("id", "test_id", "testid", "no", "#"):
+                if tc.get(k):
+                    return str(tc[k])
+            return f"TC{idx+1:03d}"
+
+        def _tc_cap(tc: dict) -> str:
+            for k in ("required_capability", "capability", "type", "category",
+                      "test_type", "area", "feature"):
+                if tc.get(k):
+                    return str(tc[k]).lower()
+            # Fall back: scan all string values for known capability keywords
+            known = list(capability_map.keys())
+            for v in tc.values():
+                v_low = str(v).lower()
+                for cap in known:
+                    if cap in v_low:
+                        return cap
+            return "ui automation"
+
         matrix: dict[str, dict] = {}
-        for tc in test_cases:
-            tc_id = tc["id"]
-            cap = tc["required_capability"].lower()
+        for _idx, tc in enumerate(test_cases):
+            tc_id = _tc_id(tc, _idx)
+            cap = _tc_cap(tc)
             keywords = capability_map.get(cap, [cap.replace(" ", "_")])
             matrix[tc_id] = {
-                "description": tc.get("description", ""),
-                "capability": tc["required_capability"],
+                "description": tc.get("description", tc.get("desc", tc.get("name", ""))),
+                "capability": cap,
                 "support": {},
+                "extra_fields": {k: v for k, v in tc.items()
+                                 if k not in ("id", "description", "required_capability",
+                                              "capability", "steps", "expected_result")},
             }
             for name in fw_names:
                 fw = self.kb.get(name.lower())
@@ -659,7 +726,7 @@ class ToolExecutor:
             lines.append(f"### {fw_name} — {data['pct']:.0f}% coverage\n**⚠️ Uncovered Test Cases:**")
             uncovered_by_cap: dict[str, list] = {}
             for tc_id in data["uncovered"]:
-                cap = matrix[tc_id]["capability"]
+                cap = matrix[tc_id].get("capability", "unknown")
                 uncovered_by_cap.setdefault(cap, []).append(tc_id)
 
             for cap, tc_ids in uncovered_by_cap.items():
@@ -693,7 +760,7 @@ class ToolExecutor:
             lines.append("")
 
         # Step 7 — case-study relevance for the capabilities being tested
-        all_caps = list({tc["required_capability"] for tc in test_cases})
+        all_caps = list({d["capability"] for d in matrix.values()})
         note = self._find_case_study_relevance(all_caps)
         if note:
             lines.append(note)
@@ -842,6 +909,108 @@ class ToolExecutor:
             lines.append("\n# Framework Integration\n")
             lines.append(generate_framework_hooks(automation_plan, fw))
 
+        return "\n".join(lines)
+
+    def _convert_test_cases(
+        self,
+        source_code: str,
+        from_framework: str,
+        to_framework: str,
+        language: str = "python",
+    ) -> str:
+        """Convert test cases from one framework to another using the LLM.
+
+        Returns a markdown block containing:
+          - Converted Python test code (runnable)
+          - A list of capabilities that could NOT be directly converted
+            (with generated Python helper scripts for each gap)
+          - A CI/CD snippet wiring the helper scripts as pre-test steps
+        """
+        from_fw = self._resolve_framework(from_framework)
+        to_fw = self._resolve_framework(to_framework)
+
+        from_name = from_fw.framework_name if from_fw else from_framework
+        to_name = to_fw.framework_name if to_fw else to_framework
+
+        # Identify capability gaps so we can tell the LLM what needs helpers
+        gap_notes = ""
+        if from_fw and to_fw:
+            from_caps = {k for k, v in from_fw.capabilities.items() if v and v is not False}
+            to_caps = {k for k, v in to_fw.capabilities.items() if v and v is not False}
+            gaps = from_caps - to_caps
+            if gaps:
+                gap_notes = (
+                    f"\n\nNote: {to_name} does NOT natively support: "
+                    + ", ".join(g.replace("_", " ") for g in sorted(gaps))
+                    + ". For those capabilities, generate a standalone Python helper "
+                    "script using `requests`/`httpx`/`subprocess` and show how to "
+                    "call it from a pytest fixture."
+                )
+
+        system = (
+            f"You are an expert test automation engineer. "
+            f"Convert the following test code from {from_name} to {to_name} using Python. "
+            f"Rules:\n"
+            f"1. Output ONLY valid, runnable Python code using {to_name}'s Python API.\n"
+            f"2. Preserve all test intent and assertions.\n"
+            f"3. Use pytest as the test runner.\n"
+            f"4. For any capability {to_name} cannot handle natively, generate a "
+            f"   helper script in a `# === HELPER SCRIPT ===` section and show a "
+            f"   pytest fixture that calls it.\n"
+            f"5. End with a `# === CI/CD INTEGRATION ===` comment block showing "
+            f"   the GitHub Actions step to run the converted tests."
+            + gap_notes
+        )
+
+        prompt = (
+            f"Convert this {from_name} test code to {to_name} (Python):\n\n"
+            f"```\n{source_code[:4000]}\n```"
+        )
+
+        if not hasattr(self, "_llm") or self._llm is None:
+            return (
+                f"## Conversion: {from_name} → {to_name}\n\n"
+                "LLM client not available in ToolExecutor. "
+                "Pass `llm_client` to ToolExecutor to enable conversion."
+            )
+
+        try:
+            result = self._llm.chat(
+                messages=[{"role": "user", "content": prompt}],
+                system=system,
+            )
+            converted = result.get("content") or result.get("reasoning", "")
+        except Exception as exc:
+            logger.error("convert_test_cases LLM call failed: %s", exc)
+            converted = f"LLM conversion failed: {exc}"
+
+        lines = [
+            f"## 🔄 Converted: {from_name} → {to_name} (Python)\n",
+            converted,
+        ]
+        if from_fw and to_fw:
+            from_caps = {k for k, v in from_fw.capabilities.items() if v and v is not False}
+            to_caps = {k for k, v in to_fw.capabilities.items() if v and v is not False}
+            gaps = sorted(from_caps - to_caps)
+            if gaps:
+                lines += [
+                    "\n---\n### ⚠️ Capabilities Requiring Python Helper Scripts",
+                    "| Capability | Reason | Helper Approach |",
+                    "|---|---|---|",
+                ]
+                _helper_map = {
+                    "network_interception": "Use `httpx` mock transport or `responses` library",
+                    "visual_regression": "Use `Pillow` + `pixelmatch-python` for screenshot diff",
+                    "performance_testing": "Use `locust` or `k6` via subprocess",
+                    "load_testing": "Use `locust` programmatic API",
+                    "accessibility_testing": "Use `axe-selenium-python` or `playwright-axe`",
+                    "component_testing": "Use `pytest` + `playwright` component fixtures",
+                    "test_recorder": "Manual — no programmatic equivalent",
+                }
+                for gap in gaps:
+                    label = gap.replace("_", " ").title()
+                    hint = _helper_map.get(gap, "Custom Python script via `subprocess`")
+                    lines.append(f"| {label} | Not in {to_name} | {hint} |")
         return "\n".join(lines)
 
     def _score_frameworks(

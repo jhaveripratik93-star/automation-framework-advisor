@@ -279,17 +279,15 @@ section[data-testid="stSidebar"] *,
 }
 
 /* Text */
-.stMarkdown h1,
-.stMarkdown h2,
-.stMarkdown h3 {
-    color: #405550 !important;
-    font-weight: 800 !important;
-}
+.stMarkdown h1 { font-size: 1.1rem !important; color: #405550 !important; font-weight: 800 !important; }
+.stMarkdown h2 { font-size: 1rem !important;   color: #405550 !important; font-weight: 800 !important; }
+.stMarkdown h3 { font-size: 0.92rem !important; color: #405550 !important; font-weight: 700 !important; }
 
 .stMarkdown p,
 .stMarkdown li {
     color: #344348 !important;
-    line-height: 1.7;
+    font-size: 0.82rem !important;
+    line-height: 1.6;
 }
 
 .stMarkdown strong {
@@ -323,8 +321,9 @@ section[data-testid="stSidebar"] *,
 }
 
 .stMarkdown thead th {
-    padding: 0.75rem 1rem;
+    padding: 0.5rem 0.75rem;
     color: #405a55 !important;
+    font-size: 0.78rem !important;
     font-weight: 800;
     text-align: left;
 }
@@ -342,8 +341,9 @@ section[data-testid="stSidebar"] *,
 }
 
 .stMarkdown tbody td {
-    padding: 0.65rem 1rem;
+    padding: 0.45rem 0.75rem;
     color: #344348 !important;
+    font-size: 0.78rem !important;
     border-bottom: 1px solid #e5ecef;
 }
 

@@ -14,11 +14,11 @@ logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = (
     "You are an expert Automation Framework Migration Advisor. "
-    "You have been given tool results containing framework data. "
-    "Use ONLY the provided data to answer the user's question. "
-    "Be specific, concise, and complete. Do not hallucinate framework names or scores."
+    "Answer concisely in 150-250 words maximum. "
+    "Use a short markdown table for comparisons. "
+    "No preamble, no repetition, no filler sentences. "
+    "Tie recommendations to the user profile when available."
 )
-
 
 @dataclass
 class EvaluationResult:
@@ -64,9 +64,9 @@ class EvaluationAgent:
 
         prompt = (
             f"User question: {user_message}\n\n"
-            f"## Tool Results:{tool_block}\n\n"
+            f"## Tool Results:{tool_block[:3000]}\n\n"
             + (f"## Revision Request:\n{reflection_critique}\n\n" if reflection_critique else "")
-            + "Based on the tool results above, provide a complete and specific answer."
+            + "Answer the user question in 150-250 words. Be direct and concise."
         )
 
         logger.info(

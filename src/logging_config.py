@@ -11,11 +11,27 @@ import logging.handlers
 from pathlib import Path
 
 
-def configure_logging(level: int = logging.DEBUG, log_dir: str = "logs") -> None:
+class _SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
+    """RotatingFileHandler that silently skips emission on OSError (e.g. disk full)."""
+
+    def shouldRollover(self, record: logging.LogRecord) -> bool:  # type: ignore[override]
+        try:
+            return super().shouldRollover(record)
+        except OSError:
+            return False
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            super().emit(record)
+        except OSError:
+            pass
+
+
+def configure_logging(level: int = logging.WARNING, log_dir: str = "logs") -> None:
     """Set up root logger with rotating file handler and console handler.
 
     Args:
-        level: Minimum log level for the file handler (default DEBUG).
+        level: Minimum log level for the file handler (default WARNING).
         log_dir: Directory to write log files into.
     """
     log_path = Path(log_dir)
@@ -23,7 +39,6 @@ def configure_logging(level: int = logging.DEBUG, log_dir: str = "logs") -> None
 
     root = logging.getLogger()
     if root.handlers:
-        # Already configured (e.g. Streamlit re-runs) — just ensure level
         root.setLevel(logging.DEBUG)
         return
 
@@ -34,8 +49,8 @@ def configure_logging(level: int = logging.DEBUG, log_dir: str = "logs") -> None
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-    # Rotating file handler — DEBUG and above
-    file_handler = logging.handlers.RotatingFileHandler(
+    # Rotating file handler — WARNING and above (avoids flooding disk)
+    file_handler = _SafeRotatingFileHandler(
         log_path / "advisor.log",
         maxBytes=5 * 1024 * 1024,  # 5 MB
         backupCount=3,
@@ -44,9 +59,9 @@ def configure_logging(level: int = logging.DEBUG, log_dir: str = "logs") -> None
     file_handler.setLevel(level)
     file_handler.setFormatter(fmt)
 
-    # Console handler — DEBUG and above (shows in terminal)
+    # Console handler — INFO and above (shows in terminal)
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.DEBUG)
+    console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(fmt)
 
     root.addHandler(file_handler)

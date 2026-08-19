@@ -74,6 +74,7 @@ class AgentOrchestrator:
             case_study_context=case_study,
             weight_profile=weight_profile,
         )
+        tool_executor._llm = self._client  # enable convert_test_cases
 
         pipeline = build_pipeline(
             decision_agent=self._decision_agent,

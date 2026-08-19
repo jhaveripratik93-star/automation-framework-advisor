@@ -90,7 +90,7 @@ class ScoringEngine:
         # Step 6: Generate pros/cons and explanations
         for score in scores:
             score.pros, score.cons = self._derive_pros_cons(score)
-            score.explanation = self._generate_explanation(score)
+            score.explanation = self._generate_explanation(score, profile)
 
         # Step 7: Build decision matrix
         return DecisionMatrix(
@@ -222,7 +222,6 @@ class ScoringEngine:
     ) -> tuple[list[str], list[str]]:
         """Derive pros and cons from criteria scores."""
         scores_dict = score.criteria_scores.model_dump()
-        # Merge in cloud criteria if present
         if score.cloud_criteria_scores:
             scores_dict.update(score.cloud_criteria_scores)
 
@@ -249,53 +248,95 @@ class ScoringEngine:
             elif value <= 40:
                 cons.append(f"Weak {label} ({value}/100)")
 
-        # Add penalty-based cons
         for penalty in score.penalties_applied:
             cons.append(penalty)
-
-        # Add bonus-based pros
         for bonus in score.bonuses_applied:
             pros.append(bonus)
 
-        return pros[:5], cons[:5]  # Cap at 5 each
+        return pros[:5], cons[:5]
 
-    def _generate_explanation(self, score: FrameworkScore) -> str:
-        """Generate natural language explanation for a score."""
+    @staticmethod
+    def _score_band(value: int) -> str:
+        if value >= 85: return "🟢 Excellent"
+        if value >= 65: return "🟡 Good"
+        if value >= 40: return "🟠 Fair"
+        return "🔴 Poor"
+
+    @staticmethod
+    def _criterion_meaning(criterion_id: str, value: int, profile: UserProfile) -> str:
+        """Return a plain-English sentence explaining what the score means for the user."""
+        band = value  # numeric for threshold checks
+        meanings = {
+            "C1_language_compatibility": {
+                "high":  f"Natively supports {profile.primary_language} — no wrappers or adapters needed.",
+                "mid":   f"Partial {profile.primary_language} support — some glue code required.",
+                "low":   f"Does NOT support {profile.primary_language} — your team must learn a new language.",
+            },
+            "C2_api_validation": {
+                "high":  "Built-in REST/GraphQL testing — no extra library needed for API tests.",
+                "mid":   "Basic HTTP support — you'll need a plugin for full API validation.",
+                "low":   "Not designed for API testing — use a dedicated tool alongside this.",
+            },
+            "C3_performance_load": {
+                "high":  "Purpose-built for load/performance testing — handles high concurrency natively.",
+                "mid":   "Can run parallel tests but not designed for load simulation.",
+                "low":   "Not a performance testing tool — pair with k6 or Locust for load tests.",
+            },
+            "C4_cicd_integration": {
+                "high":  f"Plug-and-play with {profile.ci_cd_tool} — Docker images and pipeline templates available.",
+                "mid":   f"Works with {profile.ci_cd_tool} but needs manual pipeline configuration.",
+                "low":   f"Limited {profile.ci_cd_tool} support — expect significant pipeline setup effort.",
+            },
+            "C5_maintainability": {
+                "high":  "Excellent debugger, trace viewer, and Page Object support — low long-term maintenance cost.",
+                "mid":   "Adequate tooling — test maintenance grows with suite size.",
+                "low":   "Weak debugging tools — large suites become hard to maintain over time.",
+            },
+            "C6_cloud_readiness": {
+                "high":  "Docker-native, supports BrowserStack/SauceLabs/LambdaTest — runs anywhere in the cloud.",
+                "mid":   "Docker supported but limited cloud grid integrations.",
+                "low":   "Minimal cloud support — running at scale requires custom infrastructure work.",
+            },
+            "C7_license_cost": {
+                "high":  "Fully open-source (MIT/Apache) — zero licensing cost, no vendor lock-in.",
+                "mid":   "Open-source core with some paid features — budget for optional add-ons.",
+                "low":   "Commercial license required — factor in per-seat or usage costs.",
+            },
+        }
+        c = meanings.get(criterion_id, {})
+        if not c:
+            return ""
+        if band >= 75:
+            return c["high"]
+        if band >= 45:
+            return c["mid"]
+        return c["low"]
+
+    def _generate_explanation(self, score: FrameworkScore, profile: UserProfile | None = None) -> str:
+        """Generate per-criterion plain-English explanation with score bands."""
         scores_dict = score.criteria_scores.model_dump()
-        # Merge cloud criteria if present
         if score.cloud_criteria_scores:
             scores_dict.update(score.cloud_criteria_scores)
 
-        # Find top and bottom criteria
-        sorted_criteria = sorted(
-            scores_dict.items(), key=lambda x: x[1], reverse=True
-        )
-        top_2 = sorted_criteria[:2]
-        bottom_2 = sorted_criteria[-2:]
-
         label_map = {
-            "C1_language_compatibility": "Language Compatibility",
-            "C2_api_validation": "API Validation",
-            "C3_performance_load": "Performance Testing",
-            "C4_cicd_integration": "CI/CD Integration",
-            "C5_maintainability": "Maintainability",
-            "C6_cloud_readiness": "Cloud Readiness",
-            "C7_license_cost": "License & Cost",
-            "C8_cloud_provider_support": "Cloud Provider Support",
-            "C9_iac_capabilities": "IaC Capabilities",
+            "C1_language_compatibility": "Language",
+            "C2_api_validation":         "API Validation",
+            "C3_performance_load":        "Performance",
+            "C4_cicd_integration":        "CI/CD",
+            "C5_maintainability":         "Maintainability",
+            "C6_cloud_readiness":         "Cloud Readiness",
+            "C7_license_cost":            "License & Cost",
+            "C8_cloud_provider_support":  "Cloud Provider",
+            "C9_iac_capabilities":        "IaC",
             "C10_cloud_migration_readiness": "Migration Readiness",
         }
 
-        top_str = " and ".join(
-            f"{label_map.get(c, c)} ({v})" for c, v in top_2
-        )
-        bottom_str = " and ".join(
-            f"{label_map.get(c, c)} ({v})" for c, v in bottom_2
-        )
+        lines = [f"**{score.framework}** — {score.overall_score}/100 ({score.confidence} confidence)"]
+        for c_id, value in scores_dict.items():
+            label = label_map.get(c_id, c_id)
+            band  = self._score_band(value)
+            meaning = self._criterion_meaning(c_id, value, profile) if profile else ""
+            suffix = f" — {meaning}" if meaning else ""
+            lines.append(f"  - **{label}**: {value}/100 {band}{suffix}")
 
-        return (
-            f"{score.framework} scored {score.overall_score}/100 "
-            f"(Confidence: {score.confidence}). "
-            f"Excels in {top_str}. "
-            f"Weaker in {bottom_str}."
-        )
+        return "\n".join(lines)
