@@ -120,6 +120,8 @@ _DEFAULTS: dict = {
     "excel_test_cases": [],
     "excel_summary": "",
     "coverage_result": "",
+    "coverage_best_fw": "",
+    "coverage_best_pct": "",
     "cicd_yaml": "",
     # Loading state
     "llm_busy": False,
@@ -177,6 +179,7 @@ def _render_topnav() -> None:
         ("home",     "🏠", "Home"),
         ("advisor",  "🧭", "Advisor"),
         ("studio",   "🐍", "Code Studio"),
+        ("codegen",  "🤖", "Test Generator"),
         ("coverage", "📊", "Coverage"),
     ]
     # Build nav HTML
@@ -653,15 +656,6 @@ def _render_code_studio_tab() -> None:
         # Empty state when no code pasted
         if not st.session_state.get("last_converted_code"):
             st.markdown("""
-            <div class="empty-state">
-                <span class="empty-state-icon">📋</span>
-                <div class="empty-state-title">Paste your test code below</div>
-                <div class="empty-state-desc">
-                    Paste a single test file, select source and target frameworks above,
-                    then click Convert.
-                </div>
-                <span class="empty-state-hint">⬇ Paste code in the text area below</span>
-            </div>
             """, unsafe_allow_html=True)
 
         source_code = st.text_area(
@@ -896,6 +890,334 @@ def _render_code_studio_tab() -> None:
             )
 
 
+# ── Tab: Test Code Generator ──────────────────────────────────────────
+def _render_codegen_tab() -> None:
+    """Render the manual → automated test code generation UI."""
+    import json as _json
+
+    st.markdown("""
+    <div class="page-header">
+        <div class="page-header-left">
+            <div class="breadcrumb"><span>Home</span><span class="breadcrumb-sep">›</span><span>Test Generator</span></div>
+            <div class="page-title">🤖 Test Code Generator</div>
+            <div class="page-subtitle">Convert manual test cases into executable automated test code</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Framework selection ───────────────────────────────────────────
+    _TARGET_FRAMEWORKS = {
+        "Playwright (TypeScript)": "playwright_ts",
+        "Playwright (Python)": "playwright_py",
+        "Selenium (Python)": "selenium_py",
+        "Selenium (Java)": "selenium_java",
+        "Cypress (JavaScript)": "cypress_js",
+        "Robot Framework": "robot_framework",
+    }
+
+    col1, col2 = st.columns(2)
+    with col1:
+        fw_label = st.selectbox(
+            "Target Framework",
+            list(_TARGET_FRAMEWORKS.keys()),
+            index=0,
+            key="codegen_framework",
+        )
+    with col2:
+        input_mode = st.radio(
+            "Input method",
+            ["Manual Entry", "Upload JSON/Excel"],
+            horizontal=True,
+            key="codegen_input_mode",
+        )
+
+    st.markdown("---")
+
+    # ── Manual Entry Mode ─────────────────────────────────────────────
+    if input_mode == "Manual Entry":
+        st.markdown("### 📝 Add Test Cases")
+
+        # Initialize session state for test cases
+        if "codegen_test_cases" not in st.session_state:
+            st.session_state.codegen_test_cases = []
+
+        # Form to add a new test case
+        with st.expander("➕ Add New Test Case", expanded=not st.session_state.codegen_test_cases):
+            tc_id = st.text_input("Test Case ID", value=f"TC{len(st.session_state.codegen_test_cases)+1:03d}", key="tc_id")
+            tc_title = st.text_input("Title", placeholder="e.g. Login with valid credentials", key="tc_title")
+            tc_category = st.text_input("Category", placeholder="e.g. authentication, checkout", key="tc_category")
+            tc_priority = st.selectbox("Priority", ["low", "medium", "high", "critical"], index=2, key="tc_priority")
+            tc_preconditions = st.text_input("Preconditions (comma-separated)", placeholder="e.g. User is logged in, Cart is empty", key="tc_preconditions")
+
+            st.markdown("**Test Steps** (one per line, format: `action | test_data | expected_result`)")
+            tc_steps_raw = st.text_area(
+                "Steps",
+                height=200,
+                placeholder="Navigate to the login page\n"
+                            "Enter 'admin' in the username field | admin | Username is entered\n"
+                            "Enter 'password123' in the password field | password123 | Password is masked\n"
+                            "Click the Login button\n"
+                            "Verify the dashboard is visible | | Dashboard page loads",
+                key="tc_steps_raw",
+            )
+
+            if st.button("✅ Add Test Case", key="btn_add_tc", type="primary"):
+                if not tc_title.strip():
+                    st.warning("Please provide a test case title.")
+                elif not tc_steps_raw.strip():
+                    st.warning("Please add at least one test step.")
+                else:
+                    # Parse steps
+                    steps = []
+                    for i, line in enumerate(tc_steps_raw.strip().split("\n"), 1):
+                        parts = [p.strip() for p in line.split("|")]
+                        steps.append({
+                            "step_number": i,
+                            "action": parts[0],
+                            "test_data": parts[1] if len(parts) > 1 else "",
+                            "expected_result": parts[2] if len(parts) > 2 else "",
+                        })
+
+                    tc = {
+                        "id": tc_id.strip(),
+                        "title": tc_title.strip(),
+                        "category": tc_category.strip(),
+                        "priority": tc_priority,
+                        "preconditions": [p.strip() for p in tc_preconditions.split(",") if p.strip()],
+                        "steps": steps,
+                        "expected_results": [],
+                        "tags": [],
+                    }
+                    st.session_state.codegen_test_cases.append(tc)
+                    st.success(f"Added: {tc_title} ({len(steps)} steps)")
+                    st.rerun()
+
+        # Show existing test cases
+        if st.session_state.codegen_test_cases:
+            st.markdown(f"### 📋 Test Cases ({len(st.session_state.codegen_test_cases)})")
+            for i, tc in enumerate(st.session_state.codegen_test_cases):
+                col_a, col_b = st.columns([5, 1])
+                with col_a:
+                    st.markdown(f"**{tc['id']}** — {tc['title']} ({len(tc['steps'])} steps, {tc['priority']})")
+                with col_b:
+                    if st.button("🗑️", key=f"rm_tc_{i}"):
+                        st.session_state.codegen_test_cases.pop(i)
+                        st.rerun()
+
+    # ── Upload JSON/Excel Mode ────────────────────────────────────────
+    else:
+        st.markdown("### 📁 Upload Test Cases")
+        uploaded = st.file_uploader(
+            "Upload JSON or Excel file with manual test cases",
+            type=["json", "xlsx", "xls"],
+            key="codegen_upload",
+        )
+
+        if uploaded:
+            if uploaded.name.endswith(".json"):
+                try:
+                    data = _json.loads(uploaded.read().decode("utf-8"))
+                    if "test_cases" in data:
+                        st.session_state.codegen_test_cases = data["test_cases"]
+                        st.session_state.codegen_selector_map = data.get("selector_map", {})
+                        st.success(f"Loaded {len(data['test_cases'])} test cases from JSON")
+                    else:
+                        st.error("JSON must contain a 'test_cases' array. See sample format.")
+                except Exception as e:
+                    st.error(f"Failed to parse JSON: {e}")
+            elif uploaded.name.endswith((".xlsx", ".xls")):
+                try:
+                    from src.tools.excel_parser import parse_test_cases_from_excel
+                    test_cases = parse_test_cases_from_excel(uploaded)
+                    st.session_state.codegen_test_cases = test_cases
+                    st.success(f"Loaded {len(test_cases)} test cases from Excel")
+                except Exception as e:
+                    st.error(f"Failed to parse Excel: {e}")
+
+        # Show sample JSON format
+        with st.expander("📖 Expected JSON format"):
+            st.code('''
+{
+  "test_cases": [
+    {
+      "id": "TC001",
+      "title": "Login with valid credentials",
+      "category": "authentication",
+      "priority": "high",
+      "preconditions": ["User exists"],
+      "steps": [
+        {"step_number": 1, "action": "Navigate to login page", "test_data": "", "expected_result": ""},
+        {"step_number": 2, "action": "Enter 'admin' in username field", "test_data": "admin", "expected_result": ""}
+      ]
+    }
+  ],
+  "selector_map": {
+    "username field": "[data-testid='username']",
+    "login button": "#login-btn"
+  }
+}
+            ''', language="json")
+
+    # ── Selector Map (optional) ───────────────────────────────────────
+    st.markdown("---")
+    with st.expander("🎯 Selector Map (optional — improves accuracy)"):
+        st.caption("Map element descriptions to actual CSS selectors. One per line: `element name = selector`")
+        selector_raw = st.text_area(
+            "Selectors",
+            height=120,
+            placeholder="username field = [data-testid='username']\nlogin button = #login-btn\nerror message = .alert-error",
+            value="\n".join(
+                f"{k} = {v}" for k, v in st.session_state.get("codegen_selector_map", {}).items()
+            ),
+            key="codegen_selectors_raw",
+        )
+        # Parse selector map
+        selector_map = {}
+        for line in selector_raw.strip().split("\n"):
+            if "=" in line:
+                parts = line.split("=", 1)
+                selector_map[parts[0].strip().lower()] = parts[1].strip()
+        st.session_state.codegen_selector_map = selector_map
+
+    # ── Options ───────────────────────────────────────────────────────
+    with st.expander("⚙️ Generation Options"):
+        opt_col1, opt_col2 = st.columns(2)
+        with opt_col1:
+            gen_page_objects = st.checkbox("Generate Page Objects", value=True, key="cg_po")
+            gen_fixtures = st.checkbox("Generate Fixtures", value=True, key="cg_fix")
+        with opt_col2:
+            gen_parameterize = st.checkbox("Parameterize Similar Tests", value=True, key="cg_param")
+            gen_comments = st.checkbox("Include Comments", value=True, key="cg_comments")
+
+    # ── Generate Button ───────────────────────────────────────────────
+    st.markdown("---")
+    test_cases = st.session_state.get("codegen_test_cases", [])
+    can_generate = len(test_cases) > 0
+
+    if not can_generate:
+        st.info("Add at least one test case above to generate automated code.")
+
+    if st.button("🚀 Generate Automated Tests", key="btn_generate_code", type="primary", disabled=not can_generate):
+        from src.codegen import CodeGenOrchestrator, CodeGenRequest, ManualTestCase, TestStep, TargetFramework, CodeGenOptions
+
+        fw_value = _TARGET_FRAMEWORKS[fw_label]
+        framework = TargetFramework(fw_value)
+
+        # Convert session state test cases to Pydantic models
+        manual_tests = []
+        for tc in test_cases:
+            steps = [
+                TestStep(
+                    step_number=s.get("step_number", i+1),
+                    action=s["action"],
+                    test_data=s.get("test_data", ""),
+                    expected_result=s.get("expected_result", ""),
+                )
+                for i, s in enumerate(tc.get("steps", []))
+            ]
+            manual_tests.append(ManualTestCase(
+                id=tc.get("id", f"TC{len(manual_tests)+1:03d}"),
+                title=tc.get("title", "Untitled"),
+                description=tc.get("description", ""),
+                preconditions=tc.get("preconditions", []),
+                steps=steps,
+                expected_results=tc.get("expected_results", []),
+                priority=tc.get("priority", "medium"),
+                category=tc.get("category", ""),
+                tags=tc.get("tags", []),
+            ))
+
+        options = CodeGenOptions(
+            generate_page_objects=gen_page_objects,
+            generate_fixtures=gen_fixtures,
+            parameterize_similar=gen_parameterize,
+            include_comments=gen_comments,
+        )
+
+        request = CodeGenRequest(
+            test_cases=manual_tests,
+            target_framework=framework,
+            options=options,
+            selector_map=st.session_state.get("codegen_selector_map", {}),
+        )
+
+        with st.spinner("🤖 Generating automated test code..."):
+            try:
+                orchestrator = CodeGenOrchestrator(llm_client=_client)
+                result = orchestrator.generate(request)
+                st.session_state.codegen_result = result
+            except Exception as e:
+                st.error(f"Generation failed: {e}")
+                import traceback
+                st.code(traceback.format_exc())
+
+    # ── Display Results ───────────────────────────────────────────────
+    if "codegen_result" in st.session_state and st.session_state.codegen_result:
+        result = st.session_state.codegen_result
+        st.markdown("---")
+        st.markdown("## 📦 Generated Test Suite")
+
+        # Stats bar
+        stats = result.stats
+        stat_cols = st.columns(5)
+        with stat_cols[0]:
+            st.metric("Total Steps", stats.total_steps)
+        with stat_cols[1]:
+            st.metric("Template", stats.template_handled)
+        with stat_cols[2]:
+            st.metric("LLM", stats.llm_handled)
+        with stat_cols[3]:
+            st.metric("Patterns Learned", stats.patterns_learned)
+        with stat_cols[4]:
+            st.metric("Confidence", f"{result.confidence_score:.0%}")
+
+        st.markdown(f"**Framework:** {result.framework} | **Run:** `{result.run_command}`")
+        st.markdown(f"**Install:** `{result.install_instructions}`")
+
+        # Display each generated file
+        for gf in result.files:
+            with st.expander(f"📄 {gf.path} ({gf.file_type.value})", expanded=(gf.file_type.value == "test")):
+                st.code(gf.content, language=_code_language(result.framework))
+
+        # Download as ZIP
+        import io
+        import zipfile
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for gf in result.files:
+                zf.writestr(gf.path, gf.content)
+        zip_buffer.seek(0)
+
+        st.download_button(
+            "⬇️ Download All Files (ZIP)",
+            data=zip_buffer,
+            file_name="generated_tests.zip",
+            mime="application/zip",
+            key="btn_download_codegen",
+        )
+
+        # Selector map reminder
+        if result.selector_map:
+            with st.expander("🎯 Selectors to verify"):
+                st.caption("These selectors were auto-generated. Verify them against your app's DOM:")
+                for name, sel in result.selector_map.items():
+                    st.text(f"  {name}  →  {sel}")
+
+
+def _code_language(framework: str) -> str:
+    """Map framework name to Streamlit code language."""
+    lang_map = {
+        "playwright_ts": "typescript",
+        "playwright_py": "python",
+        "selenium_py": "python",
+        "selenium_java": "java",
+        "cypress_js": "javascript",
+        "rest_assured": "java",
+        "robot_framework": "robot",
+    }
+    return lang_map.get(framework, "text")
+
+
 # ── Tab: Coverage Analyser ────────────────────────────────────────────
 def _render_coverage_tab() -> None:
     st.markdown("""
@@ -908,21 +1230,13 @@ def _render_coverage_tab() -> None:
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Metric cards when data is loaded ─────────────────────────────
     tcs = st.session_state.excel_test_cases
-    if tcs:
-        caps = list({tc.get("required_capability", "") for tc in tcs if tc.get("required_capability")})
-        # Parse best framework from coverage_result if available
-        best_fw = "—"
-        cov_pct = "—"
-        result_text = st.session_state.coverage_result
-        if result_text:
-            import re as _re2
-            m = _re2.search(r"\*\*(.+?)\*\*.*?(\d+\.?\d*)%", result_text)
-            if m:
-                best_fw = m.group(1)[:18]
-                cov_pct = f"{m.group(2)}%"
 
+    # ── Metric cards ──────────────────────────────────────────────────
+    if tcs:
+        caps    = list({tc.get("required_capability", "") for tc in tcs if tc.get("required_capability")})
+        best_fw = st.session_state.coverage_best_fw  or "—"
+        cov_pct = st.session_state.coverage_best_pct or "—"
         st.markdown(f"""
         <div class="metric-row">
             <div class="metric-card">
@@ -948,19 +1262,26 @@ def _render_coverage_tab() -> None:
         </div>
         """, unsafe_allow_html=True)
 
-    # ── Upload section ────────────────────────────────────────────────
-    with st.expander("📥 Upload Test Cases (Excel)", expanded=False):
+    # ── Upload + auto-analyse ─────────────────────────────────────────
+    with st.expander("📥 Upload Test Cases (Excel)", expanded=not bool(tcs)):
         st.markdown(
             "Expected columns *(order & case don't matter)*: "
-            "`Test ID` · `Description` · `Capability` · `Steps` · `Expected Result`"
+            "`Test ID` · `Description` · `Required Capability` · `Steps` · `Expected Result`"
         )
         xl_file = st.file_uploader("Excel file (.xlsx)", type=["xlsx"], key="xl_upload")
+        cicd_platform = st.selectbox(
+            "CI/CD platform for export",
+            ["GitHub Actions", "GitLab CI", "Azure DevOps"],
+            key="cicd_platform",
+        )
         col_parse, col_reset = st.columns([1, 1])
         with col_parse:
-            parse_clicked = st.button("📂 Parse Excel", key="btn_parse_xl", use_container_width=True)
+            parse_clicked = st.button("📂 Parse & Analyse", key="btn_parse_xl",
+                                      use_container_width=True, type="primary")
         with col_reset:
             if st.button("🗑 Clear", key="btn_clear_xl", use_container_width=True):
-                for k in ("excel_test_cases", "excel_summary", "coverage_result", "cicd_yaml"):
+                for k in ("excel_test_cases", "excel_summary", "coverage_result",
+                          "coverage_best_fw", "coverage_best_pct", "cicd_yaml"):
                     st.session_state[k] = [] if k == "excel_test_cases" else ""
                 st.rerun()
 
@@ -969,87 +1290,55 @@ def _render_coverage_tab() -> None:
                 st.warning("Upload an Excel file first.")
             else:
                 from src.tools.excel_parser import parse_excel_test_cases, summarise_excel
-                raw = xl_file.read()
+                from src.tools.coverage_engine import analyze_coverage, render_coverage_report
+
+                raw        = xl_file.read()
                 test_cases = parse_excel_test_cases(raw)
                 if not test_cases:
                     st.error("Could not parse any test cases. Check column headers.")
                 else:
-                    st.session_state.excel_test_cases = test_cases
-                    st.session_state.excel_summary = summarise_excel(test_cases)
-                    st.session_state.coverage_result = ""
-                    st.session_state.cicd_yaml = ""
-                    st.success(f"✓ {len(test_cases)} test cases loaded")
+                    _COV_STEPS = [
+                        "Parsing Excel",
+                        "Building capability map",
+                        "Scoring frameworks",
+                        "Finding best combinations",
+                        "Generating report",
+                    ]
+                    loading_slot = st.empty()
+                    try:
+                        for step_i in range(len(_COV_STEPS) - 1):
+                            with loading_slot.container():
+                                _render_loading(_COV_STEPS, step_i, "Analysing coverage…")
+                            import time; time.sleep(0.25)
+
+                        analysis = analyze_coverage(test_cases, kb)
+                        report   = render_coverage_report(analysis, len(test_cases))
+
+                        cov_data = analysis["coverage"]
+                        if cov_data:
+                            best = max(cov_data.items(), key=lambda x: x[1]["pct_with_partial"])
+                            st.session_state.coverage_best_fw  = best[0]
+                            st.session_state.coverage_best_pct = f"{best[1]['pct_with_partial']:.0f}%"
+
+                        with loading_slot.container():
+                            _render_loading(_COV_STEPS, len(_COV_STEPS) - 1, "Done!")
+                        import time; time.sleep(0.2)
+                        loading_slot.empty()
+
+                        st.session_state.excel_test_cases = test_cases
+                        st.session_state.excel_summary    = summarise_excel(test_cases)
+                        st.session_state.coverage_result  = report
+                        st.session_state.cicd_yaml        = _build_cicd_yaml(test_cases, cicd_platform)
+                        st.rerun()
+                    except Exception as exc:
+                        loading_slot.empty()
+                        st.error(f"Analysis failed: {exc}")
+                        logger.error("Coverage analysis error: %s", exc)
 
         if st.session_state.excel_summary:
             st.markdown(st.session_state.excel_summary)
 
-    # # ── Empty state when no data ──────────────────────────────────────
-    # if not tcs:
-    #     st.markdown("""
-    #     <div class="empty-state">
-    #         <span class="empty-state-icon">📊</span>
-    #         <div class="empty-state-title">No test cases loaded yet</div>
-    #         <div class="empty-state-desc">
-    #             Upload an Excel file with your test cases above, or enter them manually below.
-    #             The tool will map each test to framework capabilities and show you the best fit.
-    #         </div>
-    #         <span class="empty-state-hint">⬆ Upload Excel or use manual entry below</span>
-    #     </div>
-    #     """, unsafe_allow_html=True)
-
-    # ── Analysis options ──────────────────────────────────────────────
-    if tcs:
-        st.markdown("---")
-        st.markdown("#### ⚙️ Analysis Options")
-
-        # Framework filter as chips-style multiselect
-        selected_fws = st.multiselect(
-            "Frameworks to include (leave empty = all 17)",
-            options=_KNOWN_FRAMEWORKS, default=[], key="coverage_fw_filter",
-        )
-        cicd_platform = st.selectbox(
-            "CI/CD platform for export",
-            ["GitHub Actions", "GitLab CI", "Azure DevOps"],
-            key="cicd_platform",
-        )
-        analyse_clicked = st.button("🔍 Analyse Coverage", key="btn_analyse_cov", type="primary")
-
-        if analyse_clicked:
-            _COV_STEPS = [
-                "Loading test cases",
-                "Building capability map",
-                "Scoring frameworks",
-                "Finding best combinations",
-                "Generating report",
-            ]
-            loading_slot = st.empty()
-            try:
-                from src.tools.executor import ToolExecutor
-                executor = ToolExecutor(knowledge_base=kb, knowledge_graph=_graph)
-
-                for step_i in range(len(_COV_STEPS) - 1):
-                    with loading_slot.container():
-                        _render_loading(_COV_STEPS, step_i, "Analysing coverage…")
-                    import time; time.sleep(0.3)
-
-                result = executor.execute("analyze_test_case_coverage", {
-                    "test_cases": tcs,
-                    "frameworks": selected_fws if selected_fws else None,
-                })
-
-                with loading_slot.container():
-                    _render_loading(_COV_STEPS, len(_COV_STEPS) - 1, "Done!")
-                import time; time.sleep(0.2)
-                loading_slot.empty()
-
-                st.session_state.coverage_result = result
-                st.session_state.cicd_yaml = _build_cicd_yaml(tcs, cicd_platform)
-                st.rerun()
-            except Exception as exc:
-                loading_slot.empty()
-                st.error(f"Analysis failed: {exc}")
-                logger.error("Coverage analysis error: %s", exc)
-
+    # ── Results ───────────────────────────────────────────────────────
     if st.session_state.coverage_result:
         st.markdown("---")
         st.markdown(st.session_state.coverage_result)
@@ -1073,7 +1362,7 @@ def _render_coverage_tab() -> None:
             key="btn_download_cicd",
         )
 
-    # ── Manual entry ──────────────────────────────────────────────────
+    # ── Manual entry (only when no Excel loaded) ──────────────────────
     if not tcs:
         st.markdown("---")
         with st.expander("✏️ Or enter test cases manually", expanded=False):
@@ -1117,43 +1406,45 @@ def _render_coverage_tab() -> None:
                 value=st.session_state.get("manual_tc_prefill", ""),
                 height=220,
                 key="manual_tc_json",
-                placeholder='[{"id":"TC001","description":"Login test","capability":"ui automation","steps":"Open browser","expected_result":"User is logged in"}]',
+                placeholder='[{"id":"TC001","description":"Login test","capability":"ui automation"}]',
             )
 
             if st.button("▶ Analyse Manual Input", key="btn_manual_analyse", type="primary"):
                 import json
                 try:
+                    from src.tools.excel_parser import summarise_excel
+                    from src.tools.coverage_engine import analyze_coverage, render_coverage_report
                     raw_tcs = json.loads(manual_json)
                     if not isinstance(raw_tcs, list):
                         raise ValueError("Must be a JSON array")
-                    normalised = []
-                    for tc in raw_tcs:
-                        normalised.append({
-                            "id": tc.get("id") or tc.get("test_id") or "",
-                            "description": tc.get("description") or tc.get("desc") or "",
-                            "required_capability": (
-                                tc.get("required_capability")
-                                or tc.get("capability")
-                                or tc.get("type")
-                                or "ui automation"
-                            ).lower(),
-                            "steps": tc.get("steps") or "",
-                            "expected_result": tc.get("expected_result") or "",
-                        })
-                    from src.tools.executor import ToolExecutor
-                    from src.tools.excel_parser import summarise_excel
-                    executor = ToolExecutor(knowledge_base=kb, knowledge_graph=_graph)
-                    result = executor.execute("analyze_test_case_coverage", {"test_cases": normalised})
-                    st.session_state.coverage_result = result
-                    st.session_state.cicd_yaml = _build_cicd_yaml(normalised, "GitHub Actions")
-                    st.session_state.excel_summary = summarise_excel(normalised)
+                    normalised = [{
+                        "id": tc.get("id") or tc.get("test_id") or "",
+                        "description": tc.get("description") or tc.get("desc") or "",
+                        "required_capability": (
+                            tc.get("required_capability") or tc.get("capability")
+                            or tc.get("type") or "ui automation"
+                        ).lower(),
+                        "steps": tc.get("steps") or "",
+                        "expected_result": tc.get("expected_result") or "",
+                    } for tc in raw_tcs]
+
+                    analysis = analyze_coverage(normalised, kb)
+                    report   = render_coverage_report(analysis, len(normalised))
+                    cov_data = analysis["coverage"]
+                    if cov_data:
+                        best = max(cov_data.items(), key=lambda x: x[1]["pct_with_partial"])
+                        st.session_state.coverage_best_fw  = best[0]
+                        st.session_state.coverage_best_pct = f"{best[1]['pct_with_partial']:.0f}%"
+
+                    st.session_state.coverage_result  = report
+                    st.session_state.cicd_yaml        = _build_cicd_yaml(normalised, "GitHub Actions")
+                    st.session_state.excel_summary    = summarise_excel(normalised)
                     st.session_state.excel_test_cases = normalised
                     st.rerun()
                 except Exception as exc:
                     st.error(f"Invalid input: {exc}")
 
 
-# ── CI/CD YAML builders ───────────────────────────────────────────────
 def _build_cicd_yaml(test_cases: list[dict], platform: str) -> str:
     caps = list({tc.get("required_capability", "ui automation") for tc in test_cases})
     install_parts: list[str] = ["pip install -r requirements.txt"]
@@ -1296,6 +1587,8 @@ def main() -> None:
         _render_advisor_tab()
     elif page == "studio":
         _render_code_studio_tab()
+    elif page == "codegen":
+        _render_codegen_tab()
     elif page == "coverage":
         _render_coverage_tab()
 

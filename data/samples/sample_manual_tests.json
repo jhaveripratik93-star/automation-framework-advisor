@@ -1,0 +1,269 @@
+{
+  "description": "Sample manual test cases for the hybrid code generation module",
+  "test_cases": [
+    {
+      "id": "TC001",
+      "title": "Login with valid credentials",
+      "description": "Verify that a user can successfully log in with valid credentials",
+      "preconditions": ["User account 'admin' exists", "User is on the login page"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Navigate to the login page",
+          "test_data": "",
+          "expected_result": "Login page is displayed"
+        },
+        {
+          "step_number": 2,
+          "action": "Enter 'admin@example.com' in the email field",
+          "test_data": "admin@example.com",
+          "expected_result": "Email is entered"
+        },
+        {
+          "step_number": 3,
+          "action": "Enter 'SecurePass123!' in the password field",
+          "test_data": "SecurePass123!",
+          "expected_result": "Password is entered (masked)"
+        },
+        {
+          "step_number": 4,
+          "action": "Click the Login button",
+          "test_data": "",
+          "expected_result": "Login form is submitted"
+        },
+        {
+          "step_number": 5,
+          "action": "Verify the URL contains '/dashboard'",
+          "test_data": "",
+          "expected_result": "User is redirected to dashboard"
+        },
+        {
+          "step_number": 6,
+          "action": "Verify the welcome message is visible",
+          "test_data": "",
+          "expected_result": "Welcome message is displayed"
+        }
+      ],
+      "expected_results": ["User is logged in and redirected to dashboard", "Welcome message is shown"],
+      "priority": "high",
+      "category": "authentication",
+      "tags": ["login", "smoke", "regression"]
+    },
+    {
+      "id": "TC002",
+      "title": "Login with invalid password",
+      "description": "Verify that login fails with incorrect password and shows error",
+      "preconditions": ["User account 'admin' exists", "User is on the login page"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Navigate to the login page",
+          "test_data": "",
+          "expected_result": "Login page is displayed"
+        },
+        {
+          "step_number": 2,
+          "action": "Enter 'admin@example.com' in the email field",
+          "test_data": "admin@example.com",
+          "expected_result": "Email is entered"
+        },
+        {
+          "step_number": 3,
+          "action": "Enter 'wrongpassword' in the password field",
+          "test_data": "wrongpassword",
+          "expected_result": "Password is entered"
+        },
+        {
+          "step_number": 4,
+          "action": "Click the Login button",
+          "test_data": "",
+          "expected_result": "Login form is submitted"
+        },
+        {
+          "step_number": 5,
+          "action": "Verify the error message is visible",
+          "test_data": "",
+          "expected_result": "Error message is shown"
+        },
+        {
+          "step_number": 6,
+          "action": "Verify the page shows 'Invalid credentials'",
+          "test_data": "",
+          "expected_result": "Correct error text is displayed"
+        }
+      ],
+      "expected_results": ["Login fails", "Error message 'Invalid credentials' is shown"],
+      "priority": "high",
+      "category": "authentication",
+      "tags": ["login", "negative", "regression"]
+    },
+    {
+      "id": "TC003",
+      "title": "Search for a product",
+      "description": "Verify that the user can search for products and see results",
+      "preconditions": ["User is logged in", "Products exist in the database"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Navigate to the home page",
+          "test_data": "",
+          "expected_result": "Home page is displayed"
+        },
+        {
+          "step_number": 2,
+          "action": "Enter 'laptop' in the search field",
+          "test_data": "laptop",
+          "expected_result": "Search term is entered"
+        },
+        {
+          "step_number": 3,
+          "action": "Click the search button",
+          "test_data": "",
+          "expected_result": "Search is executed"
+        },
+        {
+          "step_number": 4,
+          "action": "Wait for the search results to be visible",
+          "test_data": "",
+          "expected_result": "Results are loaded"
+        },
+        {
+          "step_number": 5,
+          "action": "Verify the search results contains 'laptop'",
+          "test_data": "",
+          "expected_result": "Results contain the search term"
+        }
+      ],
+      "expected_results": ["Search results page shows products containing 'laptop'"],
+      "priority": "medium",
+      "category": "search",
+      "tags": ["search", "smoke"]
+    },
+    {
+      "id": "TC004",
+      "title": "Add item to cart",
+      "description": "Verify that a user can add a product to the shopping cart",
+      "preconditions": ["User is logged in", "User is on the product detail page"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Navigate to /products/laptop-pro",
+          "test_data": "",
+          "expected_result": "Product page is displayed"
+        },
+        {
+          "step_number": 2,
+          "action": "Select 'Silver' from the color dropdown",
+          "test_data": "Silver",
+          "expected_result": "Color is selected"
+        },
+        {
+          "step_number": 3,
+          "action": "Click the Add to Cart button",
+          "test_data": "",
+          "expected_result": "Item is added"
+        },
+        {
+          "step_number": 4,
+          "action": "Wait for the cart notification to be visible",
+          "test_data": "",
+          "expected_result": "Notification appears"
+        },
+        {
+          "step_number": 5,
+          "action": "Verify the cart badge shows '1'",
+          "test_data": "",
+          "expected_result": "Cart count is updated"
+        }
+      ],
+      "expected_results": ["Product is added to cart", "Cart badge shows 1"],
+      "priority": "high",
+      "category": "cart",
+      "tags": ["cart", "e2e", "regression"]
+    },
+    {
+      "id": "TC005",
+      "title": "User registration with valid data",
+      "description": "Verify new user registration flow with all required fields",
+      "preconditions": ["Registration page is accessible", "Email is not already registered"],
+      "steps": [
+        {
+          "step_number": 1,
+          "action": "Navigate to the registration page",
+          "test_data": "",
+          "expected_result": "Registration form is displayed"
+        },
+        {
+          "step_number": 2,
+          "action": "Enter 'John' in the first name field",
+          "test_data": "John",
+          "expected_result": "First name is entered"
+        },
+        {
+          "step_number": 3,
+          "action": "Enter 'Doe' in the last name field",
+          "test_data": "Doe",
+          "expected_result": "Last name is entered"
+        },
+        {
+          "step_number": 4,
+          "action": "Enter 'john.doe@test.com' in the email field",
+          "test_data": "john.doe@test.com",
+          "expected_result": "Email is entered"
+        },
+        {
+          "step_number": 5,
+          "action": "Enter 'StrongP@ss1' in the password field",
+          "test_data": "StrongP@ss1",
+          "expected_result": "Password is entered"
+        },
+        {
+          "step_number": 6,
+          "action": "Enter 'StrongP@ss1' in the confirm password field",
+          "test_data": "StrongP@ss1",
+          "expected_result": "Password confirmation matches"
+        },
+        {
+          "step_number": 7,
+          "action": "Click the Register button",
+          "test_data": "",
+          "expected_result": "Form is submitted"
+        },
+        {
+          "step_number": 8,
+          "action": "Verify the page shows 'Registration successful'",
+          "test_data": "",
+          "expected_result": "Success message is displayed"
+        },
+        {
+          "step_number": 9,
+          "action": "Verify the URL contains '/welcome'",
+          "test_data": "",
+          "expected_result": "User is redirected to welcome page"
+        }
+      ],
+      "expected_results": ["User account is created", "Redirected to welcome page with success message"],
+      "priority": "critical",
+      "category": "registration",
+      "tags": ["registration", "smoke", "e2e"]
+    }
+  ],
+  "selector_map": {
+    "email field": "[data-testid='email-input']",
+    "password field": "[data-testid='password-input']",
+    "login button": "[data-testid='login-btn']",
+    "search field": "[data-testid='search-input']",
+    "search button": "[data-testid='search-btn']",
+    "cart badge": "[data-testid='cart-badge']",
+    "welcome message": "[data-testid='welcome-msg']",
+    "error message": "[data-testid='error-alert']",
+    "first name field": "[data-testid='firstname-input']",
+    "last name field": "[data-testid='lastname-input']",
+    "confirm password field": "[data-testid='confirm-password-input']",
+    "register button": "[data-testid='register-btn']",
+    "color dropdown": "[data-testid='color-select']",
+    "add to cart button": "[data-testid='add-to-cart-btn']",
+    "cart notification": "[data-testid='cart-notification']",
+    "search results": "[data-testid='search-results']"
+  }
+}
