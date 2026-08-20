@@ -133,6 +133,14 @@ def build_capability_map(kb: "KnowledgeBase") -> dict[str, list[str]]:
         ("security testing",    ["network_interception", "api_testing"]),
         # Database
         ("database testing",    ["api_testing"]),
+        # File handling
+        ("file handling",       ["file_upload_download"]),
+        ("file download",       ["file_upload_download"]),
+        ("file upload",         ["file_upload_download"]),
+        # Custom / proprietary — always unsupported (empty keys → false for all frameworks)
+        ("custom library",      []),
+        ("proprietary",         []),
+        ("custom protocol",     []),
     ]
 
     for label, keys in _semantic_groups:
@@ -197,10 +205,9 @@ def resolve_capability(
         logger.debug("Semantic fallback: '%s' → '%s' (score=%d)", raw, best_label, best_score)
         return best_label, best_keys
 
-    # 4. Hard fallback
-    logger.debug("No match for capability '%s' — defaulting to ui automation", raw)
-    fallback_keys = cap_map.get("ui automation", list(all_cap_keys)[:3])
-    return "ui automation (fallback)", fallback_keys
+    # 4. Hard fallback — return empty keys so all frameworks score "false"
+    logger.debug("No match for capability '%s' — marking as unsupported", raw)
+    return f"{raw} (unsupported)", []
 
 
 # ── Per-framework support scoring ─────────────────────────────────────────────
@@ -344,6 +351,7 @@ def analyze_coverage(
         "cap_map":      cap_map,
         "all_cap_keys": all_cap_keys,
         "fw_names":     fw_names,
+        "kb":           kb,
     }
 
 
@@ -352,6 +360,7 @@ def render_coverage_report(analysis: dict, total: int) -> str:
     matrix   = analysis["matrix"]
     coverage = analysis["coverage"]
     fw_names = analysis["fw_names"]
+    kb       = analysis["kb"]
     lines: list[str] = ["# Test Case Coverage Analysis\n"]
 
     # ── Summary table ─────────────────────────────────────────────────

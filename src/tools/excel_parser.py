@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 _COL_ALIASES: dict[str, list[str]] = {
     "id":          ["test id", "id", "test_id", "testid", "no", "#"],
     "description": ["description", "desc", "test name", "name", "title", "summary"],
-    "capability":  ["capability", "type", "category", "test type", "area", "feature"],
+    "capability":  ["capability", "type", "category", "test type", "area", "feature",
+                    "required capability", "required_capability"],
     "steps":       ["steps", "step", "test steps", "actions", "procedure"],
     "expected":    ["expected result", "expected", "result", "outcome", "assertion"],
 }
