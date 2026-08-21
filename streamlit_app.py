@@ -22,6 +22,7 @@ from src.graph.graphrag_engine import GraphRAGEngine
 from src.llm.groq_client import GroqClient
 from src.llm.advisor_llm import AdvisorLLM
 from src.scoring.weights import WeightProfile, PRESETS, CRITERIA_IDS
+from src.discovery.framework_scanner import FrameworkScanner
 
 # ── Page config ───────────────────────────────────────────────────────
 st.set_page_config(
@@ -89,6 +90,108 @@ def init_stack(_kb: KnowledgeBase):
 
 kb = load_kb()
 _client, _graph, _graphrag, advisor = init_stack(kb)
+
+
+# ── Framework Scanner (auto-discovery on load) ────────────────────────
+@st.cache_resource
+def init_scanner(_kb: KnowledgeBase) -> FrameworkScanner:
+    """Initialize the framework scanner with KB and LLM client."""
+    client = GroqClient()
+    scanner = FrameworkScanner(
+        kb=_kb,
+        llm_client=client if client.is_available else None,
+        data_dir="data/frameworks",
+    )
+    return scanner
+
+
+_scanner = init_scanner(kb)
+
+
+# Auto-scan on first load (non-blocking — just discover, don't auto-add)
+if "auto_scan_done" not in st.session_state:
+    st.session_state.auto_scan_done = False
+    st.session_state.scan_results = []
+    st.session_state.scan_message = ""
+
+if not st.session_state.auto_scan_done:
+    try:
+        new_fws = _scanner.scan(force=False)
+        st.session_state.scan_results = new_fws
+        if new_fws:
+            st.session_state.scan_message = (
+                f"🔔 {len(new_fws)} new framework(s) detected! "
+                "Open sidebar → Framework Discovery to review and add."
+            )
+        st.session_state.auto_scan_done = True
+    except Exception as exc:
+        logger.debug("Auto-scan skipped: %s", exc)
+        st.session_state.auto_scan_done = True
+
+
+def _run_framework_scan():
+    """Run an on-demand framework discovery scan."""
+    with st.spinner("Scanning GitHub, PyPI, npm for new frameworks..."):
+        try:
+            new_fws = _scanner.scan(force=True)
+            st.session_state.scan_results = new_fws
+            if not new_fws:
+                st.session_state.scan_message = "✓ No new frameworks found — KB is up to date."
+            else:
+                st.session_state.scan_message = ""
+        except Exception as exc:
+            st.session_state.scan_message = f"⚠️ Scan error: {exc}"
+    st.rerun()
+
+
+def _add_single_framework(name: str):
+    """Research and add a single framework to the KB."""
+    with st.spinner(f"Researching {name}..."):
+        try:
+            profile = _scanner.research_framework(name)
+            if profile:
+                path = _scanner.add_framework(profile)
+                if path:
+                    # Remove from scan results
+                    st.session_state.scan_results = [
+                        fw for fw in st.session_state.scan_results
+                        if fw.name != name
+                    ]
+                    st.session_state.scan_message = f"✓ Added {name} to knowledge base!"
+                    # Clear cached KB to reload
+                    load_kb.clear()
+                else:
+                    st.session_state.scan_message = f"⚠️ Could not write {name} profile."
+            else:
+                st.session_state.scan_message = f"⚠️ Could not research {name}."
+        except Exception as exc:
+            st.session_state.scan_message = f"⚠️ Error adding {name}: {exc}"
+    st.rerun()
+
+
+def _add_all_discovered_frameworks():
+    """Add all discovered frameworks to the KB."""
+    results = st.session_state.get("scan_results", [])
+    if not results:
+        return
+    added = []
+    with st.spinner(f"Adding {len(results)} framework(s)..."):
+        for fw in results:
+            try:
+                profile = _scanner.research_framework(fw.name)
+                if profile:
+                    path = _scanner.add_framework(profile)
+                    if path:
+                        added.append(fw.name)
+            except Exception as exc:
+                logger.warning("Failed to add %s: %s", fw.name, exc)
+    st.session_state.scan_results = [
+        fw for fw in results if fw.name not in added
+    ]
+    st.session_state.scan_message = f"✓ Added {len(added)} framework(s): {', '.join(added)}"
+    if added:
+        load_kb.clear()
+    st.rerun()
 
 # ── Constants ─────────────────────────────────────────────────────────
 _CRITERIA_LABELS = {
@@ -312,6 +415,36 @@ def _render_sidebar() -> None:
                         st.success(f"✓ {len(text)} chars parsed")
                     except Exception as exc:
                         st.error(str(exc))
+
+            # ── Framework Discovery ───────────────────────────────────
+            st.markdown("---")
+            st.markdown('<div class="sidebar-section">🔍 Framework Discovery</div>',
+                        unsafe_allow_html=True)
+            with st.expander("Discover New Frameworks", expanded=False):
+                st.caption(
+                    "Scan the internet for new automation frameworks and "
+                    "automatically add them to the knowledge base."
+                )
+                if st.button("🌐 Scan Now", key="scan_frameworks", use_container_width=True):
+                    _run_framework_scan()
+
+                if st.session_state.get("scan_results"):
+                    results = st.session_state.scan_results
+                    st.success(f"Found {len(results)} new framework(s)")
+                    for fw in results:
+                        col_name, col_btn = st.columns([3, 1])
+                        with col_name:
+                            st.markdown(f"**{fw.name}** ⭐{fw.stars}")
+                            st.caption(fw.description[:80])
+                        with col_btn:
+                            if st.button("➕", key=f"add_{fw.name}", help=f"Add {fw.name}"):
+                                _add_single_framework(fw.name)
+
+                    if st.button("➕ Add All", key="add_all_frameworks", use_container_width=True):
+                        _add_all_discovered_frameworks()
+
+                if st.session_state.get("scan_message"):
+                    st.info(st.session_state.scan_message)
 
         elif page == "studio":
             # ── Code Studio context ───────────────────────────────────
