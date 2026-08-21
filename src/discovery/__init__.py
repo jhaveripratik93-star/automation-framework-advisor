@@ -2,5 +2,6 @@
 
 from .questions import DISCOVERY_QUESTIONS
 from .session import DiscoverySession
+from .framework_scanner import FrameworkScanner
 
-__all__ = ["DISCOVERY_QUESTIONS", "DiscoverySession"]
+__all__ = ["DISCOVERY_QUESTIONS", "DiscoverySession", "FrameworkScanner"]
