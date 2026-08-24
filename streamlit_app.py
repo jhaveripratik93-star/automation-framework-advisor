@@ -346,33 +346,55 @@ def _render_sidebar() -> None:
 
             with st.expander("⚖️ Adjust Weights", expanded=True):
                 preset_names = list(PRESETS.keys())
+
+                def _on_preset_change():
+                    chosen = st.session_state["weight_preset"]
+                    if chosen == "custom":
+                        return
+                    st.session_state.weight_profile = WeightProfile.from_preset(chosen)
+                    for cid in CRITERIA_IDS:
+                        st.session_state[f"w_{cid}"] = float(
+                            round(PRESETS[chosen].get(cid, 0.0), 2)
+                        )
+
                 current_preset = st.session_state.weight_profile.profile_name.replace("_adjusted", "")
                 if current_preset not in preset_names:
                     current_preset = "balanced"
-                selected_preset = st.selectbox(
-                    "Preset", preset_names,
-                    index=preset_names.index(current_preset),
+                if "weight_preset" not in st.session_state:
+                    st.session_state["weight_preset"] = current_preset
+
+                preset_options = preset_names + ["custom"]
+                if st.session_state.get("weight_preset", current_preset) not in preset_options:
+                    st.session_state["weight_preset"] = current_preset
+
+                st.selectbox(
+                    "Preset", preset_options,
                     key="weight_preset",
+                    on_change=_on_preset_change,
                     label_visibility="collapsed",
                 )
-                if selected_preset != current_preset:
-                    st.session_state.weight_profile = WeightProfile.from_preset(selected_preset)
-                    st.rerun()
 
                 st.caption("Set weights (0.0–1.0). Click Apply to normalise & save.")
+                # Initialise widget keys on first load (no conflict with session state)
+                for cid in CRITERIA_IDS:
+                    if f"w_{cid}" not in st.session_state:
+                        st.session_state[f"w_{cid}"] = float(
+                            round(st.session_state.weight_profile.weights.get(cid, 0.0), 2)
+                        )
+
                 raw_weights: dict[str, float] = {}
                 for cid in CRITERIA_IDS:
                     raw_weights[cid] = st.number_input(
                         _CRITERIA_LABELS[cid],
                         min_value=0.0,
                         max_value=1.0,
-                        value=float(round(st.session_state.weight_profile.weights.get(cid, 0.0), 2)),
                         step=0.05,
                         format="%.2f",
                         key=f"w_{cid}",
                     )
 
                 if st.button("Apply Weights", key="apply_weights", use_container_width=True):
+                    raw_weights = {cid: st.session_state[f"w_{cid}"] for cid in CRITERIA_IDS}
                     total = sum(raw_weights.values())
                     normalised = (
                         {k: v / total for k, v in raw_weights.items()} if total > 0
@@ -381,6 +403,7 @@ def _render_sidebar() -> None:
                     st.session_state.weight_profile = WeightProfile(
                         weights=normalised, profile_name="custom"
                     )
+                    st.session_state["weight_preset"] = "custom"
                     st.success("Weights applied ✓")
 
             st.markdown("---")
