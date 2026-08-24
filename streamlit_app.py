@@ -518,6 +518,32 @@ def _render_sidebar() -> None:
             st.caption("• Capability field drives analysis — 'smoke', 'e2e', 'api' all work")
             st.caption("• Leave framework filter empty to compare all 17 frameworks")
 
+        elif page == "codegen":
+            st.markdown('<div class="sidebar-section">🤖 Test Generator</div>',
+                        unsafe_allow_html=True)
+            tcs = st.session_state.get("codegen_test_cases", [])
+            if tcs:
+                cats = list({tc.get("category", "") for tc in tcs if tc.get("category")})
+                st.markdown(f"**Test cases:** {len(tcs)}")
+                if cats:
+                    st.markdown(f"**Categories:** {', '.join(cats[:5])}")
+                priorities = {tc.get("priority", "") for tc in tcs}
+                st.markdown(f"**Priorities:** {', '.join(sorted(priorities))}")
+                st.markdown("---")
+                if st.button("🗑 Clear test cases", key="sb_clear_codegen"):
+                    st.session_state.codegen_test_cases = []
+                    st.session_state.pop("codegen_result", None)
+                    st.rerun()
+            else:
+                st.caption("No test cases added yet.")
+            st.markdown("---")
+            st.markdown('<div class="sidebar-section">Quick Tips</div>',
+                        unsafe_allow_html=True)
+            st.caption("• Add steps as: `action | test_data | expected`")
+            st.caption("• Add a Selector Map to improve accuracy")
+            st.caption("• Enable Page Objects for maintainable code")
+
+
 
 # ── Home page ─────────────────────────────────────────────────────────
 def _render_home() -> None:
