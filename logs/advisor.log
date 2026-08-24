@@ -331,3 +331,16 @@ For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/St
 
 2026-08-11 11:08:59 [WARNING ] src.graph.entity_extractor: EntityExtractor.extract_from_message: LLM extraction failed — HTTPStatusError: Client error '400 Bad Request' for url 'https://api.groq.com/openai/v1/chat/completions'
 For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+2026-08-21 19:51:46 [WARNING ] src.discovery.framework_scanner: YAML already exists: data\frameworks\robot_framework.yaml — skipping
+2026-08-24 12:48:06 [WARNING ] src.discovery.framework_scanner: Framework 'Awesome Test Automation': limitations was empty, filled with defaults
+2026-08-24 12:48:06 [WARNING ] src.discovery.framework_scanner: Framework 'Awesome Test Automation': performance was empty, filled with defaults
+2026-08-24 12:48:06 [WARNING ] src.discovery.framework_scanner: Framework 'Awesome Test Automation': maintainability was empty, filled with defaults
+2026-08-24 12:48:06 [WARNING ] src.discovery.framework_scanner: Framework 'Awesome Test Automation': cloud_grids was empty, set to not_applicable
+2026-08-24 12:58:19 [WARNING ] src.discovery.framework_scanner: LLM profile generation failed for Awesome Test Automation: while parsing a block mapping
+  in "<unicode string>", line 1, column 1:
+    We need to output YAML with the  ... 
+    ^
+expected <block end>, but found '<scalar>'
+  in "<unicode string>", line 1, column 372:
+     ...  https://automated-testing.info". So the framework is likely a r ... 
+                                         ^ — using template
