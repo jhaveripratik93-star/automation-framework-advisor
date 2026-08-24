@@ -68,6 +68,11 @@ class GroqClient:
             "max_tokens": self.max_tokens,
         }
 
+        if not self._api_key:
+            raise ValueError(
+                "GROQ_API_KEY is not set. Add it to config/.env or set the environment variable."
+            )
+
         try:
             response = httpx.post(
                 f"{_API_BASE}/chat/completions",

@@ -1,0 +1,73 @@
+framework_name: Robotframework
+vendor: robotframework
+license: Apache-2.0
+website: http://robotframework.org
+first_release: ''
+latest_version: 7.4.2
+category: test_automation
+languages_supported:
+- Python
+architecture_fit:
+  web_spa: false
+  web_mpa: false
+  native_mobile: false
+  hybrid_mobile: false
+  desktop: false
+  api_testing: false
+  microservices: false
+capabilities:
+  shadow_dom: false
+  iframe_cross_origin: false
+  multi_tab: false
+  multi_domain: false
+  file_upload_download: false
+  network_interception: false
+  parallel_execution: false
+  auto_wait: false
+  test_recorder: false
+  code_generation: false
+cicd_integration:
+  docker_support: true
+  github_actions: true
+  jenkins: true
+  gitlab_ci: true
+  azure_devops: false
+  pre_built_docker_images: community
+cloud_grids:
+  standalone: true
+performance:
+  avg_test_execution_speed: moderate
+  resource_footprint: medium
+  startup_time_ms: 1500
+  parallel_overhead: medium
+maintainability:
+  page_object_support: false
+  fixture_support: via test framework
+  reusable_components: true
+  built_in_reporting: false
+  trace_viewer: false
+  debugging_tools: moderate (logs, IDE debugging)
+limitations:
+- Python only — no support for other languages
+- No web browser testing support
+- Cannot test native mobile applications
+- 'Community size: 11841 GitHub stars'
+- Profile auto-generated from metadata — manual review recommended
+pip_packages:
+  robotframework: '>=1.0'
+install_commands: []
+test_command: pytest tests/
+report_paths:
+- test-results/
+versions:
+- version: 7.4.2
+  release_date: unknown
+  min_runtime: '>=3.8'
+  notable_features:
+  - Latest stable release
+  - See official changelog for details
+  capabilities_added: []
+  capabilities_deprecated: []
+  breaking_changes: []
+  known_limitations:
+  - Version details auto-generated — verify against official docs

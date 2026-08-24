@@ -31,6 +31,21 @@ async def lifespan(app: FastAPI):
     kb.load()
     scoring_engine = ScoringEngine(knowledge_base=kb)
     logger.info("Advisor Agent initialized successfully")
+
+    # Auto-discover new frameworks on startup (non-blocking)
+    try:
+        from src.discovery.framework_scanner import FrameworkScanner
+        scanner = FrameworkScanner(kb=kb, data_dir="data/frameworks")
+        new_fws = scanner.scan(force=False)
+        if new_fws:
+            logger.info(
+                "Framework scanner found %d new framework(s): %s",
+                len(new_fws),
+                [fw.name for fw in new_fws],
+            )
+    except Exception as exc:
+        logger.debug("Auto-scan skipped on startup: %s", exc)
+
     yield
     logger.info("Advisor Agent shutting down")
 
@@ -129,3 +144,76 @@ async def generate_boilerplate(
 async def get_weight_presets():
     """Return available weight preset profiles."""
     return WeightProfile.list_presets()
+
+
+@app.post("/api/v1/discover-frameworks")
+async def discover_frameworks(force: bool = False):
+    """Scan the internet for new automation frameworks.
+
+    Args:
+        force: If True, ignore scan interval and scan immediately.
+
+    Returns:
+        List of newly discovered frameworks not in the knowledge base.
+    """
+    from src.discovery.framework_scanner import FrameworkScanner
+
+    scanner = FrameworkScanner(kb=kb, data_dir="data/frameworks")
+    new_fws = scanner.scan(force=force)
+    return {
+        "new_frameworks": [
+            {
+                "name": fw.name,
+                "description": fw.description,
+                "stars": fw.stars,
+                "language": fw.language,
+                "repo_url": fw.repo_url,
+                "license": fw.license,
+            }
+            for fw in new_fws
+        ],
+        "count": len(new_fws),
+    }
+
+
+@app.post("/api/v1/add-framework")
+async def add_framework(name: str):
+    """Research a framework and add it to the knowledge base.
+
+    Args:
+        name: Framework name to research and add.
+
+    Returns:
+        Status and profile path if successful.
+    """
+    from src.discovery.framework_scanner import FrameworkScanner
+    from src.llm.groq_client import GroqClient
+    from src.knowledge_base.schema import FrameworkData
+
+    client = GroqClient()
+    scanner = FrameworkScanner(
+        kb=kb,
+        llm_client=client if client.is_available else None,
+        data_dir="data/frameworks",
+    )
+    profile = scanner.research_framework(name)
+    if not profile:
+        raise HTTPException(status_code=404, detail=f"Could not research framework: {name}")
+
+    # Validate completeness before adding
+    is_complete, issues = FrameworkData.validate_for_addition(profile)
+
+    path = scanner.add_framework(profile)
+    if not path:
+        raise HTTPException(status_code=500, detail=f"Could not write profile for: {name}")
+
+    return {
+        "status": "added",
+        "framework": name,
+        "path": str(path),
+        "profile": profile,
+        "completeness": {
+            "is_complete": is_complete,
+            "issues": issues,
+        },
+    }
