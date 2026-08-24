@@ -62,7 +62,13 @@ def make_decide_node(decision_agent):
     def decide(state: PipelineState) -> dict:
         result = decision_agent.decide(state["user_message"], state["graph_context"])
         logger.info("LangGraph[decide]: action=%s", result.action)
-        return {"action": result.action}
+        output: dict[str, Any] = {"action": result.action}
+        # Short-circuit: if rejected or clarify, set final_response directly
+        if result.action == "rejected" and result.rejection_message:
+            output["final_response"] = result.rejection_message
+        elif result.action == "clarify" and result.clarification:
+            output["final_response"] = result.clarification
+        return output
     return decide
 
 
@@ -172,7 +178,12 @@ def route_after_reflect(state: PipelineState) -> str:
 
 
 def route_after_decide(state: PipelineState) -> str:
-    return "select_tools" if state.get("action") == "tool_call" else "evaluate"
+    action = state.get("action")
+    if action == "tool_call":
+        return "select_tools"
+    if action in ("rejected", "clarify"):
+        return "format"
+    return "evaluate"
 
 
 # ── Graph builder ─────────────────────────────────────────────────────
@@ -205,6 +216,7 @@ def build_pipeline(
     graph.add_conditional_edges("decide", route_after_decide, {
         "select_tools": "select_tools",
         "evaluate": "evaluate",
+        "format": "format",
     })
     graph.add_edge("select_tools", "execute_tools")
     graph.add_edge("execute_tools", "synthesise")

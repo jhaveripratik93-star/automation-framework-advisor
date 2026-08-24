@@ -331,6 +331,7 @@ For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/St
 
 2026-08-11 11:08:59 [WARNING ] src.graph.entity_extractor: EntityExtractor.extract_from_message: LLM extraction failed — HTTPStatusError: Client error '400 Bad Request' for url 'https://api.groq.com/openai/v1/chat/completions'
 For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+<<<<<<< Updated upstream
 2026-08-21 19:51:46 [WARNING ] src.discovery.framework_scanner: YAML already exists: data\frameworks\robot_framework.yaml — skipping
 2026-08-24 12:48:06 [WARNING ] src.discovery.framework_scanner: Framework 'Awesome Test Automation': limitations was empty, filled with defaults
 2026-08-24 12:48:06 [WARNING ] src.discovery.framework_scanner: Framework 'Awesome Test Automation': performance was empty, filled with defaults
@@ -344,3 +345,84 @@ expected <block end>, but found '<scalar>'
   in "<unicode string>", line 1, column 372:
      ...  https://automated-testing.info". So the framework is likely a r ... 
                                          ^ — using template
+=======
+2026-08-24 15:13:20 [WARNING ] src.llm.groq_client: GroqClient: GROQ_API_KEY not set
+2026-08-24 15:13:20 [WARNING ] __main__: Groq: GROQ_API_KEY not set
+2026-08-24 15:14:12 [ERROR   ] src.llm.groq_client: GroqClient.chat: LocalProtocolError: Illegal header value b'Bearer '
+2026-08-24 15:14:12 [WARNING ] src.agents.retry: llm_retry: _call_llm attempt 1/4 failed (Illegal header value b'Bearer '), retrying in 1.0s
+2026-08-24 15:14:13 [ERROR   ] src.llm.groq_client: GroqClient.chat: LocalProtocolError: Illegal header value b'Bearer '
+2026-08-24 15:14:13 [WARNING ] src.agents.retry: llm_retry: _call_llm attempt 2/4 failed (Illegal header value b'Bearer '), retrying in 2.0s
+2026-08-24 15:14:16 [ERROR   ] src.llm.groq_client: GroqClient.chat: LocalProtocolError: Illegal header value b'Bearer '
+2026-08-24 15:14:16 [WARNING ] src.agents.retry: llm_retry: _call_llm attempt 3/4 failed (Illegal header value b'Bearer '), retrying in 4.0s
+2026-08-24 15:14:20 [ERROR   ] src.llm.groq_client: GroqClient.chat: LocalProtocolError: Illegal header value b'Bearer '
+2026-08-24 15:14:20 [ERROR   ] src.agents.retry: llm_retry: _call_llm exhausted 4 retries
+2026-08-24 15:14:20 [WARNING ] src.agents.evaluation_agent: EvaluationAgent: LLM call failed after retries (Illegal header value b'Bearer ') — returning raw tool output
+2026-08-24 15:14:20 [ERROR   ] src.llm.groq_client: GroqClient.chat: LocalProtocolError: Illegal header value b'Bearer '
+2026-08-24 15:14:20 [WARNING ] src.agents.retry: llm_retry: _call_llm attempt 1/3 failed (Illegal header value b'Bearer '), retrying in 0.5s
+2026-08-24 15:14:21 [ERROR   ] src.llm.groq_client: GroqClient.chat: LocalProtocolError: Illegal header value b'Bearer '
+2026-08-24 15:14:21 [WARNING ] src.agents.retry: llm_retry: _call_llm attempt 2/3 failed (Illegal header value b'Bearer '), retrying in 1.0s
+2026-08-24 15:14:23 [ERROR   ] src.llm.groq_client: GroqClient.chat: LocalProtocolError: Illegal header value b'Bearer '
+2026-08-24 15:14:23 [ERROR   ] src.agents.retry: llm_retry: _call_llm exhausted 3 retries
+2026-08-24 15:14:23 [WARNING ] src.agents.reflection_agent: ReflectionAgent: LLM call failed after retries (Illegal header value b'Bearer ') — approving draft
+2026-08-24 15:14:23 [ERROR   ] src.llm.groq_client: GroqClient.chat: LocalProtocolError: Illegal header value b'Bearer '
+2026-08-24 15:14:23 [WARNING ] src.agents.format_agent: FormatAgent: LLM call failed (Illegal header value b'Bearer ') — using deterministic formatting
+2026-08-24 15:15:56 [ERROR   ] src.llm.groq_client: GroqClient.chat: LocalProtocolError: Illegal header value b'Bearer '
+2026-08-24 15:15:56 [WARNING ] src.agents.retry: llm_retry: _call_llm attempt 1/4 failed (Illegal header value b'Bearer '), retrying in 1.0s
+2026-08-24 15:15:57 [ERROR   ] src.llm.groq_client: GroqClient.chat: LocalProtocolError: Illegal header value b'Bearer '
+2026-08-24 15:15:57 [WARNING ] src.agents.retry: llm_retry: _call_llm attempt 2/4 failed (Illegal header value b'Bearer '), retrying in 2.0s
+2026-08-24 15:16:00 [ERROR   ] src.llm.groq_client: GroqClient.chat: LocalProtocolError: Illegal header value b'Bearer '
+2026-08-24 15:16:00 [WARNING ] src.agents.retry: llm_retry: _call_llm attempt 3/4 failed (Illegal header value b'Bearer '), retrying in 4.0s
+2026-08-24 15:16:04 [ERROR   ] src.llm.groq_client: GroqClient.chat: LocalProtocolError: Illegal header value b'Bearer '
+2026-08-24 15:16:04 [ERROR   ] src.agents.retry: llm_retry: _call_llm exhausted 4 retries
+2026-08-24 15:16:04 [WARNING ] src.agents.evaluation_agent: EvaluationAgent: LLM call failed after retries (Illegal header value b'Bearer ') — returning raw tool output
+2026-08-24 15:16:05 [ERROR   ] src.llm.groq_client: GroqClient.chat: LocalProtocolError: Illegal header value b'Bearer '
+2026-08-24 15:16:05 [WARNING ] src.agents.retry: llm_retry: _call_llm attempt 1/3 failed (Illegal header value b'Bearer '), retrying in 0.5s
+2026-08-24 15:16:05 [ERROR   ] src.llm.groq_client: GroqClient.chat: LocalProtocolError: Illegal header value b'Bearer '
+2026-08-24 15:16:05 [WARNING ] src.agents.retry: llm_retry: _call_llm attempt 2/3 failed (Illegal header value b'Bearer '), retrying in 1.0s
+2026-08-24 15:16:07 [ERROR   ] src.llm.groq_client: GroqClient.chat: LocalProtocolError: Illegal header value b'Bearer '
+2026-08-24 15:16:07 [ERROR   ] src.agents.retry: llm_retry: _call_llm exhausted 3 retries
+2026-08-24 15:16:07 [WARNING ] src.agents.reflection_agent: ReflectionAgent: LLM call failed after retries (Illegal header value b'Bearer ') — approving draft
+2026-08-24 15:16:07 [ERROR   ] src.llm.groq_client: GroqClient.chat: LocalProtocolError: Illegal header value b'Bearer '
+2026-08-24 15:16:07 [WARNING ] src.agents.format_agent: FormatAgent: LLM call failed (Illegal header value b'Bearer ') — using deterministic formatting
+2026-08-24 15:20:22 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 429 — {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01kzncmb88efaradkbf3m69x50` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7092, Requested 1324. Please try again in 3.119999999s. Need more tokens? Upgrade to Dev Tier today at https:
+2026-08-24 15:20:22 [WARNING ] src.agents.retry: llm_retry: _call_llm attempt 1/3 failed (Client error '429 Too Many Requests' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429), retrying in 0.5s
+2026-08-24 15:20:23 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 429 — {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01kzncmb88efaradkbf3m69x50` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 6979, Requested 1151. Please try again in 975ms. Need more tokens? Upgrade to Dev Tier today at https://conso
+2026-08-24 15:20:23 [WARNING ] src.agents.retry: llm_retry: _call_llm attempt 2/3 failed (Client error '429 Too Many Requests' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429), retrying in 1.0s
+2026-08-24 15:20:26 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 429 — {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01kzncmb88efaradkbf3m69x50` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7833, Requested 1218. Please try again in 7.882499999s. Need more tokens? Upgrade to Dev Tier today at https:
+2026-08-24 15:20:26 [WARNING ] src.agents.format_agent: FormatAgent: LLM call failed (Client error '429 Too Many Requests' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429) — using deterministic formatting
+2026-08-24 15:21:49 [WARNING ] src.agents.tool_selection_agent: ToolSelectionAgent: LLM returned unparseable: '{
+  "tool_calls": [],
+  "overall_reasoning": "User wants to compare test frameworks but did not spec'
+2026-08-24 15:21:52 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 429 — {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01kzncmb88efaradkbf3m69x50` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7228, Requested 991. Please try again in 1.6425s. Need more tokens? Upgrade to Dev Tier today at https://cons
+2026-08-24 15:21:52 [WARNING ] src.agents.retry: llm_retry: _call_llm attempt 1/3 failed (Client error '429 Too Many Requests' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429), retrying in 0.5s
+2026-08-24 15:21:53 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 429 — {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01kzncmb88efaradkbf3m69x50` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7110, Requested 909. Please try again in 142.5ms. Need more tokens? Upgrade to Dev Tier today at https://cons
+2026-08-24 15:21:53 [WARNING ] src.agents.retry: llm_retry: _call_llm attempt 2/3 failed (Client error '429 Too Many Requests' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429), retrying in 1.0s
+2026-08-24 15:21:55 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 429 — {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01kzncmb88efaradkbf3m69x50` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7650, Requested 1600. Please try again in 9.375s. Need more tokens? Upgrade to Dev Tier today at https://cons
+2026-08-24 15:21:55 [WARNING ] src.agents.format_agent: FormatAgent: LLM call failed (Client error '429 Too Many Requests' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429) — using deterministic formatting
+2026-08-24 15:23:18 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 429 — {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01kzncmb88efaradkbf3m69x50` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 6547, Requested 1791. Please try again in 2.535s. Need more tokens? Upgrade to Dev Tier today at https://cons
+2026-08-24 15:23:18 [WARNING ] src.agents.format_agent: FormatAgent: LLM call failed (Client error '429 Too Many Requests' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429) — using deterministic formatting
+2026-08-24 15:24:12 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 429 — {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01kzncmb88efaradkbf3m69x50` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 7355, Requested 1417. Please try again in 5.79s. Need more tokens? Upgrade to Dev Tier today at https://conso
+2026-08-24 15:24:12 [WARNING ] src.agents.format_agent: FormatAgent: LLM call failed (Client error '429 Too Many Requests' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429) — using deterministic formatting
+2026-08-24 15:31:52 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 429 — {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01kzncmb88efaradkbf3m69x50` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 4624, Requested 4659. Please try again in 9.622499999s. Need more tokens? Upgrade to Dev Tier today at https:
+2026-08-24 15:31:52 [WARNING ] src.agents.format_agent: FormatAgent: LLM call failed (Client error '429 Too Many Requests' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429) — using deterministic formatting
+2026-08-24 15:31:54 [WARNING ] src.graph.entity_extractor: EntityExtractor._parse_llm_extraction: no JSON block found in response: 'We need to extract automation framework entities and relationships. Types: Framework, Capability, La'
+2026-08-24 15:33:06 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 429 — {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01kzncmb88efaradkbf3m69x50` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 6824, Requested 1718. Please try again in 4.065s. Need more tokens? Upgrade to Dev Tier today at https://cons
+2026-08-24 15:33:06 [WARNING ] src.agents.retry: llm_retry: _call_llm attempt 1/3 failed (Client error '429 Too Many Requests' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429), retrying in 0.5s
+2026-08-24 15:33:07 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 429 — {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01kzncmb88efaradkbf3m69x50` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 6697, Requested 1306. Please try again in 22.5ms. Need more tokens? Upgrade to Dev Tier today at https://cons
+2026-08-24 15:33:07 [WARNING ] src.agents.retry: llm_retry: _call_llm attempt 2/3 failed (Client error '429 Too Many Requests' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429), retrying in 1.0s
+2026-08-24 15:33:08 [ERROR   ] src.llm.groq_client: GroqClient.chat: HTTP 429 — {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01kzncmb88efaradkbf3m69x50` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 6514, Requested 1718. Please try again in 1.74s. Need more tokens? Upgrade to Dev Tier today at https://conso
+2026-08-24 15:33:08 [ERROR   ] src.agents.retry: llm_retry: _call_llm exhausted 3 retries
+2026-08-24 15:33:08 [WARNING ] src.agents.reflection_agent: ReflectionAgent: LLM call failed after retries (Client error '429 Too Many Requests' for url 'https://api.groq.com/openai/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429) — approving draft
+>>>>>>> Stashed changes
