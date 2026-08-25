@@ -69,6 +69,7 @@ class DiscoveredFramework:
     topics: list[str] = field(default_factory=list)
     last_updated: str = ""
     homepage: str = ""
+    categories: list[str] = field(default_factory=list)  # e.g. ["web_ui_testing", "api_testing"]
 
 
 class FrameworkScanner:
@@ -143,6 +144,34 @@ class FrameworkScanner:
             len(new_frameworks),
         )
         return new_frameworks
+
+    def get_categorized_results(
+        self, frameworks: list[DiscoveredFramework] | None = None
+    ) -> dict[str, list[DiscoveredFramework]]:
+        """Group discovered frameworks by category.
+
+        Args:
+            frameworks: List of discovered frameworks. If None, uses last scan results.
+
+        Returns:
+            Dict mapping category_id -> list of DiscoveredFramework in that category.
+            A framework may appear in multiple categories.
+        """
+        from src.knowledge_base.schema import FRAMEWORK_CATEGORIES
+
+        fws = frameworks if frameworks is not None else self._scan_results
+        categorized: dict[str, list[DiscoveredFramework]] = {
+            cat_id: [] for cat_id in FRAMEWORK_CATEGORIES
+        }
+
+        for fw in fws:
+            cats = fw.categories or self._classify_discovered(fw)
+            for cat in cats:
+                if cat in categorized:
+                    categorized[cat].append(fw)
+
+        # Remove empty categories
+        return {k: v for k, v in categorized.items() if v}
 
     def research_framework(self, name: str) -> dict[str, Any] | None:
         """Research a specific framework and generate a full YAML profile.
@@ -317,6 +346,7 @@ class FrameworkScanner:
                         last_updated=item.get("pushed_at", ""),
                         homepage=item.get("homepage", "") or "",
                     )
+                    fw.categories = self._classify_discovered(fw)
                     results.append(fw)
 
                 # Be nice to GitHub API
@@ -439,6 +469,9 @@ class FrameworkScanner:
                 homepage="https://dredd.org/",
             ),
         ]
+        # Classify each curated framework
+        for fw in curated:
+            fw.categories = self._classify_discovered(fw)
         return curated
 
     # ── Info gathering ────────────────────────────────────────────────
@@ -1051,6 +1084,15 @@ Use true/false for booleans, use "limited" or "plugin (name)" for partial suppor
             )
 
         return profile
+
+    def _classify_discovered(self, fw: DiscoveredFramework) -> list[str]:
+        """Classify a discovered framework into categories using available metadata."""
+        from src.knowledge_base.schema import classify_framework
+        return classify_framework(
+            architecture_fit=None,
+            description=fw.description,
+            topics=fw.topics,
+        )
 
     def _filter_existing(self, frameworks: list[DiscoveredFramework]) -> list[DiscoveredFramework]:
         """Filter out frameworks already in the knowledge base."""

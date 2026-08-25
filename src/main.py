@@ -92,6 +92,40 @@ async def list_frameworks():
     }
 
 
+@app.get("/api/v1/frameworks/categorized")
+async def list_frameworks_categorized():
+    """List all frameworks in the knowledge base grouped by category."""
+    from src.knowledge_base.schema import (
+        FRAMEWORK_CATEGORIES, classify_framework_data,
+    )
+
+    categorized: dict[str, list] = {cat_id: [] for cat_id in FRAMEWORK_CATEGORIES}
+
+    for fw in kb.list_all():
+        cats = classify_framework_data(fw)
+        fw_info = {
+            "name": fw.framework_name,
+            "vendor": fw.vendor,
+            "license": fw.license,
+            "languages": fw.languages_supported,
+        }
+        for cat in cats:
+            if cat in categorized:
+                categorized[cat].append(fw_info)
+
+    return {
+        cat_id: {
+            "label": FRAMEWORK_CATEGORIES[cat_id]["label"],
+            "icon": FRAMEWORK_CATEGORIES[cat_id]["icon"],
+            "description": FRAMEWORK_CATEGORIES[cat_id]["description"],
+            "frameworks": fws,
+            "count": len(fws),
+        }
+        for cat_id, fws in categorized.items()
+        if fws
+    }
+
+
 @app.post("/api/v1/evaluate", response_model=DecisionMatrix)
 async def evaluate_frameworks(profile: UserProfile):
     """Evaluate and rank frameworks against a user profile."""
@@ -154,25 +188,54 @@ async def discover_frameworks(force: bool = False):
         force: If True, ignore scan interval and scan immediately.
 
     Returns:
-        List of newly discovered frameworks not in the knowledge base.
+        Discovered frameworks grouped by category, plus a flat list for backward compat.
     """
     from src.discovery.framework_scanner import FrameworkScanner
+    from src.knowledge_base.schema import FRAMEWORK_CATEGORIES
 
     scanner = FrameworkScanner(kb=kb, data_dir="data/frameworks")
     new_fws = scanner.scan(force=force)
+
+    # Flat list (backward compatible)
+    flat_list = [
+        {
+            "name": fw.name,
+            "description": fw.description,
+            "stars": fw.stars,
+            "language": fw.language,
+            "repo_url": fw.repo_url,
+            "license": fw.license,
+            "categories": fw.categories,
+        }
+        for fw in new_fws
+    ]
+
+    # Categorized view
+    categorized = scanner.get_categorized_results(new_fws)
+    categories_response = {
+        cat_id: {
+            "label": FRAMEWORK_CATEGORIES[cat_id]["label"],
+            "icon": FRAMEWORK_CATEGORIES[cat_id]["icon"],
+            "description": FRAMEWORK_CATEGORIES[cat_id]["description"],
+            "frameworks": [
+                {
+                    "name": fw.name,
+                    "description": fw.description,
+                    "stars": fw.stars,
+                    "language": fw.language,
+                    "repo_url": fw.repo_url,
+                    "license": fw.license,
+                }
+                for fw in fws
+            ],
+        }
+        for cat_id, fws in categorized.items()
+    }
+
     return {
-        "new_frameworks": [
-            {
-                "name": fw.name,
-                "description": fw.description,
-                "stars": fw.stars,
-                "language": fw.language,
-                "repo_url": fw.repo_url,
-                "license": fw.license,
-            }
-            for fw in new_fws
-        ],
+        "new_frameworks": flat_list,
         "count": len(new_fws),
+        "categorized": categories_response,
     }
 
 

@@ -6,6 +6,123 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# ── Framework Categories ──────────────────────────────────────────────
+# Categories used to group frameworks by their primary purpose.
+# A framework can belong to multiple categories.
+
+FRAMEWORK_CATEGORIES = {
+    "web_ui_testing": {
+        "label": "Web UI Testing",
+        "icon": "🌐",
+        "description": "Browser-based end-to-end and UI testing frameworks",
+        "architecture_keys": ["web_spa", "web_mpa"],
+        "topic_keywords": ["browser", "e2e", "ui", "web", "selenium", "playwright", "cypress"],
+    },
+    "api_testing": {
+        "label": "API Testing",
+        "icon": "🔌",
+        "description": "REST, GraphQL, and microservice testing frameworks",
+        "architecture_keys": ["api_testing", "microservices"],
+        "topic_keywords": ["api", "rest", "http", "graphql", "contract", "soap"],
+    },
+    "mobile_testing": {
+        "label": "Mobile Testing",
+        "icon": "📱",
+        "description": "Native and hybrid mobile app testing frameworks",
+        "architecture_keys": ["native_mobile", "hybrid_mobile"],
+        "topic_keywords": ["mobile", "ios", "android", "react-native", "appium", "detox"],
+    },
+    "performance_testing": {
+        "label": "Performance & Load Testing",
+        "icon": "⚡",
+        "description": "Load, stress, and performance testing frameworks",
+        "architecture_keys": ["performance_testing", "load_testing"],
+        "topic_keywords": ["load", "performance", "stress", "benchmark", "k6", "locust", "jmeter"],
+    },
+    "infrastructure_as_code": {
+        "label": "Infrastructure as Code",
+        "icon": "☁️",
+        "description": "Cloud provisioning, configuration management, and IaC tools",
+        "architecture_keys": ["cloud_infrastructure", "infrastructure_as_code", "configuration_management"],
+        "topic_keywords": ["infrastructure", "iac", "terraform", "ansible", "cloud", "devops", "provisioning"],
+    },
+    "desktop_testing": {
+        "label": "Desktop Testing",
+        "icon": "🖥️",
+        "description": "Desktop application testing frameworks",
+        "architecture_keys": ["desktop"],
+        "topic_keywords": ["desktop", "electron", "winappdriver", "gui"],
+    },
+}
+
+
+def classify_framework(
+    architecture_fit: dict[str, Any] | None = None,
+    description: str = "",
+    topics: list[str] | None = None,
+    category: str = "",
+) -> list[str]:
+    """Classify a framework into one or more categories.
+
+    Uses architecture_fit keys, description keywords, and topic tags to
+    determine which categories a framework belongs to.
+
+    Args:
+        architecture_fit: Dict of architecture support flags from YAML.
+        description: Framework description text.
+        topics: List of topic/tag strings (e.g. from GitHub).
+        category: The binary category field ("test_automation" or "cloud_infrastructure").
+
+    Returns:
+        List of category IDs (e.g. ["web_ui_testing", "api_testing"]).
+    """
+    matched: list[str] = []
+    desc_lower = description.lower()
+    topics_lower = [t.lower() for t in (topics or [])]
+
+    for cat_id, cat_def in FRAMEWORK_CATEGORIES.items():
+        # Check architecture_fit keys
+        if architecture_fit:
+            for arch_key in cat_def["architecture_keys"]:
+                value = architecture_fit.get(arch_key, False)
+                if value is True or (isinstance(value, str) and value.lower() not in ("false", "", "no")):
+                    matched.append(cat_id)
+                    break
+            else:
+                # No arch key matched — try description/topics
+                if any(kw in desc_lower for kw in cat_def["topic_keywords"]):
+                    matched.append(cat_id)
+                elif any(kw in t for t in topics_lower for kw in cat_def["topic_keywords"]):
+                    matched.append(cat_id)
+        else:
+            # No architecture_fit — rely on description and topics
+            if any(kw in desc_lower for kw in cat_def["topic_keywords"]):
+                matched.append(cat_id)
+            elif any(kw in t for t in topics_lower for kw in cat_def["topic_keywords"]):
+                matched.append(cat_id)
+
+    # Fallback: use the binary category field
+    if not matched:
+        if category == "cloud_infrastructure":
+            matched.append("infrastructure_as_code")
+        else:
+            matched.append("web_ui_testing")  # Default for test_automation
+
+    return matched
+
+
+def classify_framework_data(fw_data) -> list[str]:
+    """Classify a loaded FrameworkData object into categories."""
+    return classify_framework(
+        architecture_fit=fw_data.architecture_fit,
+        description="",
+        topics=[],
+        category=fw_data.category,
+    )
+
+
+# ── Completeness validation constants ─────────────────────────────────
+
 # Fields that MUST be populated (non-empty) for a framework to be considered complete.
 # These are critical for scoring, recommendations, and migration planning.
 REQUIRED_POPULATED_FIELDS = {
