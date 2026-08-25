@@ -80,6 +80,7 @@ class ToolExecutor:
             "analyze_prerequisites": self._analyze_prerequisites,
             "score_frameworks": self._score_frameworks,
             "convert_test_cases": self._convert_test_cases,
+            "list_frameworks_by_category": self._list_frameworks_by_category,
         }
 
     # ── Dispatch ──────────────────────────────────────────────────────
@@ -192,7 +193,7 @@ class ToolExecutor:
                 scored.append((score, fw))
 
         scored.sort(key=lambda x: -x[0])
-        top = [fw for _, fw in scored[:5]]
+        top = [fw for _, fw in scored[:10]]
 
         if not top:
             return f"No frameworks found matching: {query}"
@@ -617,6 +618,90 @@ class ToolExecutor:
             list({d["capability"] for d in analysis["matrix"].values()})
         )
         return report + ("\n" + note if note else "")
+    def _list_frameworks_by_category(self, category: str | None = None) -> str:
+        """List frameworks grouped by their functional category using architecture_fit classification."""
+        from collections import defaultdict
+        from src.knowledge_base.schema import FRAMEWORK_CATEGORIES, classify_framework_data
+
+        # Build a keyword → cat_id map for fuzzy matching user input
+        _KEYWORD_MAP: dict[str, str] = {
+            "api": "api_testing",
+            "rest": "api_testing",
+            "http": "api_testing",
+            "microservice": "api_testing",
+            "web": "web_ui_testing",
+            "ui": "web_ui_testing",
+            "browser": "web_ui_testing",
+            "e2e": "web_ui_testing",
+            "mobile": "mobile_testing",
+            "ios": "mobile_testing",
+            "android": "mobile_testing",
+            "performance": "performance_testing",
+            "load": "performance_testing",
+            "stress": "performance_testing",
+            "cloud": "infrastructure_as_code",
+            "infrastructure": "infrastructure_as_code",
+            "iac": "infrastructure_as_code",
+            "devops": "infrastructure_as_code",
+            "desktop": "desktop_testing",
+        }
+
+        # Classify every framework using architecture_fit (not the raw category string)
+        by_cat: dict[str, list] = defaultdict(list)
+        for fw in self.kb.list_all():
+            for cat_id in classify_framework_data(fw):
+                by_cat[cat_id].append(fw)
+
+        # Resolve requested category
+        target_cat: str | None = None
+        if category:
+            cat_lower = category.lower().strip()
+            # Direct match first
+            if cat_lower in FRAMEWORK_CATEGORIES:
+                target_cat = cat_lower
+            else:
+                # Keyword fuzzy match
+                for kw, cat_id in _KEYWORD_MAP.items():
+                    if kw in cat_lower:
+                        target_cat = cat_id
+                        break
+
+        if target_cat:
+            cat_def = FRAMEWORK_CATEGORIES[target_cat]
+            fws = sorted(by_cat.get(target_cat, []), key=lambda f: f.framework_name)
+            lines = [f"## {cat_def['icon']} {cat_def['label']} Frameworks ({len(fws)} found)\n",
+                     f"*{cat_def['description']}*\n"]
+            if not fws:
+                lines.append("No frameworks found for this category.")
+            else:
+                for fw in fws:
+                    arch_keys = [
+                        k.replace("_", " ").title()
+                        for k, v in fw.architecture_fit.items()
+                        if v is True or (isinstance(v, str) and v.lower() not in ("false", ""))
+                    ]
+                    langs = ", ".join(fw.languages_supported[:3])
+                    lines.append(f"### {fw.framework_name}")
+                    lines.append(f"- **Vendor:** {fw.vendor}")
+                    lines.append(f"- **Languages:** {langs}")
+                    lines.append(f"- **Architecture fit:** {', '.join(arch_keys[:5])}")
+                    if fw.limitations:
+                        lines.append(f"- **Key limitation:** {fw.limitations[0]}")
+                    lines.append("")
+        else:
+            # No category filter — show all grouped
+            lines = ["## All Frameworks by Category\n"]
+            for cat_id, cat_def in FRAMEWORK_CATEGORIES.items():
+                fws = sorted(by_cat.get(cat_id, []), key=lambda f: f.framework_name)
+                if not fws:
+                    continue
+                lines.append(f"### {cat_def['icon']} {cat_def['label']} ({len(fws)})")
+                for fw in fws:
+                    lines.append(f"- **{fw.framework_name}** ({fw.vendor})")
+                lines.append("")
+
+        return "\n".join(lines)
+
     def _analyze_uploaded_content(self, search_term: str, document_type: str = "all") -> str:
         results = []
         term = search_term.lower()

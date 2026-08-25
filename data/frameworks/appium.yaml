@@ -4,6 +4,7 @@ license: "Apache-2.0"
 website: "https://appium.io"
 first_release: "2013"
 latest_version: "2.x"
+category: "test_automation"
 languages_supported:
   - Python
   - Java
@@ -20,6 +21,12 @@ architecture_fit:
   desktop: "partial (Windows/Mac drivers)"
   api_testing: false
   microservices: false
+  performance_testing: false
+  load_testing: false
+  cloud_infrastructure: false
+  infrastructure_as_code: false
+  multi_cloud: false
+  hybrid_cloud: false
 
 capabilities:
   shadow_dom: false
@@ -38,6 +45,33 @@ capabilities:
   accessibility_testing: "native platform APIs"
   gesture_support: true
   device_farm_support: true
+  protocol_support: ["W3C WebDriver"]
+  schema_validation: false
+  json_path_support: false
+  xml_path_support: false
+  drift_detection: false
+  state_management: false
+  plan_and_apply: false
+  policy_as_code: false
+
+cloud_providers:
+  aws: false
+  azure: false
+  gcp: false
+  kubernetes: false
+
+testing_capabilities:
+  unit_testing: false
+  integration_testing: false
+  e2e_testing: true
+  component_testing: false
+  visual_testing: "third-party"
+  accessibility_testing: "native platform APIs"
+  api_testing: false
+  performance_testing: false
+
+cloud_migration_metrics:
+  not_applicable: true
 
 cicd_integration:
   docker_support: "limited (Android emulators only)"
@@ -46,6 +80,10 @@ cicd_integration:
   gitlab_ci: true
   azure_devops: true
   pre_built_docker_images: "community (Android only)"
+  terraform_cloud: false
+  atlantis: false
+  aws_codepipeline: false
+  aws_codebuild: false
 
 cloud_grids:
   browserstack: true

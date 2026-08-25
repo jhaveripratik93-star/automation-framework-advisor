@@ -12,10 +12,9 @@ logger = logging.getLogger(__name__)
 def llm_retry(max_retries: int = 2, initial_wait: float = 0.5) -> Callable:
     """Decorator: retry LLM calls on transient errors with exponential backoff.
 
-    Usage:
-        @llm_retry(max_retries=2, initial_wait=0.5)
-        def _call_llm(self, message: str) -> str:
-            ...
+    400 (bad request), 401 (auth), 403 (forbidden) are NOT retried — they
+    will never succeed without a config change.
+    Only 429 (rate limit) and 5xx (server errors) are worth retrying.
     """
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
@@ -28,13 +27,25 @@ def llm_retry(max_retries: int = 2, initial_wait: float = 0.5) -> Callable:
                     return func(*args, **kwargs)
                 except Exception as exc:
                     last_exc = exc
+                    # Don't retry permanent client errors
+                    exc_str = str(exc)
+                    is_permanent = any(code in exc_str for code in (
+                        "400", "401", "403", "model_decommissioned",
+                        "invalid_request_error", "GROQ_API_KEY is not set",
+                    ))
+                    if is_permanent:
+                        logger.error(
+                            "llm_retry: %s permanent error — not retrying: %s",
+                            func.__name__, exc,
+                        )
+                        break
                     if attempt < max_retries:
                         logger.warning(
                             "llm_retry: %s attempt %d/%d failed (%s), retrying in %.1fs",
                             func.__name__, attempt + 1, max_retries + 1, exc, wait,
                         )
                         time.sleep(wait)
-                        wait *= 2  # exponential backoff
+                        wait *= 2
                     else:
                         logger.error(
                             "llm_retry: %s exhausted %d retries", func.__name__, max_retries + 1,

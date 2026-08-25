@@ -4,6 +4,7 @@ license: "MIT"
 website: "https://webdriver.io"
 first_release: "2015"
 latest_version: "8.x"
+category: "test_automation"
 languages_supported:
   - JavaScript
   - TypeScript
@@ -16,6 +17,12 @@ architecture_fit:
   desktop: "partial (via Electron)"
   api_testing: true
   microservices: "partial"
+  performance_testing: false
+  load_testing: false
+  cloud_infrastructure: false
+  infrastructure_as_code: false
+  multi_cloud: false
+  hybrid_cloud: false
 
 capabilities:
   shadow_dom: true
@@ -32,6 +39,35 @@ capabilities:
   code_generation: false
   component_testing: true
   accessibility_testing: "plugin (@wdio/axe-service)"
+  gesture_support: "via Appium"
+  device_farm_support: true
+  protocol_support: ["HTTP/HTTPS", "WebSocket"]
+  schema_validation: false
+  json_path_support: false
+  xml_path_support: false
+  drift_detection: false
+  state_management: false
+  plan_and_apply: false
+  policy_as_code: false
+
+cloud_providers:
+  aws: false
+  azure: false
+  gcp: false
+  kubernetes: false
+
+testing_capabilities:
+  unit_testing: false
+  integration_testing: "via API testing mode"
+  e2e_testing: true
+  component_testing: true
+  visual_testing: "plugin"
+  accessibility_testing: "plugin"
+  api_testing: true
+  performance_testing: false
+
+cloud_migration_metrics:
+  not_applicable: true
 
 cicd_integration:
   docker_support: true
@@ -40,6 +76,10 @@ cicd_integration:
   gitlab_ci: true
   azure_devops: true
   pre_built_docker_images: "community"
+  terraform_cloud: false
+  atlantis: false
+  aws_codepipeline: false
+  aws_codebuild: false
 
 cloud_grids:
   browserstack: true

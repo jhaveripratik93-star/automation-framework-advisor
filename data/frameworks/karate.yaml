@@ -4,6 +4,7 @@ license: "MIT"
 website: "https://karatelabs.github.io/karate/"
 first_release: "2017"
 latest_version: "1.5+"
+category: "test_automation"
 languages_supported:
   - "Karate DSL (Gherkin-like)"
   - "Java (for extensions)"
@@ -16,6 +17,12 @@ architecture_fit:
   desktop: "via Appium/WinAppDriver"
   api_testing: true
   microservices: true
+  performance_testing: false
+  load_testing: false
+  cloud_infrastructure: false
+  infrastructure_as_code: false
+  multi_cloud: false
+  hybrid_cloud: false
 
 capabilities:
   shadow_dom: "via Playwright engine"
@@ -32,12 +39,40 @@ capabilities:
   code_generation: false
   component_testing: false
   accessibility_testing: false
+  gesture_support: false
+  device_farm_support: false
   protocol_support:
     - HTTP/HTTPS
     - GraphQL
     - WebSocket
     - gRPC
     - SOAP
+  schema_validation: true
+  json_path_support: true
+  xml_path_support: true
+  drift_detection: false
+  state_management: false
+  plan_and_apply: false
+  policy_as_code: false
+
+cloud_providers:
+  aws: false
+  azure: false
+  gcp: false
+  kubernetes: false
+
+testing_capabilities:
+  unit_testing: false
+  integration_testing: true
+  e2e_testing: "via Karate UI"
+  component_testing: false
+  visual_testing: false
+  accessibility_testing: false
+  api_testing: true
+  performance_testing: "via Gatling integration"
+
+cloud_migration_metrics:
+  not_applicable: true
 
 cicd_integration:
   docker_support: true
@@ -46,6 +81,10 @@ cicd_integration:
   gitlab_ci: true
   azure_devops: true
   pre_built_docker_images: "community"
+  terraform_cloud: false
+  atlantis: false
+  aws_codepipeline: false
+  aws_codebuild: false
 
 cloud_grids:
   browserstack: "limited"

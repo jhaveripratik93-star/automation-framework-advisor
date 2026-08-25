@@ -80,9 +80,9 @@ class AdvisorLLM:
             if graph_ctx:
                 system += f"\n\n## Knowledge Graph Context:\n{graph_ctx[:3000]}"
             if uploaded_docs:
-                system += f"\n\n## Uploaded Files:\n{uploaded_docs[:1500]}"
+                system += f"\n\n## Uploaded Files:\n{uploaded_docs[:2000]}"
             if case_study:
-                system += f"\n\n## Case Study:\n{case_study[:1500]}"
+                system += f"\n\n## Case Study:\n{case_study[:4000]}"
 
             messages = list(self._history) + [{"role": "user", "content": user_message}]
             result = self._client.chat(messages=messages, system=system)

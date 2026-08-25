@@ -234,6 +234,21 @@ for k, v in _DEFAULTS.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
+# Auto-load persisted case study files from disk into session state
+if not st.session_state.get("_case_studies_loaded"):
+    _cs_dir = Path("data/frameworks/case_studies")
+    if _cs_dir.exists():
+        _parts = []
+        for _f in sorted(_cs_dir.glob("*.txt")):
+            try:
+                _text = _f.read_text(encoding="utf-8")
+                _parts.append(f"--- Source: {_f.stem} ---\n{_text}")
+            except Exception:
+                pass
+        if _parts:
+            st.session_state.case_study_context = "\n\n".join(_parts)
+    st.session_state["_case_studies_loaded"] = True
+
 
 # ── Loading indicator ─────────────────────────────────────────────────
 def _render_loading(steps: list[str], current: int, title: str = "AI is thinking…") -> None:
@@ -339,12 +354,12 @@ def _render_sidebar() -> None:
         </div>
         """, unsafe_allow_html=True)
 
-        if page in ("home", "advisor"):
+        if page in ("advisor"):
             # ── Scoring Weights ───────────────────────────────────────────
             st.markdown('<div class="sidebar-section">⚖️ Scoring Weights</div>',
                         unsafe_allow_html=True)
 
-            with st.expander("⚖️ Adjust Weights", expanded=True):
+            with st.expander("⚖️ Adjust Weights", expanded=False):
                 preset_names = list(PRESETS.keys())
 
                 def _on_preset_change():
@@ -428,18 +443,74 @@ def _render_sidebar() -> None:
                     st.success(f"✓ {len(files)} file(s) loaded")
 
             with st.expander("📚 Upload Case Study", expanded=False):
-                cs_file = st.file_uploader(
-                    "Case study (txt/md)", type=["txt", "md"], key="case_study",
-                )
-                if cs_file and st.button("📖 Parse", key="parse_cs"):
-                    try:
-                        text = cs_file.read().decode("utf-8")
-                        st.session_state.case_study_context = text
-                        st.success(f"✓ {len(text)} chars parsed")
-                    except Exception as exc:
-                        st.error(str(exc))
+                cs_tab_file, cs_tab_url = st.tabs(["📄 File", "🔗 URL"])
+
+                with cs_tab_file:
+                    cs_file = st.file_uploader(
+                        "Case study (txt/md)", type=["txt", "md"], key="case_study",
+                    )
+                    if cs_file and st.button("📖 Parse", key="parse_cs"):
+                        try:
+                            text = cs_file.read().decode("utf-8")
+                            st.session_state.case_study_context = text
+                            _ingest_case_study_to_kb(text, source=cs_file.name)
+                            st.success(f"✓ {len(text)} chars parsed & added to KB")
+                        except Exception as exc:
+                            st.error(str(exc))
+
+                with cs_tab_url:
+                    if "case_study_urls" not in st.session_state:
+                        st.session_state.case_study_urls = []
+                    url_input = st.text_input(
+                        "Paste URL", placeholder="https://example.com/case-study",
+                        key="cs_url_input",
+                    )
+                    if st.button("➕ Fetch & Add", key="cs_fetch_url"):
+                        url = url_input.strip()
+                        if not url:
+                            st.warning("Enter a URL first.")
+                        elif url in st.session_state.case_study_urls:
+                            st.warning("URL already added.")
+                        else:
+                            with st.spinner("Fetching…"):
+                                content, err = _fetch_url_content(url)
+                            if err:
+                                st.error(err)
+                            else:
+                                chunk = f"\n\n--- Source: {url} ---\n{content}"
+                                st.session_state.case_study_context = (
+                                    st.session_state.get("case_study_context", "") + chunk
+                                )
+                                st.session_state.case_study_urls.append(url)
+                                _ingest_case_study_to_kb(content, source=url)
+                                st.success(f"✓ Fetched {len(content)} chars")
+                                st.rerun()
+
+                    if st.session_state.case_study_urls:
+                        st.caption(f"{len(st.session_state.case_study_urls)} URL(s) loaded:")
+                        for _u in st.session_state.case_study_urls:
+                            st.markdown(f"· `{_u}`")
+                        if st.button("🗑 Clear all URLs", key="cs_clear_urls"):
+                            st.session_state.case_study_urls = []
+                            st.session_state.case_study_context = ""
+                            st.rerun()
 
             # ── Framework Discovery ───────────────────────────────────
+        if page in ("home"):
+            st.markdown("---")
+            st.markdown('<div class="sidebar-section">📚 Available Frameworks</div>',
+                        unsafe_allow_html=True)
+            all_fws = kb.list_all()
+            # Group by category
+            from collections import defaultdict
+            fw_by_cat: dict = defaultdict(list)
+            for _fw in all_fws:
+                fw_by_cat[_fw.category or "Other"].append(_fw.framework_name)
+            for _cat, _names in sorted(fw_by_cat.items()):
+                with st.expander(f"{_cat} ({len(_names)})", expanded=False):
+                    for _name in sorted(_names):
+                        st.markdown(f"· {_name}")
+
             st.markdown("---")
             st.markdown('<div class="sidebar-section">🔍 Framework Discovery</div>',
                         unsafe_allow_html=True)
@@ -567,6 +638,53 @@ def _render_sidebar() -> None:
 
 
 
+# ── Case study helpers ───────────────────────────────────────────────
+def _fetch_url_content(url: str) -> tuple[str, str]:
+    """Fetch URL and return (clean_text, error_msg). error_msg is '' on success."""
+    try:
+        import httpx
+        from bs4 import BeautifulSoup
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Referer": "https://www.google.com/",
+        }
+        resp = httpx.get(url, timeout=15, follow_redirects=True, headers=headers)
+        if resp.status_code == 403:
+            return "", (
+                f"⛔ 403 Forbidden — '{url}' blocks automated access (bot protection / Cloudflare). "
+                "Try copying the page text manually and uploading it as a .txt file instead."
+            )
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        for tag in soup(["script", "style", "nav", "footer", "header"]):
+            tag.decompose()
+        text = " ".join(soup.get_text(separator=" ").split())
+        if not text.strip():
+            return "", "Page fetched but no readable text found (may be JavaScript-rendered)."
+        return text[:8000], ""
+    except httpx.HTTPStatusError as exc:
+        return "", f"HTTP {exc.response.status_code} error fetching URL."
+    except Exception as exc:
+        return "", str(exc)
+
+
+def _ingest_case_study_to_kb(text: str, source: str = "case_study") -> None:
+    """Write case study text as a plain-text entry in data/frameworks/case_studies/."""
+    try:
+        import re, hashlib
+        slug = re.sub(r"[^a-z0-9]+", "_", source.lower())[:40]
+        uid  = hashlib.md5(text[:200].encode()).hexdigest()[:6]
+        dest = Path("data/frameworks/case_studies")
+        dest.mkdir(parents=True, exist_ok=True)
+        (dest / f"{slug}_{uid}.txt").write_text(text, encoding="utf-8")
+    except Exception as exc:
+        logger.warning("_ingest_case_study_to_kb failed: %s", exc)
+
+
 # ── Home page ─────────────────────────────────────────────────────────
 def _render_home() -> None:
     fw_count = len(kb.list_all())
@@ -592,7 +710,7 @@ def _render_home() -> None:
             <div class="home-stat-label">Powered by Groq LLM</div>
         </div>
         <div style="text-align:center">
-            <div class="home-stat-value">3</div>
+            <div class="home-stat-value">4</div>
             <div class="home-stat-label">Core Features</div>
         </div>
         <div style="text-align:center">
@@ -603,7 +721,7 @@ def _render_home() -> None:
     """, unsafe_allow_html=True)
 
     # Feature cards
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.markdown("""
         <div class="feature-card">
@@ -666,10 +784,31 @@ def _render_home() -> None:
             st.session_state.page = "coverage"
             st.rerun()
 
+    with c4:
+        st.markdown("""
+        <div class="feature-card">
+            <span class="feature-card-icon">🤖</span>
+            <div class="feature-card-title">Test Generator</div>
+            <div class="feature-card-desc">
+                Convert manual test cases into executable automated test code.
+                Supports Playwright, Selenium, Cypress, and Robot Framework
+                with page objects, fixtures, and CI/CD config.
+            </div>
+            <div class="feature-card-tags">
+                <span class="feature-tag">Manual → Auto</span>
+                <span class="feature-tag">Page Objects</span>
+                <span class="feature-tag">Multi-framework</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("Open Test Generator →", key="home_go_codegen", use_container_width=True):
+            st.session_state.page = "codegen"
+            st.rerun()
+
     # Quick start guide
     st.markdown("---")
     st.markdown("#### 🚀 Quick Start")
-    qa, qb, qc = st.columns(3)
+    qa, qb, qc, qd = st.columns(4)
     with qa:
         st.markdown("""
         **New to the tool?**
@@ -690,6 +829,13 @@ def _render_home() -> None:
         1. Go to **Coverage Analyser**
         2. Upload your test case Excel sheet
         3. See which frameworks cover 100% of your needs
+        """)
+    with qd:
+        st.markdown("""
+        **Automating manual tests?**
+        1. Go to **Test Generator**
+        2. Enter or upload manual test cases
+        3. Download generated test code as a ZIP
         """)
 
 
@@ -718,6 +864,12 @@ _TOPIC_KEYWORDS = {
     # general dev
     "python", "javascript", "typescript", "java", "node", "npm", "pip",
     "package", "dependency", "library", "plugin", "extension",
+    # case study / document / tool usage
+    "case study", "case", "study", "document", "upload", "uploaded",
+    "how", "what", "info", "information", "tell", "give", "show", "explain",
+    "help", "weight", "preset", "score", "advisor", "tool", "feature",
+    "amazon", "google", "microsoft", "netflix", "uber", "airbnb",
+    "company", "project", "team", "enterprise", "startup", "organization",
 }
 
 _OFF_TOPIC_REPLY = (
