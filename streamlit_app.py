@@ -454,14 +454,36 @@ def _render_sidebar() -> None:
                 if st.session_state.get("scan_results"):
                     results = st.session_state.scan_results
                     st.success(f"Found {len(results)} new framework(s)")
-                    for fw in results:
-                        col_name, col_btn = st.columns([3, 1])
-                        with col_name:
-                            st.markdown(f"**{fw.name}** ⭐{fw.stars}")
-                            st.caption(fw.description[:80])
-                        with col_btn:
-                            if st.button("➕", key=f"add_{fw.name}", help=f"Add {fw.name}"):
-                                _add_single_framework(fw.name)
+
+                    # Group by category
+                    from src.knowledge_base.schema import FRAMEWORK_CATEGORIES
+                    categorized = _scanner.get_categorized_results(results)
+
+                    if categorized:
+                        for cat_id, fws in categorized.items():
+                            cat_def = FRAMEWORK_CATEGORIES[cat_id]
+                            with st.expander(
+                                f"{cat_def['icon']} {cat_def['label']} ({len(fws)})",
+                                expanded=False,
+                            ):
+                                for fw in fws:
+                                    col_name, col_btn = st.columns([3, 1])
+                                    with col_name:
+                                        st.markdown(f"**{fw.name}** ⭐{fw.stars}")
+                                        st.caption(fw.description[:70])
+                                    with col_btn:
+                                        if st.button("➕", key=f"add_{cat_id}_{fw.name}", help=f"Add {fw.name}"):
+                                            _add_single_framework(fw.name)
+                    else:
+                        # Fallback: flat list if no categories
+                        for fw in results:
+                            col_name, col_btn = st.columns([3, 1])
+                            with col_name:
+                                st.markdown(f"**{fw.name}** ⭐{fw.stars}")
+                                st.caption(fw.description[:80])
+                            with col_btn:
+                                if st.button("➕", key=f"add_{fw.name}", help=f"Add {fw.name}"):
+                                    _add_single_framework(fw.name)
 
                     if st.button("➕ Add All", key="add_all_frameworks", use_container_width=True):
                         _add_all_discovered_frameworks()

@@ -69,6 +69,7 @@ class DiscoveredFramework:
     topics: list[str] = field(default_factory=list)
     last_updated: str = ""
     homepage: str = ""
+    categories: list[str] = field(default_factory=list)  # e.g. ["web_ui_testing", "api_testing"]
 
 
 class FrameworkScanner:
@@ -143,6 +144,34 @@ class FrameworkScanner:
             len(new_frameworks),
         )
         return new_frameworks
+
+    def get_categorized_results(
+        self, frameworks: list[DiscoveredFramework] | None = None
+    ) -> dict[str, list[DiscoveredFramework]]:
+        """Group discovered frameworks by category.
+
+        Args:
+            frameworks: List of discovered frameworks. If None, uses last scan results.
+
+        Returns:
+            Dict mapping category_id -> list of DiscoveredFramework in that category.
+            A framework may appear in multiple categories.
+        """
+        from src.knowledge_base.schema import FRAMEWORK_CATEGORIES
+
+        fws = frameworks if frameworks is not None else self._scan_results
+        categorized: dict[str, list[DiscoveredFramework]] = {
+            cat_id: [] for cat_id in FRAMEWORK_CATEGORIES
+        }
+
+        for fw in fws:
+            cats = fw.categories or self._classify_discovered(fw)
+            for cat in cats:
+                if cat in categorized:
+                    categorized[cat].append(fw)
+
+        # Remove empty categories
+        return {k: v for k, v in categorized.items() if v}
 
     def research_framework(self, name: str) -> dict[str, Any] | None:
         """Research a specific framework and generate a full YAML profile.
@@ -230,6 +259,20 @@ class FrameworkScanner:
                 self._kb.load()
                 logger.info("Knowledge base reloaded — now has %d frameworks", len(self._kb.list_all()))
 
+                # Update knowledge graph with the new framework
+                try:
+                    from src.knowledge_base.schema import FrameworkData as FD
+                    from src.graph import update_graph_with_framework
+
+                    fw_data = FD(**profile)
+                    update_graph_with_framework(fw_data, self._kb)
+                    logger.info("Knowledge graph updated with '%s'", profile["framework_name"])
+                except Exception as graph_exc:
+                    logger.warning(
+                        "Failed to update knowledge graph for '%s': %s",
+                        profile["framework_name"], graph_exc,
+                    )
+
             return filepath
         except Exception as exc:
             logger.error("Failed to write %s: %s", filepath, exc)
@@ -303,6 +346,7 @@ class FrameworkScanner:
                         last_updated=item.get("pushed_at", ""),
                         homepage=item.get("homepage", "") or "",
                     )
+                    fw.categories = self._classify_discovered(fw)
                     results.append(fw)
 
                 # Be nice to GitHub API
@@ -425,6 +469,9 @@ class FrameworkScanner:
                 homepage="https://dredd.org/",
             ),
         ]
+        # Classify each curated framework
+        for fw in curated:
+            fw.categories = self._classify_discovered(fw)
         return curated
 
     # ── Info gathering ────────────────────────────────────────────────
@@ -1038,6 +1085,15 @@ Use true/false for booleans, use "limited" or "plugin (name)" for partial suppor
 
         return profile
 
+    def _classify_discovered(self, fw: DiscoveredFramework) -> list[str]:
+        """Classify a discovered framework into categories using available metadata."""
+        from src.knowledge_base.schema import classify_framework
+        return classify_framework(
+            architecture_fit=None,
+            description=fw.description,
+            topics=fw.topics,
+        )
+
     def _filter_existing(self, frameworks: list[DiscoveredFramework]) -> list[DiscoveredFramework]:
         """Filter out frameworks already in the knowledge base."""
         if not self._kb:
@@ -1048,18 +1104,39 @@ Use true/false for booleans, use "limited" or "plugin (name)" for partial suppor
         existing_display = {fw.framework_name.lower() for fw in self._kb.list_all()}
         all_existing = existing_names | existing_display
 
+        # Build normalized set (no spaces, hyphens, underscores) for fuzzy matching
+        all_existing_normalized = {
+            name.replace(" ", "").replace("-", "").replace("_", "")
+            for name in all_existing
+        }
+
         new: list[DiscoveredFramework] = []
         for fw in frameworks:
             name_lower = fw.name.lower().replace("-", " ").replace("_", " ")
-            # Check various normalizations
-            if name_lower not in all_existing and name_lower.replace(" ", "") not in all_existing:
-                # Also check partial matches (e.g. "playwright" in "playwright-python")
+            name_normalized = name_lower.replace(" ", "")
+
+            # Direct match (with spaces)
+            if name_lower in all_existing:
+                continue
+
+            # Normalized match (no spaces/hyphens/underscores)
+            if name_normalized in all_existing_normalized:
+                continue
+
+            # Partial match (e.g. "playwright" in "playwright-python")
+            is_existing = any(
+                existing in name_lower or name_lower in existing
+                for existing in all_existing
+            )
+            # Also check partial with normalized names
+            if not is_existing:
                 is_existing = any(
-                    existing in name_lower or name_lower in existing
-                    for existing in all_existing
+                    existing in name_normalized or name_normalized in existing
+                    for existing in all_existing_normalized
                 )
-                if not is_existing:
-                    new.append(fw)
+
+            if not is_existing:
+                new.append(fw)
 
         return new
 
