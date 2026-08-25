@@ -1,5 +1,7 @@
 """Evaluation Agent — takes raw tool output(s) and the original user query,
 then uses the LLM to produce a coherent, grounded evaluation/answer.
+
+Integrates with LangGraph state, conversation memory, and retry policies.
 """
 from __future__ import annotations
 
@@ -7,18 +9,21 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from src.agents.memory import AgentMemory
+from src.agents.retry import llm_retry
+
 if TYPE_CHECKING:
-    from src.llm.ollama_client import OllamaClient
+    from src.agents.state import AgentState
 
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = (
     "You are an expert Automation Framework Migration Advisor. "
-    "Answer concisely in 150-250 words maximum. "
-    "Use a short markdown table for comparisons. "
-    "No preamble, no repetition, no filler sentences. "
-    "Tie recommendations to the user profile when available."
+    "You have been given tool results containing framework data. "
+    "Use ONLY the provided data to answer the user's question. "
+    "Be specific, concise, and complete. Do not hallucinate framework names or scores."
 )
+
 
 @dataclass
 class EvaluationResult:
@@ -28,10 +33,21 @@ class EvaluationResult:
 
 
 class EvaluationAgent:
-    """Synthesises tool outputs into a coherent LLM response."""
+    """Synthesises tool outputs into a coherent LLM response.
 
-    def __init__(self, llm_client: OllamaClient) -> None:
+    Maintains conversation memory to provide context-aware evaluations
+    that reference previous interactions when relevant.
+    """
+
+    def __init__(self, llm_client) -> None:
         self._client = llm_client
+        self._memory = AgentMemory(agent_name="evaluation_agent", max_entries=15)
+
+    @llm_retry(max_retries=3, initial_wait=1.0)
+    def _call_llm(self, messages: list[dict[str, str]], system: str) -> str:
+        """LLM call with retry policy for transient failures."""
+        result = self._client.chat(messages=messages, system=system, tools=None)
+        return result.get("content", "").strip()
 
     def evaluate(
         self,
@@ -40,6 +56,7 @@ class EvaluationAgent:
         graph_context: str = "",
         profile_context: str = "",
         reflection_critique: str = "",
+        conversation_history: list[dict[str, str]] | None = None,
     ) -> EvaluationResult:
         """Combine tool results and ask LLM to produce a final answer.
 
@@ -48,6 +65,8 @@ class EvaluationAgent:
             tool_results: List of {"tool_name": str, "result": str} dicts.
             graph_context: Pre-retrieved graph context (may be empty).
             profile_context: User profile summary string (may be empty).
+            reflection_critique: Feedback from reflection agent for revision.
+            conversation_history: Recent conversation for context continuity.
         """
         # Build context block from tool results
         tool_block = ""
@@ -62,11 +81,16 @@ class EvaluationAgent:
         if graph_context:
             system += f"\n\n## Knowledge Graph Context:\n{graph_context[:2000]}"
 
+        # Include agent memory for context continuity
+        memory_context = self._memory.get_context_string(last_n=3)
+        if memory_context:
+            system += f"\n\n{memory_context}"
+
         prompt = (
             f"User question: {user_message}\n\n"
-            f"## Tool Results:{tool_block[:3000]}\n\n"
+            f"## Tool Results:{tool_block}\n\n"
             + (f"## Revision Request:\n{reflection_critique}\n\n" if reflection_critique else "")
-            + "Answer the user question in 150-250 words. Be direct and concise."
+            + "Based on the tool results above, provide a complete and specific answer."
         )
 
         logger.info(
@@ -74,16 +98,25 @@ class EvaluationAgent:
             len(tool_results), user_message,
         )
 
+        # Build messages including recent conversation history
+        messages = []
+        if conversation_history:
+            for msg in conversation_history[-6:]:
+                messages.append({"role": msg["role"], "content": msg["content"][:500]})
+        messages.append({"role": "user", "content": prompt})
+
         try:
-            result = self._client.chat(
-                messages=[{"role": "user", "content": prompt}],
-                system=system,
-                tools=None,
-            )
-            response_text = result.get("content", "").strip()
+            response_text = self._call_llm(messages=messages, system=system)
+            if not response_text:
+                response_text = tool_block.strip() or "No data available."
         except Exception as exc:
-            logger.warning("EvaluationAgent: LLM call failed (%s) — returning raw tool output", exc)
+            logger.warning(
+                "EvaluationAgent: LLM call failed after retries (%s) — returning raw tool output", exc
+            )
             response_text = tool_block.strip() or "No data available."
+
+        # Store in memory
+        self._memory.add("evaluation", f"Q: {user_message[:80]} → A: {response_text[:100]}")
 
         logger.info("EvaluationAgent: response_len=%d", len(response_text))
         return EvaluationResult(
@@ -91,3 +124,19 @@ class EvaluationAgent:
             tool_results_used=tool_names_used,
             reasoning=f"synthesised {len(tool_results)} tool result(s)",
         )
+
+    def run_node(self, state: AgentState) -> dict[str, Any]:
+        """LangGraph node entry point — reads/writes from shared state."""
+        result = self.evaluate(
+            user_message=state["user_message"],
+            tool_results=state.get("tool_results", []),
+            graph_context=state.get("graph_context", ""),
+            profile_context=state.get("profile_context", ""),
+            reflection_critique=state.get("reflection_critique", ""),
+            conversation_history=state.get("conversation_history", []),
+        )
+        return {"evaluation_response": result.response}
+
+    @property
+    def memory(self) -> AgentMemory:
+        return self._memory
