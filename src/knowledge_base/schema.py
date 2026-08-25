@@ -53,6 +53,48 @@ FRAMEWORK_CATEGORIES = {
         "architecture_keys": ["desktop"],
         "topic_keywords": ["desktop", "electron", "winappdriver", "gui"],
     },
+    "unit_testing": {
+        "label": "Unit & Integration Testing",
+        "icon": "🧪",
+        "description": "Unit test runners and integration testing frameworks",
+        "architecture_keys": ["unit_testing"],
+        "topic_keywords": ["unit-testing", "unit", "test-runner", "test-framework", "integration-testing", "pytest", "junit", "jest", "mocha", "vitest", "nunit", "xunit", "rspec"],
+    },
+    "bdd_testing": {
+        "label": "BDD & Acceptance Testing",
+        "icon": "📋",
+        "description": "Behaviour-driven development and acceptance testing frameworks",
+        "architecture_keys": ["bdd"],
+        "topic_keywords": ["bdd", "gherkin", "cucumber", "behave", "specflow", "acceptance-testing"],
+    },
+    "security_testing": {
+        "label": "Security Testing",
+        "icon": "🔒",
+        "description": "Security scanning, penetration testing, and vulnerability detection",
+        "architecture_keys": ["security_testing"],
+        "topic_keywords": ["security", "penetration-testing", "vulnerability", "dast", "sast", "owasp", "web-security"],
+    },
+    "visual_testing": {
+        "label": "Visual & Accessibility Testing",
+        "icon": "👁️",
+        "description": "Visual regression, component testing, and accessibility validation",
+        "architecture_keys": ["visual_testing", "accessibility_testing"],
+        "topic_keywords": ["visual-testing", "visual", "regression", "accessibility", "a11y", "wcag", "component-testing", "storybook"],
+    },
+    "chaos_engineering": {
+        "label": "Chaos Engineering",
+        "icon": "💥",
+        "description": "Resilience testing and chaos engineering tools",
+        "architecture_keys": ["chaos_engineering", "resilience_testing"],
+        "topic_keywords": ["chaos", "chaos-engineering", "resilience", "fault-injection", "chaos-monkey"],
+    },
+    "contract_testing": {
+        "label": "Contract Testing",
+        "icon": "📝",
+        "description": "Consumer-driven contract testing for microservices",
+        "architecture_keys": ["contract_testing"],
+        "topic_keywords": ["contract-testing", "consumer-driven", "pact", "openapi", "api-blueprint"],
+    },
 }
 
 
