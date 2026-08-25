@@ -4,11 +4,20 @@ either approves it or requests a revision with specific feedback.
 Sits between evaluate → format in the pipeline:
   evaluate → reflect → [approve] → format
                      → [revise]  → evaluate (with critique injected)
+
+Integrates with LangGraph state, conversation memory, and retry policies.
 """
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Any, TYPE_CHECKING
+
+from src.agents.memory import AgentMemory
+from src.agents.retry import llm_retry
+
+if TYPE_CHECKING:
+    from src.agents.state import AgentState
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +48,23 @@ class ReflectionResult:
 
 
 class ReflectionAgent:
-    """Critiques the draft response and returns approve/revise + feedback."""
+    """Critiques the draft response and returns approve/revise + feedback.
+
+    Maintains memory of reflection cycles for context across revision rounds.
+    """
 
     def __init__(self, llm_client=None) -> None:
         self._client = llm_client
+        self._memory = AgentMemory(agent_name="reflection_agent", max_entries=10)
+
+    @llm_retry(max_retries=2, initial_wait=0.5)
+    def _call_llm(self, prompt: str) -> str:
+        """LLM call with retry policy for transient failures."""
+        result = self._client.chat(
+            messages=[{"role": "user", "content": prompt}],
+            system=_SYSTEM_PROMPT,
+        )
+        return result.get("content", "").strip()
 
     def reflect(
         self,
@@ -61,21 +83,51 @@ class ReflectionAgent:
             logger.info("ReflectionAgent: max reflections reached — approving")
             return ReflectionResult(approved=True, critique="Max reflections reached.")
 
+        # Include memory context for multi-round reflections
+        memory_ctx = self._memory.get_context_string(last_n=3)
+
         prompt = (
             f"User question: {user_message}\n\n"
             f"Draft response:\n{draft_response}\n\n"
-            "Review the draft and respond in the required format."
         )
+        if memory_ctx:
+            prompt += f"\n{memory_ctx}\n\n"
+        prompt += "Review the draft and respond in the required format."
+
         try:
-            result = self._client.chat(
-                messages=[{"role": "user", "content": prompt}],
-                system=_SYSTEM_PROMPT,
-            )
-            raw = result.get("content", "").strip()
-            return self._parse(raw)
+            raw = self._call_llm(prompt)
+            result = self._parse(raw)
         except Exception as exc:
-            logger.warning("ReflectionAgent: LLM call failed (%s) — approving draft", exc)
-            return ReflectionResult(approved=True, critique="Reflection unavailable.")
+            logger.warning("ReflectionAgent: LLM call failed after retries (%s) — approving draft", exc)
+            result = ReflectionResult(approved=True, critique="Reflection unavailable.")
+
+        # Store in memory for context in subsequent reflection rounds
+        self._memory.add(
+            "reflection",
+            f"round={reflection_count} approved={result.approved} critique='{result.critique[:80]}'",
+            {"approved": result.approved, "round": reflection_count},
+        )
+
+        return result
+
+    def run_node(self, state: AgentState) -> dict[str, Any]:
+        """LangGraph node entry point — reads/writes from shared state."""
+        result = self.reflect(
+            user_message=state["user_message"],
+            draft_response=state.get("final_response", ""),
+            reflection_count=state.get("reflection_count", 0),
+        )
+        return {
+            "reflection_critique": result.critique,
+            "reflection_approved": result.approved,
+            "reflection_count": state.get("reflection_count", 0) + 1,
+        }
+
+    @property
+    def memory(self) -> AgentMemory:
+        return self._memory
+
+    # ------------------------------------------------------------------
 
     @staticmethod
     def _parse(raw: str) -> ReflectionResult:
@@ -86,6 +138,7 @@ class ReflectionAgent:
                 verdict = line.split(":", 1)[1].strip().lower()
             elif line.upper().startswith("CRITIQUE:"):
                 critique = line.split(":", 1)[1].strip()
+
         approved = verdict != "revise"
         logger.info("ReflectionAgent: verdict=%s critique='%.100s'", verdict, critique)
         return ReflectionResult(approved=approved, critique=critique)
