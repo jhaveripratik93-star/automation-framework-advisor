@@ -1,16 +1,17 @@
 """CodeGen Orchestrator — main pipeline for hybrid test code generation.
 
-Coordinates the full flow:
-  1. Route each step → template engine or LLM (confidence-based)
-  2. Validate generated code (syntax + structure)
-  3. Fix loop on failure (LLM retry up to N times)
-  4. Learn new patterns from successful LLM generations
-  5. Multi-test optimization (page objects, fixtures, parameterization)
-  6. Render final output via CodeRenderer
+Two generation paths:
+  1. LangGraph Agent Pipeline (default) — 5 specialised agents:
+       plan → resolve → generate → validate → assemble
+     Prompts and settings are fully configurable in agent_config.py
+
+  2. Legacy Template+LLM Pipeline (fallback) — step-by-step:
+       TemplateEngine → LLMGenerator → CodeValidator → CodeRenderer
 """
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import Any
 
@@ -51,10 +52,12 @@ class CodeGenOrchestrator:
         llm_client: Any,
         template_store_path: str | None = None,
         auto_learn: bool = True,
+        use_agent_pipeline: bool = True,
     ) -> None:
         self._llm_client = llm_client
+        self._use_agent_pipeline = use_agent_pipeline and llm_client is not None
 
-        # Initialize components
+        # Legacy components (used as fallback)
         self._template_store = TemplateStore(
             store_path=template_store_path,
             auto_learn=auto_learn,
@@ -73,12 +76,96 @@ class CodeGenOrchestrator:
     def generate(self, request: CodeGenRequest) -> GeneratedTestSuite:
         """Execute the full code generation pipeline.
 
-        Args:
-            request: CodeGenRequest with test cases, target framework, and options.
-
-        Returns:
-            GeneratedTestSuite with all generated files and metadata.
+        Uses the LangGraph agent pipeline by default.
+        Falls back to the legacy template+LLM pipeline if agents are disabled
+        or if the LLM client is unavailable.
         """
+        if self._use_agent_pipeline:
+            try:
+                return self._generate_with_agents(request)
+            except Exception as exc:
+                logger.warning(
+                    "CodeGenOrchestrator: agent pipeline failed (%s) — falling back to legacy", exc
+                )
+
+        return self._generate_legacy(request)
+
+    def _generate_with_agents(self, request: CodeGenRequest) -> GeneratedTestSuite:
+        """Generate using the LangGraph 5-agent pipeline."""
+        from src.codegen.pipeline import run_codegen_pipeline
+
+        start_time = time.time()
+        framework = request.target_framework
+        files: list[GeneratedFile] = []
+        stats = GenerationStats(total_steps=sum(len(tc.steps) for tc in request.test_cases))
+
+        for tc in request.test_cases:
+            tc_dict = {
+                "id": tc.id,
+                "title": tc.title,
+                "description": tc.description,
+                "category": tc.category,
+                "priority": tc.priority,
+                "preconditions": tc.preconditions,
+                "steps": [
+                    {
+                        "step_number": s.step_number,
+                        "action": s.action,
+                        "test_data": s.test_data,
+                        "expected_result": s.expected_result,
+                    }
+                    for s in tc.steps
+                ],
+                "expected_results": tc.expected_results,
+                "tags": tc.tags,
+            }
+
+            final_state = run_codegen_pipeline(
+                test_case=tc_dict,
+                framework=framework.value,
+                selector_map=dict(request.selector_map),
+                llm_client=self._llm_client,
+            )
+
+            code = final_state.get("assembled_code") or final_state.get("generated_code", "")
+            is_valid = final_state.get("validation_result", {}).get("is_valid", True)
+            stats.llm_handled += len(tc.steps)
+
+            from src.codegen.renderer import _FRAMEWORK_CONFIG
+            cfg = _FRAMEWORK_CONFIG.get(framework.value, _FRAMEWORK_CONFIG["playwright_ts"])
+            slug = re.sub(r"[^a-z0-9]+", "_", tc.title.lower()).strip("_")[:50] or "test"
+            files.append(GeneratedFile(
+                path=f"tests/{slug}{cfg['extension']}",
+                content=code,
+                file_type=FileType.TEST,
+                source=GenerationSource.LLM,
+                confidence=0.9 if is_valid else 0.6,
+            ))
+
+        elapsed_ms = int((time.time() - start_time) * 1000)
+        stats.time_elapsed_ms = elapsed_ms
+
+        from src.codegen.renderer import _FRAMEWORK_CONFIG
+        cfg = _FRAMEWORK_CONFIG.get(framework.value, _FRAMEWORK_CONFIG["playwright_ts"])
+        suite = GeneratedTestSuite(
+            framework=framework.value,
+            language=cfg["language"],
+            files=files,
+            install_instructions=cfg["install_command"],
+            run_command=cfg["run_command"],
+            selector_map=request.selector_map,
+            confidence_score=sum(f.confidence for f in files) / max(len(files), 1),
+            validation=ValidationResult(is_valid=True),
+            stats=stats,
+        )
+        logger.info(
+            "CodeGenOrchestrator (agents): %d files in %dms",
+            len(files), elapsed_ms,
+        )
+        return suite
+
+    def _generate_legacy(self, request: CodeGenRequest) -> GeneratedTestSuite:
+        """Original template+LLM pipeline (fallback)."""
         start_time = time.time()
         framework = request.target_framework
         options = request.options
