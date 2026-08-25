@@ -57,17 +57,9 @@ class EvaluationAgent:
         profile_context: str = "",
         reflection_critique: str = "",
         conversation_history: list[dict[str, str]] | None = None,
+        uploaded_docs: str = "",
+        case_study: str = "",
     ) -> EvaluationResult:
-        """Combine tool results and ask LLM to produce a final answer.
-
-        Args:
-            user_message: Original user query.
-            tool_results: List of {"tool_name": str, "result": str} dicts.
-            graph_context: Pre-retrieved graph context (may be empty).
-            profile_context: User profile summary string (may be empty).
-            reflection_critique: Feedback from reflection agent for revision.
-            conversation_history: Recent conversation for context continuity.
-        """
         # Build context block from tool results
         tool_block = ""
         tool_names_used = []
@@ -80,8 +72,11 @@ class EvaluationAgent:
             system += f"\n\nUser profile: {profile_context}"
         if graph_context:
             system += f"\n\n## Knowledge Graph Context:\n{graph_context[:2000]}"
+        if uploaded_docs:
+            system += f"\n\n## Uploaded Test Files:\n{uploaded_docs[:2000]}"
+        if case_study:
+            system += f"\n\n## Case Study / Reference Documents:\n{case_study[:4000]}"
 
-        # Include agent memory for context continuity
         memory_context = self._memory.get_context_string(last_n=3)
         if memory_context:
             system += f"\n\n{memory_context}"

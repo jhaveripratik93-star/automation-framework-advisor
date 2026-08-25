@@ -130,6 +130,8 @@ def make_evaluate_node(evaluation_agent):
             graph_context=state.get("graph_context", ""),
             profile_context=state.get("profile_context", ""),
             reflection_critique=state.get("reflection_critique", ""),
+            uploaded_docs=state.get("uploaded_docs", ""),
+            case_study=state.get("case_study", ""),
         )
         logger.info("LangGraph[evaluate]: response_len=%d", len(result.response))
         return {"final_response": result.response, "reflection_critique": ""}

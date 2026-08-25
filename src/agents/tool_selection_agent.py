@@ -118,6 +118,17 @@ _TOOL_DEFINITIONS = {
             "to_framework": "string — target framework name",
         },
     },
+    "list_frameworks_by_category": {
+        "description": (
+            "List all frameworks grouped by category, or filter to a specific category. "
+            "Use when the user asks which frameworks belong to a category (e.g. 'cloud', "
+            "'infrastructure', 'mobile', 'performance'), or asks to list/show all frameworks."
+        ),
+        "parameters": {
+            "category": "string|null — category to filter by (e.g. 'cloud_infrastructure', "
+                        "'web_testing', 'mobile', 'performance') or null to list all categories",
+        },
+    },
 }
 
 
@@ -144,6 +155,9 @@ use "get_framework_details" instead.
 5. You can select multiple tools if the query has multiple intents \
 (e.g., "compare Playwright and Cypress and recommend the best for API testing" → \
 comparison + recommendation).
+6. For queries like "which are api frameworks", "list cloud frameworks", "show mobile frameworks", \
+"what are performance testing tools" → use "list_frameworks_by_category" with the matching category \
+(api, cloud, mobile, performance, web, etc.). Do NOT use recommend_frameworks for these.
 
 ## Known Framework Names:
 Playwright, Cypress, Selenium, WebdriverIO, Robot Framework, TestCafe, Puppeteer, \
@@ -482,6 +496,21 @@ class ToolSelectionAgent:
                         arguments={"framework_name": fw.title()},
                         reasoning=f"heuristic: details for {fw}",
                     ))
+
+        elif any(kw in msg_lower for kw in ["list", "show all", "what are", "which are",
+                                             "category", "categories"]):
+            if "list_frameworks_by_category" in available_tools:
+                cat = None
+                for kw in ["api", "cloud", "infrastructure", "mobile", "performance",
+                           "load", "web", "ui", "browser", "iac", "devops"]:
+                    if kw in msg_lower:
+                        cat = kw
+                        break
+                tool_calls.append(ToolCall(
+                    tool_name="list_frameworks_by_category",
+                    arguments={"category": cat},
+                    reasoning=f"heuristic: category listing query (cat={cat})",
+                ))
 
         elif any(kw in msg_lower for kw in ["best", "recommend", "which framework", "suggest"]):
             if "recommend_frameworks" in available_tools:

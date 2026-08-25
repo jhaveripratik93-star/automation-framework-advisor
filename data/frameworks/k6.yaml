@@ -4,6 +4,7 @@ license: "AGPL-3.0"
 website: "https://k6.io"
 first_release: "2017"
 latest_version: "0.50+"
+category: "test_automation"
 languages_supported:
   - JavaScript
   - "TypeScript (via bundler)"
@@ -18,6 +19,10 @@ architecture_fit:
   microservices: true
   performance_testing: true
   load_testing: true
+  cloud_infrastructure: false
+  infrastructure_as_code: false
+  multi_cloud: false
+  hybrid_cloud: false
 
 capabilities:
   shadow_dom: false
@@ -34,12 +39,40 @@ capabilities:
   code_generation: "browser recorder extension"
   component_testing: false
   accessibility_testing: false
+  gesture_support: false
+  device_farm_support: false
   protocol_support:
     - HTTP/HTTPS
     - WebSocket
     - gRPC
     - "MQTT (extension)"
   browser_testing: "k6-browser module (experimental)"
+  schema_validation: false
+  json_path_support: false
+  xml_path_support: false
+  drift_detection: false
+  state_management: false
+  plan_and_apply: false
+  policy_as_code: false
+
+cloud_providers:
+  aws: false
+  azure: false
+  gcp: false
+  kubernetes: true
+
+testing_capabilities:
+  unit_testing: false
+  integration_testing: false
+  e2e_testing: false
+  component_testing: false
+  visual_testing: false
+  accessibility_testing: false
+  api_testing: true
+  performance_testing: true
+
+cloud_migration_metrics:
+  not_applicable: true
 
 cicd_integration:
   docker_support: true
@@ -48,6 +81,10 @@ cicd_integration:
   gitlab_ci: true
   azure_devops: true
   pre_built_docker_images: true
+  terraform_cloud: false
+  atlantis: false
+  aws_codepipeline: false
+  aws_codebuild: false
 
 cloud_grids:
   grafana_cloud_k6: true

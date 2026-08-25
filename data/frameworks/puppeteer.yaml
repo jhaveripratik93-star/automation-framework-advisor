@@ -4,6 +4,7 @@ license: "Apache-2.0"
 website: "https://pptr.dev"
 first_release: "2017"
 latest_version: "22.x"
+category: "test_automation"
 languages_supported:
   - JavaScript
   - TypeScript
@@ -16,6 +17,12 @@ architecture_fit:
   desktop: false
   api_testing: "indirect (via page.evaluate)"
   microservices: false
+  performance_testing: false
+  load_testing: false
+  cloud_infrastructure: false
+  infrastructure_as_code: false
+  multi_cloud: false
+  hybrid_cloud: false
 
 capabilities:
   shadow_dom: true
@@ -32,6 +39,35 @@ capabilities:
   code_generation: "Chrome DevTools export"
   component_testing: false
   accessibility_testing: "via @axe-core/puppeteer"
+  gesture_support: false
+  device_farm_support: false
+  protocol_support: ["HTTP/HTTPS"]
+  schema_validation: false
+  json_path_support: false
+  xml_path_support: false
+  drift_detection: false
+  state_management: false
+  plan_and_apply: false
+  policy_as_code: false
+
+cloud_providers:
+  aws: false
+  azure: false
+  gcp: false
+  kubernetes: false
+
+testing_capabilities:
+  unit_testing: false
+  integration_testing: false
+  e2e_testing: true
+  component_testing: false
+  visual_testing: "third-party"
+  accessibility_testing: "plugin"
+  api_testing: "indirect"
+  performance_testing: false
+
+cloud_migration_metrics:
+  not_applicable: true
 
 cicd_integration:
   docker_support: true
@@ -40,6 +76,10 @@ cicd_integration:
   gitlab_ci: true
   azure_devops: true
   pre_built_docker_images: true
+  terraform_cloud: false
+  atlantis: false
+  aws_codepipeline: false
+  aws_codebuild: false
 
 cloud_grids:
   browserstack: "limited"
