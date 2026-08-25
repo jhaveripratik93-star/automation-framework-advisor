@@ -1062,18 +1062,39 @@ Use true/false for booleans, use "limited" or "plugin (name)" for partial suppor
         existing_display = {fw.framework_name.lower() for fw in self._kb.list_all()}
         all_existing = existing_names | existing_display
 
+        # Build normalized set (no spaces, hyphens, underscores) for fuzzy matching
+        all_existing_normalized = {
+            name.replace(" ", "").replace("-", "").replace("_", "")
+            for name in all_existing
+        }
+
         new: list[DiscoveredFramework] = []
         for fw in frameworks:
             name_lower = fw.name.lower().replace("-", " ").replace("_", " ")
-            # Check various normalizations
-            if name_lower not in all_existing and name_lower.replace(" ", "") not in all_existing:
-                # Also check partial matches (e.g. "playwright" in "playwright-python")
+            name_normalized = name_lower.replace(" ", "")
+
+            # Direct match (with spaces)
+            if name_lower in all_existing:
+                continue
+
+            # Normalized match (no spaces/hyphens/underscores)
+            if name_normalized in all_existing_normalized:
+                continue
+
+            # Partial match (e.g. "playwright" in "playwright-python")
+            is_existing = any(
+                existing in name_lower or name_lower in existing
+                for existing in all_existing
+            )
+            # Also check partial with normalized names
+            if not is_existing:
                 is_existing = any(
-                    existing in name_lower or name_lower in existing
-                    for existing in all_existing
+                    existing in name_normalized or name_normalized in existing
+                    for existing in all_existing_normalized
                 )
-                if not is_existing:
-                    new.append(fw)
+
+            if not is_existing:
+                new.append(fw)
 
         return new
 
