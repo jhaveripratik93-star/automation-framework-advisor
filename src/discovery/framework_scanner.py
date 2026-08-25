@@ -230,6 +230,20 @@ class FrameworkScanner:
                 self._kb.load()
                 logger.info("Knowledge base reloaded — now has %d frameworks", len(self._kb.list_all()))
 
+                # Update knowledge graph with the new framework
+                try:
+                    from src.knowledge_base.schema import FrameworkData as FD
+                    from src.graph import update_graph_with_framework
+
+                    fw_data = FD(**profile)
+                    update_graph_with_framework(fw_data, self._kb)
+                    logger.info("Knowledge graph updated with '%s'", profile["framework_name"])
+                except Exception as graph_exc:
+                    logger.warning(
+                        "Failed to update knowledge graph for '%s': %s",
+                        profile["framework_name"], graph_exc,
+                    )
+
             return filepath
         except Exception as exc:
             logger.error("Failed to write %s: %s", filepath, exc)
