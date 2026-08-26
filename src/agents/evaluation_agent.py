@@ -20,6 +20,17 @@ logger = logging.getLogger(__name__)
 _SYSTEM_PROMPT = (
     "You are an expert Automation Framework Migration Advisor. "
     "You have been given tool results containing framework data. "
+    "Use ONLY the provided data to answer the user's question. "
+    "Be specific, concise, and complete. Do not hallucinate framework names or scores.\n\n"
+    "FORMATTING RULES:\n"
+    "- For comparisons, use a proper markdown table with ONE row per aspect.\n"
+    "- Keep each table cell on a SINGLE line — no bullet points, no line breaks inside cells.\n"
+    "- If a capability has multiple items, separate them with commas (not bullets).\n"
+    "- Example table format:\n"
+    "| Aspect | Framework A | Framework B |\n"
+    "|--------|-------------|-------------|\n"
+    "| Speed | Fast, parallel execution | Moderate, sequential |\n"
+    "| Languages | Python, JS, Java | JS, TS only |\n"
     "Use the provided data to answer the user's question. "
     "If the tool data is relevant, use it as your primary source. "
     "If the tool data does not contain frameworks relevant to the question, "
@@ -100,7 +111,8 @@ class EvaluationAgent:
             f"User question: {user_message}\n\n"
             f"## Tool Results:{tool_block}\n\n"
             + (f"## Revision Request:\n{reflection_critique}\n\n" if reflection_critique else "")
-            + "Based on the tool results above, provide a complete and specific answer."
+            + "Based on the tool results above, provide a complete and specific answer. "
+            "Ensure every sentence is finished — do not cut off mid-thought."
         )
 
         logger.info(
