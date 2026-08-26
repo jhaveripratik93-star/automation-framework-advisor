@@ -1,8 +1,8 @@
 # Low-Level Design (LLD)
 # Scoring & Evaluation Engine Module
 
-**Version:** 1.0  
-**Date:** July 2026  
+**Version:** 1.1  
+**Date:** July 2025  
 **Module:** `src/scoring/`
 
 ---
@@ -85,14 +85,12 @@ src/scoring/
 ├── criteria.py         # Individual criterion scoring functions
 ├── weights.py          # WeightProfile and preset profiles
 ├── penalties.py        # Penalty and bonus logic
-├── models.py           # Data models (FrameworkScore, DecisionMatrix)
-└── explainer.py        # Natural language explanation generator
+└── models.py           # Data models (FrameworkScore, DecisionMatrix)
 
 src/knowledge_base/
 ├── __init__.py
 ├── loader.py           # YAML framework data loader
-├── schema.py           # Pydantic models for framework data
-└── filters.py          # Architecture-based filtering
+└── schema.py           # Pydantic models + classify_framework_data()
 ```
 
 ---
@@ -553,7 +551,7 @@ async def list_frameworks():
     """List all frameworks in knowledge base."""
     return [fw.framework_name for fw in kb.list_all()]
 
-@router.get("/weights/presets")
+@router.get("/weight-presets")
 async def get_weight_presets():
     """Return available weight preset profiles."""
     return WeightProfile.list_presets()
@@ -600,4 +598,12 @@ Client          API           ScoringEngine    KnowledgeBase    Criteria
 
 ---
 
-*End of LLD Document*
+## 11. Notes on Framework Classification
+
+Framework YAML files have a `category` field, but classification for tools like `list_frameworks_by_category` uses `classify_framework_data()` from `src/knowledge_base/schema.py`, which reads `architecture_fit` flags. This is the authoritative classification — the raw `category` string was inconsistent across 12 of 17 YAMLs before the audit.
+
+`FRAMEWORK_CATEGORIES` in `schema.py` defines the canonical category IDs: `web_ui_testing`, `api_testing`, `mobile_testing`, `performance_testing`, `infrastructure_as_code`, `desktop_testing`.
+
+---
+
+*End of LLD Document — Version 1.1*

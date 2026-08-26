@@ -1,7 +1,7 @@
 # Evaluation Metrics & Scoring Algorithm Design
 
-**Version:** 1.0  
-**Date:** July 2026
+**Version:** 1.1  
+**Date:** July 2025
 
 ---
 
@@ -342,11 +342,14 @@ web requirements including Shadow DOM and iFrame handling."
 
 | Profile Name | C1 | C2 | C3 | C4 | C5 | C6 | C7 | Best For |
 |-------------|----|----|----|----|----|----|-----|----------|
-| **Balanced** | 20 | 20 | 15 | 20 | 15 | 5 | 5 | General teams |
-| **API-Heavy** | 15 | 30 | 20 | 20 | 10 | 5 | 0 | Backend/microservices |
-| **Enterprise** | 15 | 15 | 10 | 20 | 20 | 10 | 10 | Large orgs, compliance |
-| **Startup** | 25 | 15 | 5 | 15 | 25 | 5 | 10 | Speed, cost-conscious |
-| **DevOps-First** | 10 | 15 | 15 | 30 | 15 | 10 | 5 | Pipeline optimization |
+| **balanced** | 20 | 20 | 15 | 20 | 15 | 5 | 5 | General teams |
+| **api_heavy** | 15 | 30 | 20 | 20 | 10 | 5 | 0 | Backend/microservices |
+| **enterprise** | 15 | 15 | 10 | 20 | 20 | 10 | 10 | Large orgs, compliance |
+| **startup** | 25 | 15 | 5 | 15 | 25 | 5 | 10 | Speed, cost-conscious |
+| **devops_first** | 10 | 15 | 15 | 30 | 15 | 10 | 5 | Pipeline optimization |
+| **cloud_migration** | 10 | 10 | 10 | 15 | 10 | 20 | 5 | Cloud/IaC projects (activates C8–C10) |
+| **performance_focus** | 15 | 15 | 30 | 20 | 10 | 5 | 5 | Load/performance testing |
+| **custom** | — | — | — | — | — | — | — | User-defined via sidebar sliders |
 
 ### 7.2 Dynamic Weight Adjustment
 
@@ -403,4 +406,4 @@ Step 7: Output Decision Matrix JSON
 
 ---
 
-*End of Evaluation Metrics Document*
+*End of Evaluation Metrics Document — Version 1.1*

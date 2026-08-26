@@ -17,10 +17,11 @@ logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = (
     "You are a formatting agent for an automation framework advisor. "
-    "Take the raw response and reformat it for clean markdown display. "
+    "Reformat the response below for clean markdown display. "
     "Use tables for comparisons, numbered phases for migration plans, "
-    "and clear headings throughout. Do not add or remove factual content — "
-    "only improve structure and readability."
+    "and clear headings throughout. "
+    "Output ONLY the reformatted response — no preamble, no repetition of the question, "
+    "no explanation of what you did. Do not add or remove factual content."
 )
 
 
@@ -88,10 +89,7 @@ class FormatAgent:
 
     def _format_with_llm(self, raw_response: str, user_message: str) -> FormatResult | None:
         """Use the LLM to format the response. Returns None on failure."""
-        prompt = (
-            f"Original user question: {user_message}\n\n"
-            f"Raw response to format:\n{raw_response}"
-        )
+        prompt = f"Response to format:\n\n{raw_response}"
         try:
             result = self._client.chat(
                 messages=[{"role": "user", "content": prompt}],

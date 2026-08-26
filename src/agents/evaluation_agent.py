@@ -20,8 +20,19 @@ logger = logging.getLogger(__name__)
 _SYSTEM_PROMPT = (
     "You are an expert Automation Framework Migration Advisor. "
     "You have been given tool results containing framework data. "
-    "Use ONLY the provided data to answer the user's question. "
-    "Be specific, concise, and complete. Do not hallucinate framework names or scores."
+    "Use the provided data to answer the user's question. "
+    "If the tool data is relevant, use it as your primary source. "
+    "If the tool data does not contain frameworks relevant to the question, "
+    "answer from your own expert knowledge — do NOT say you cannot answer. "
+    "Be specific, concise, and complete. Do not hallucinate scores or version numbers."
+)
+
+_DIRECT_SYSTEM_PROMPT = (
+    "You are an expert Automation Framework Migration Advisor. "
+    "Answer the user's question conversationally using your general knowledge about "
+    "test automation frameworks. Be concise and helpful. "
+    "If the question is too vague to give a specific recommendation, ask a clarifying "
+    "question (e.g. what language, what type of app, what CI/CD tool)."
 )
 
 
@@ -60,7 +71,11 @@ class EvaluationAgent:
         uploaded_docs: str = "",
         case_study: str = "",
     ) -> EvaluationResult:
-        # Build context block from tool results
+        # ── Direct path: no tool results — answer conversationally ────
+        if not tool_results:
+            return self._evaluate_direct(user_message, graph_context, conversation_history)
+
+        # ── Tool path: synthesise tool results ────────────────────────
         tool_block = ""
         tool_names_used = []
         for tr in tool_results:
@@ -93,7 +108,6 @@ class EvaluationAgent:
             len(tool_results), user_message,
         )
 
-        # Build messages including recent conversation history
         messages = []
         if conversation_history:
             for msg in conversation_history[-6:]:
@@ -110,14 +124,53 @@ class EvaluationAgent:
             )
             response_text = tool_block.strip() or "No data available."
 
-        # Store in memory
         self._memory.add("evaluation", f"Q: {user_message[:80]} → A: {response_text[:100]}")
-
         logger.info("EvaluationAgent: response_len=%d", len(response_text))
         return EvaluationResult(
             response=response_text,
             tool_results_used=tool_names_used,
             reasoning=f"synthesised {len(tool_results)} tool result(s)",
+        )
+
+    def _evaluate_direct(
+        self,
+        user_message: str,
+        graph_context: str = "",
+        conversation_history: list[dict[str, str]] | None = None,
+    ) -> EvaluationResult:
+        """Answer a direct (no-tool) question conversationally."""
+        logger.info("EvaluationAgent: direct path for query='%.60s'", user_message)
+
+        system = _DIRECT_SYSTEM_PROMPT
+        if graph_context:
+            system += f"\n\n## Background context:\n{graph_context[:1500]}"
+
+        messages = []
+        if conversation_history:
+            for msg in conversation_history[-4:]:
+                messages.append({"role": msg["role"], "content": msg["content"][:400]})
+        messages.append({"role": "user", "content": user_message})
+
+        try:
+            response_text = self._call_llm(messages=messages, system=system)
+            if not response_text:
+                response_text = (
+                    "Could you give me more details? For example: what type of app are you "
+                    "testing, what language does your team use, and what CI/CD tool do you have?"
+                )
+        except Exception as exc:
+            logger.warning("EvaluationAgent: direct LLM call failed (%s)", exc)
+            response_text = (
+                "I'd be happy to help! Could you tell me more about your project — "
+                "what type of app, language, and CI/CD setup you have?"
+            )
+
+        self._memory.add("evaluation", f"Q: {user_message[:80]} → A: {response_text[:100]}")
+        logger.info("EvaluationAgent (direct): response_len=%d", len(response_text))
+        return EvaluationResult(
+            response=response_text,
+            tool_results_used=[],
+            reasoning="direct answer (no tool results)",
         )
 
     def run_node(self, state: AgentState) -> dict[str, Any]:

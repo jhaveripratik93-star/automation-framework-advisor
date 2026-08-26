@@ -14,10 +14,11 @@ This tool helps you make data-driven decisions about framework migration by:
 
 ### 1. Tool Definition
 
-The tool is integrated into the LLM's function-calling system:
+The tool is integrated into the agent pipeline's tool executor:
 - **Tool Name**: `analyze_test_case_coverage`
-- **Location**: `src/llm/tools.py`
-- **Called by**: LLM automatically when user asks about test case coverage
+- **Location**: `src/tools/executor.py` → `_analyze_test_case_coverage()`
+- **Engine**: `src/tools/coverage_engine.py` → `analyze_coverage()` + `render_coverage_report()`
+- **Called by**: `ToolSelectionAgent` when user asks about test case coverage
 
 ### 2. Input Format
 
@@ -250,14 +251,13 @@ LLM presents results in chat
 
 ### Code Location
 
-**Tool Definition:**
-- File: `src/llm/tools.py`
-- Lines: ~140-170 (TOOL_DEFINITIONS)
+**Tool registration:**
+- File: `src/tools/executor.py`
+- Method: `_analyze_test_case_coverage()`
 
-**Tool Implementation:**
-- File: `src/llm/tools.py`
-- Function: `_analyze_test_case_coverage()`
-- Lines: ~380-550
+**Coverage engine:**
+- File: `src/tools/coverage_engine.py`
+- Functions: `analyze_coverage()`, `render_coverage_report()`
 
 **Sample Data:**
 - File: `data/samples/sample_test_case_analysis.json`
@@ -375,7 +375,8 @@ Planned improvements:
 ## Related Documentation
 
 - **High-Level Design**: `docs/HLD.md`
-- **Tool-Based Approach**: `docs/LOGGING_GUIDE.md` (Tool execution logs)
+- **Tool Executor**: `src/tools/executor.py` (all 11 tools)
+- **Coverage Engine**: `src/tools/coverage_engine.py`
 - **Framework Data**: `data/frameworks/*.yaml`
 - **Sample Input**: `data/samples/sample_test_case_analysis.json`
 
