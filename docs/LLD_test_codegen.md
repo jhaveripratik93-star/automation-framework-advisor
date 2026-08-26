@@ -1,70 +1,51 @@
 # Low-Level Design: Hybrid Test Code Generation
 
+**Version:** 2.0
+**Date:** July 2025
+**Module:** `src/codegen/`
+
 ## 1. Overview
 
-This module converts **manual test cases** (natural language descriptions) into **executable automated test code** using a hybrid approach combining template-based pattern matching with LLM-powered code generation.
+This module converts **manual test cases** (natural language descriptions) into **executable automated test code** using a hybrid approach:
+
+- **Primary path** — LangGraph 5-agent pipeline (plan → resolve → generate → validate → assemble)
+- **Fallback path** — Template+LLM pipeline (TemplateEngine → LLMGenerator → CodeValidator → CodeRenderer)
 
 ### Key Design Decisions
 
 | Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Generation strategy | Hybrid (Template + LLM) | Cost efficiency + flexibility |
-| Validation | Multi-layer (AST + lint + structure + dry-run) | Guarantee runnable output |
-| Learning | Self-learning template store | Reduces LLM cost over time |
-| Multi-test | Optimization pass with page objects | Professional-grade output |
-| Integration | New `src/codegen/` module + ToolExecutor registration | Follows existing patterns |
+|----------|--------|-----------| 
+| Primary generation | LangGraph 5-agent pipeline | Analyses full test case before writing code; coherent single-call generation |
+| Fallback | Legacy template+LLM pipeline | No regression risk if agent pipeline fails |
+| User config | `agent_config.py` single file | All prompts, framework context, action keywords, pipeline settings in one place |
+| Validation | Multi-layer (AST + lint + structure + LLM fix) | Guarantee runnable output |
+| Learning | Self-learning template store | Reduces LLM cost over time (legacy path) |
 
 ---
 
 ## 2. Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    CodeGen Orchestrator                       │
-│  (src/codegen/orchestrator.py)                               │
-└──────────┬──────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                    CodeGenOrchestrator                          │
+│  (src/codegen/orchestrator.py)                                  │
+│                                                                 │
+│  generate() → tries _generate_with_agents() first              │
+│             → falls back to _generate_legacy() on exception     │
+└──────────┬──────────────────────────────────────────────────────┘
            │
-           ▼
-┌──────────────────────┐     ┌──────────────────────┐
-│  Template Engine      │     │  LLM Generator       │
-│  (confidence-based)   │     │  (fallback + complex)│
-│                       │     │                       │
-│  - Pattern matching   │     │  - GroqClient.chat() │
-│  - Confidence scoring │     │  - System prompts    │
-│  - Code assembly      │     │  - Context-aware     │
-└──────────┬────────────┘     └──────────┬───────────┘
-           │                             │
-           ▼                             ▼
-┌──────────────────────────────────────────────────────────────┐
-│                     Code Validator                            │
-│  - Syntax check (AST parsing)                                │
-│  - Structure validation (framework rules)                    │
-│  - Import completeness check                                 │
-└──────────┬───────────────────────────────────────────────────┘
-           │
-           ▼
-┌──────────────────────────────────────────────────────────────┐
-│                   Multi-Test Optimizer                        │
-│  - Detect shared steps → extract helpers/page objects         │
-│  - Detect data-only diffs → parameterize                     │
-│  - Extract setup/teardown → fixtures                         │
-└──────────┬───────────────────────────────────────────────────┘
-           │
-           ▼
-┌──────────────────────────────────────────────────────────────┐
-│                     Code Renderer                            │
-│  - Framework-specific output (Playwright, Selenium, etc.)    │
-│  - Project scaffold (package.json, config, README)           │
-│  - Selector map for user review                             │
-└──────────┬───────────────────────────────────────────────────┘
-           │
-           ▼
-┌──────────────────────────────────────────────────────────────┐
-│                   Self-Learning Store                         │
-│  - Store successful LLM patterns as new templates            │
-│  - Track usage count and success rate                        │
-│  - Auto-retire failing patterns                              │
-└──────────────────────────────────────────────────────────────┘
+    ┌──────┴──────────────────────────────────────────────┐
+    │                                                     │
+    ▼                                                     ▼
+┌──────────────────────────────────┐   ┌──────────────────────────────────┐
+│  LangGraph Agent Pipeline        │   │  Legacy Template+LLM Pipeline    │
+│  (src/codegen/pipeline.py)       │   │                                  │
+│                                  │   │  TemplateEngine                  │
+│  plan → resolve → generate       │   │  LLMGenerator                    │
+│       → validate → assemble      │   │  CodeValidator                   │
+│                                  │   │  TestOptimizer                   │
+│  Config: agent_config.py         │   │  CodeRenderer                    │
+└──────────────────────────────────┘   └──────────────────────────────────┘
 ```
 
 ---
@@ -73,274 +54,202 @@ This module converts **manual test cases** (natural language descriptions) into 
 
 ```
 src/codegen/
-├── __init__.py              # Public API
-├── models.py               # Pydantic data models
-├── template_engine.py      # Pattern matching + confidence scoring
-├── llm_generator.py        # LLM-based code generation
-├── template_store.py       # Self-learning pattern store (JSON persistence)
-├── validator.py            # Syntax + structure validation
-├── optimizer.py            # Multi-test optimization (page objects, fixtures)
-├── renderer.py             # Framework-specific code rendering
-└── orchestrator.py         # Main pipeline coordinator
+├── __init__.py
+├── agent_config.py          # ← Single user-editable file (prompts + settings)
+├── pipeline.py              # LangGraph CodeGenState + build_codegen_pipeline()
+├── orchestrator.py          # CodeGenOrchestrator (agent + legacy paths)
+├── agents/
+│   ├── __init__.py
+│   ├── scenario_planner.py  # Agent 1: analyse test case, classify steps
+│   ├── selector_resolver.py # Agent 2: resolve element names to CSS selectors
+│   ├── step_generator.py    # Agent 3: generate complete test code in one LLM call
+│   ├── validator_agent.py   # Agent 4: review code, apply fixes
+│   └── assembler_agent.py   # Agent 5: combine into final project-ready file
+├── models.py                # Pydantic data models
+├── template_engine.py       # Pattern matching + confidence scoring (legacy)
+├── llm_generator.py         # LLM-based step generation (legacy)
+├── template_store.py        # Self-learning pattern store (legacy)
+├── validator.py             # Syntax + structure validation
+├── optimizer.py             # Multi-test optimization (legacy)
+└── renderer.py              # Framework-specific code rendering
 ```
 
 ---
 
-## 4. Data Models
+## 4. LangGraph Agent Pipeline
 
-### 4.1 Input: ManualTestCase
+### 4.1 CodeGenState TypedDict (`pipeline.py`)
+
+All keys must be declared — LangGraph silently drops undeclared keys.
+
+```python
+class CodeGenState(TypedDict):
+    # Inputs
+    test_case: dict[str, Any]          # ManualTestCase as dict
+    framework: str                     # e.g. "playwright_ts"
+    selector_map: dict[str, str]       # user-provided element → selector
+
+    # ScenarioPlanner output
+    scenario: dict[str, Any]           # structured scenario analysis
+    classified_steps: list[dict]       # steps with action_type added
+
+    # SelectorResolver output
+    resolved_selectors: dict[str, str] # merged user + LLM-resolved selectors
+
+    # StepGenerator output
+    generated_code: str
+    generation_error: str
+
+    # ValidatorAgent output
+    validation_result: dict[str, Any]
+    validation_attempts: int
+
+    # AssemblerAgent output
+    assembled_code: str
+
+    # Injected dependency
+    _llm_client: Any
+```
+
+### 4.2 Graph Topology
+
+```
+plan ──→ resolve ──→ generate ──→ validate ──→ assemble ──→ END
+                                     │
+                         (is_valid=False AND attempts < max_retries)
+                                     │
+                                     └──→ generate (retry)
+```
+
+### 4.3 Agent Responsibilities
+
+**ScenarioPlanner** (`agents/scenario_planner.py`)
+- Analyses the full test case before any code is written
+- Classifies each step by action type (navigate, click, fill, assert, etc.)
+- Returns `scenario` dict and `classified_steps` list
+- Heuristic fallback when LLM fails
+
+**SelectorResolver** (`agents/selector_resolver.py`)
+- Extracts element names from step text
+- Resolves to CSS selectors via LLM
+- Merges user-provided selectors with LLM-resolved ones
+- Returns `resolved_selectors` dict
+
+**StepGenerator** (`agents/step_generator.py`)
+- Generates complete test code in **one LLM call** using full scenario context + resolved selectors
+- Uses `STEP_GENERATOR_SYSTEM` from `agent_config.py` (dict per framework)
+- Returns `generated_code` string
+
+**ValidatorAgent** (`agents/validator_agent.py`)
+- Reviews generated code for syntax and structure issues
+- Applies LLM fixes if invalid
+- `should_retry_validation()` is the conditional edge function:
+  - Returns `"retry"` if `is_valid=False` AND `validation_attempts < max_retries`
+  - Returns `"assemble"` otherwise
+
+**AssemblerAgent** (`agents/assembler_agent.py`)
+- Combines test functions into final project-ready file
+- Skips LLM if code already looks complete
+- Returns `assembled_code` string
+
+### 4.4 User-Editable Config (`agent_config.py`)
+
+Single file containing all 8 configurable sections:
+
+| Section | Purpose |
+|---------|---------|
+| `SCENARIO_PLANNER_SYSTEM` | System prompt for ScenarioPlanner |
+| `SCENARIO_PLANNER_USER_TEMPLATE` | User message template |
+| `SELECTOR_RESOLVER_SYSTEM` | System prompt for SelectorResolver |
+| `SELECTOR_RESOLVER_USER_TEMPLATE` | User message template |
+| `STEP_GENERATOR_SYSTEM` | Dict per framework (playwright_ts, selenium_python, etc.) |
+| `STEP_GENERATOR_USER_TEMPLATE` | User message template |
+| `VALIDATOR_SYSTEM` | System prompt for ValidatorAgent |
+| `VALIDATOR_USER_TEMPLATE` | User message template |
+| `ASSEMBLER_SYSTEM` | System prompt for AssemblerAgent |
+| `ASSEMBLER_USER_TEMPLATE` | User message template |
+| `FRAMEWORK_CONTEXT` | Dict per framework (imports, patterns, examples) |
+| `ACTION_KEYWORDS` | Keyword → action_type mapping |
+| `PIPELINE_SETTINGS` | `max_retries`, `confidence_threshold`, etc. |
+
+---
+
+## 5. Data Models (`models.py`)
+
+### 5.1 Input: ManualTestCase
 
 ```python
 class ManualTestCase(BaseModel):
-    id: str                          # e.g. "TC001"
-    title: str                       # e.g. "Login with valid credentials"
-    description: str                 # Natural language description
-    preconditions: list[str] = []    # Setup requirements
-    steps: list[TestStep]            # Ordered test steps
-    expected_results: list[str] = [] # What should happen
-    priority: str = "medium"         # low/medium/high/critical
-    category: str = ""               # e.g. "authentication", "checkout"
+    id: str
+    title: str
+    description: str
+    preconditions: list[str] = []
+    steps: list[TestStep]
+    expected_results: list[str] = []
+    priority: str = "medium"
+    category: str = ""
     tags: list[str] = []
 
 class TestStep(BaseModel):
     step_number: int
-    action: str                      # Natural language action
-    test_data: str = ""              # Input data for this step
-    expected_result: str = ""        # Per-step expected outcome
+    action: str
+    test_data: str = ""
+    expected_result: str = ""
 ```
 
-### 4.2 Output: GeneratedTestSuite
+### 5.2 Output: GeneratedTestSuite
 
 ```python
 class GeneratedTestSuite(BaseModel):
-    framework: str                    # Target framework
-    language: str                     # Target language
-    files: list[GeneratedFile]        # All generated files
-    install_instructions: str         # How to set up
-    run_command: str                  # How to execute
-    selector_map: dict[str, str]      # Elements needing user verification
-    confidence_score: float           # Overall generation confidence
+    framework: str
+    language: str
+    files: list[GeneratedFile]
+    install_instructions: str
+    run_command: str
+    selector_map: dict[str, str]
+    confidence_score: float
+    validation: ValidationResult
+    stats: GenerationStats
 
 class GeneratedFile(BaseModel):
-    path: str                         # Relative file path
-    content: str                      # File content
-    file_type: str                    # "test" | "page_object" | "fixture" | "config" | "data"
+    path: str
+    content: str
+    file_type: FileType          # TEST | PAGE_OBJECT | FIXTURE | CONFIG | DATA
+    source: GenerationSource     # TEMPLATE | LLM | LLM_FIX | HYBRID
+    confidence: float
 ```
 
-### 4.3 Internal: Template Pattern
+---
+
+## 6. CodeGenOrchestrator (`orchestrator.py`)
 
 ```python
-class TemplatePattern(BaseModel):
-    id: str
-    pattern: str                      # Regex pattern with named groups
-    action_type: str                  # "click" | "fill" | "navigate" | "assert" | ...
-    code_template: dict[str, str]     # framework → code template string
-    confidence_threshold: float = 0.8
-    source: str = "static"            # "static" | "learned"
-    usage_count: int = 0
-    success_count: int = 0
-    created_at: str = ""
+class CodeGenOrchestrator:
+    def __init__(
+        self,
+        llm_client: Any,
+        template_store_path: str | None = None,
+        auto_learn: bool = True,
+        use_agent_pipeline: bool = True,   # default: True
+    ) -> None: ...
+
+    def generate(self, request: CodeGenRequest) -> GeneratedTestSuite:
+        """Tries agent pipeline first, falls back to legacy."""
+        if self._use_agent_pipeline:
+            try:
+                return self._generate_with_agents(request)
+            except Exception:
+                logger.warning("agent pipeline failed — falling back to legacy")
+        return self._generate_legacy(request)
 ```
+
+`_generate_with_agents()` calls `run_codegen_pipeline()` per test case, then assembles a `GeneratedTestSuite` from the final state's `assembled_code`.
+
+`_generate_legacy()` runs the original TemplateEngine → LLMGenerator → CodeValidator → TestOptimizer → CodeRenderer pipeline.
 
 ---
 
-## 5. Pipeline Flow
-
-### 5.1 Single Test Case Generation
-
-```
-ManualTestCase
-    │
-    ├─ For each step:
-    │   ├─ TemplateEngine.match(step) → (code, confidence)
-    │   │   ├─ confidence >= 0.8 → use template output
-    │   │   │   └─ LLM quick-verify (yes/no) → accept or regenerate
-    │   │   └─ confidence < 0.8 → skip to LLM
-    │   │
-    │   └─ LLMGenerator.generate(step, context) → code
-    │       └─ On success → TemplateStore.learn(step, code)
-    │
-    ├─ Validator.validate(assembled_code)
-    │   ├─ Syntax check (AST)
-    │   ├─ Structure check (framework rules)
-    │   └─ Import check
-    │       └─ On failure: LLM fix loop (max 2 retries)
-    │
-    └─ Return validated code
-```
-
-### 5.2 Multi-Test Case Generation
-
-```
-list[ManualTestCase]
-    │
-    ├─ Phase 1: Generate individually (parallel-ready)
-    │   └─ Each test case → single-case pipeline → raw code
-    │
-    ├─ Phase 2: Optimizer.analyze(all_raw_codes)
-    │   ├─ Detect repeated step sequences → helper functions
-    │   ├─ Detect shared selectors → page object candidates
-    │   ├─ Detect data-only differences → parameterized tests
-    │   └─ Detect common setup → beforeEach/fixtures
-    │
-    ├─ Phase 3: Renderer.render(optimized_structure)
-    │   ├─ Generate page object files
-    │   ├─ Generate fixture files
-    │   ├─ Generate test spec files
-    │   ├─ Generate config (playwright.config.ts, etc.)
-    │   └─ Generate package.json / requirements.txt
-    │
-    └─ Return GeneratedTestSuite
-```
-
----
-
-## 6. Template Engine Design
-
-### 6.1 Pattern Categories
-
-| Category | Example Steps | Pattern |
-|----------|--------------|---------|
-| Navigation | "Go to login page", "Open URL" | `(navigate\|go to\|open\|visit)\s+(.+)` |
-| Input | "Enter admin in username" | `(enter\|type\|input\|fill)\s+['"]?(.+?)['"]?\s+(in\|into)\s+(.+)` |
-| Click | "Click login button" | `(click\|tap\|press)\s+(on\s+)?(.+)` |
-| Assert visible | "Verify error message is shown" | `(verify\|check\|assert\|confirm)\s+(.+)\s+(is\s+)?(visible\|shown\|displayed)` |
-| Assert text | "Verify page shows 'Welcome'" | `(verify\|check\|assert)\s+(.+)\s+(shows\|contains\|displays)\s+['"](.+)['"]` |
-| Wait | "Wait for page to load" | `(wait\s+for)\s+(.+)` |
-| Select | "Select 'Option A' from dropdown" | `(select\|choose)\s+['"]?(.+?)['"]?\s+(from)\s+(.+)` |
-
-### 6.2 Confidence Scoring
-
-```
-confidence = base_score × modifier
-
-base_score:
-  - Exact structural match: 0.95
-  - Partial match (some groups captured): 0.75
-  - Fuzzy match (edit distance): 0.60
-
-modifier:
-  - All named groups filled: ×1.0
-  - Some groups empty: ×0.85
-  - Step has ambiguous references: ×0.70
-```
-
----
-
-## 7. Self-Learning Loop
-
-### 7.1 Learning Trigger
-
-When the LLM generates code for a step that was NOT handled by a template:
-
-1. LLM generates code → passes validation
-2. System extracts the step's structure → creates a generalized regex pattern
-3. Maps the step pattern to the generated code template
-4. Stores in `data/codegen/learned_templates.json`
-
-### 7.2 Pattern Generalization
-
-```
-Input step:  "Put admin123 into the login email box"
-LLM output:  await page.fill('[data-testid="email"]', 'admin123')
-
-Generalized:
-  pattern: "(put|place)\s+['"]?(.+?)['"]?\s+(into|in)\s+(.+)"
-  template: "await page.fill('[data-testid=\"{field}\"]', '{value}')"
-  variables: {value: group(2), field: group(4)}
-```
-
-### 7.3 Quality Gates
-
-- Pattern must be distinct from existing patterns (Jaccard similarity < 0.85)
-- Must have passed syntax validation
-- Track `usage_count` and `success_count`
-- If `success_rate < 0.6` after 5+ uses → auto-disable pattern
-- Optional: user approval mode for first N patterns
-
----
-
-## 8. Code Validation Layers
-
-### Layer 1: Syntax Check
-- Python: `ast.parse(code)` — catches syntax errors
-- JavaScript/TypeScript: `subprocess.run(["node", "--check", file])` or regex-based bracket matching
-- Fallback: Balanced bracket/quote checker for environments without Node.js
-
-### Layer 2: Framework Structure Rules
-
-```python
-FRAMEWORK_RULES = {
-    "playwright": {
-        "must_have": ["test(", "expect("],
-        "must_import": ["@playwright/test"],
-        "structure": "test.describe > test > assertions",
-    },
-    "selenium_python": {
-        "must_have": ["def test_", "assert"],
-        "must_import": ["selenium", "webdriver"],
-        "structure": "class > def test_ > assertions",
-    },
-    "cypress": {
-        "must_have": ["describe(", "it(", "cy."],
-        "must_import": [],  # Cypress auto-imports
-        "structure": "describe > it > cy.commands",
-    },
-}
-```
-
-### Layer 3: Import Completeness
-- Scan generated code for used APIs
-- Cross-reference with framework's import map
-- Auto-add missing imports
-
-### Layer 4: LLM Fix Loop (on failure)
-```
-Code with error → Send to LLM:
-  "Fix this {language} syntax error: {error_message}
-   Code: {code}
-   Only return the fixed code."
-→ Re-validate (max 2 retries)
-```
-
----
-
-## 9. Multi-Test Optimizer
-
-### 9.1 Detection Algorithms
-
-**Repeated Steps (→ helpers/page objects):**
-- Hash each step's generated code (ignoring whitespace/variable names)
-- If same hash appears in 2+ test cases → extract to shared helper
-- If 3+ steps from same "page" context → create page object class
-
-**Data-Only Differences (→ parameterized tests):**
-- Compare test cases pairwise
-- If steps are identical except for literal values → parameterize
-- Extract varying values into a test data array
-
-**Common Setup (→ fixtures/beforeEach):**
-- Find longest common prefix across all test case step sequences
-- If ≥ 2 common leading steps → extract to beforeEach/setup fixture
-
-### 9.2 Output Structure Decision
-
-```
-If page_object_candidates >= 1:
-    → Generate: pages/{name}.page.ts
-If fixture_candidates >= 1:
-    → Generate: fixtures/{name}.fixture.ts
-If parameterized_groups >= 1:
-    → Generate: test-data/{name}.data.ts
-Always:
-    → Generate: tests/{name}.spec.ts
-    → Generate: config file (playwright.config.ts etc.)
-    → Generate: package.json / requirements.txt
-```
-
----
-
-## 10. Supported Frameworks (Initial)
+## 7. Supported Frameworks
 
 | Framework | Language | Test Runner | Output Format |
 |-----------|----------|-------------|---------------|
@@ -349,93 +258,106 @@ Always:
 | Selenium | Python | pytest | test_*.py |
 | Selenium | Java | TestNG/JUnit | *Test.java |
 | Cypress | JavaScript | Cypress | .cy.js |
-| Rest Assured | Java | JUnit | *Test.java |
+| REST Assured | Java | JUnit | *Test.java |
 | Robot Framework | Robot | robot | *.robot |
 
 ---
 
-## 11. Integration Points
+## 8. Legacy Pipeline (Fallback)
 
-### 11.1 ToolExecutor Registration
+### 8.1 Template Engine
 
-Add `generate_test_code` tool to `src/tools/executor.py`:
+Pattern categories: Navigation, Input, Click, Assert visible, Assert text, Wait, Select.
 
-```python
-self.tools["generate_test_code"] = self._generate_test_code
+Confidence scoring:
+```
+confidence = base_score × modifier
+
+base_score:
+  Exact structural match: 0.95
+  Partial match:          0.75
+  Fuzzy match:            0.60
+
+modifier:
+  All named groups filled: ×1.0
+  Some groups empty:       ×0.85
+  Ambiguous references:    ×0.70
 ```
 
-### 11.2 Streamlit UI (Future)
+### 8.2 Self-Learning Loop
 
-New tab in the app: "Code Generator"
-- Upload manual test cases (Excel/JSON)
-- Select target framework
-- Configure options (page objects, fixtures, etc.)
-- Preview generated code
-- Download as ZIP
+When LLM generates code for a step not handled by a template:
+1. LLM generates code → passes validation
+2. System extracts step structure → creates generalised regex pattern
+3. Stores in `data/codegen/learned_templates.json`
+4. Quality gate: `success_rate < 0.6` after 5+ uses → auto-disable
 
-### 11.3 CLI Usage
+### 8.3 Code Validation Layers
+
+| Layer | Check |
+|-------|-------|
+| 1 | Syntax (AST parse for Python; bracket matching for JS/TS) |
+| 2 | Framework structure rules (`must_have`, `must_import`) |
+| 3 | Import completeness (auto-add missing imports) |
+| 4 | LLM fix loop (max 2 retries on failure) |
+
+---
+
+## 9. CLI Usage
 
 ```python
-from src.codegen import CodeGenOrchestrator
+from src.codegen.orchestrator import CodeGenOrchestrator
+from src.codegen.models import CodeGenRequest, ManualTestCase, TestStep, TargetFramework
 
 orchestrator = CodeGenOrchestrator(llm_client=groq_client)
-result = orchestrator.generate(
-    test_cases=[...],
-    target_framework="playwright",
-    language="typescript",
-    options={"page_objects": True, "fixtures": True}
+
+request = CodeGenRequest(
+    test_cases=[
+        ManualTestCase(
+            id="TC001",
+            title="Login with valid credentials",
+            steps=[
+                TestStep(step_number=1, action="Navigate to login page"),
+                TestStep(step_number=2, action="Enter admin in username field"),
+                TestStep(step_number=3, action="Click login button"),
+                TestStep(step_number=4, action="Verify dashboard is shown"),
+            ]
+        )
+    ],
+    target_framework=TargetFramework.PLAYWRIGHT_TS,
+    selector_map={"username field": "#username"},
 )
+
+result = orchestrator.generate(request)
+for f in result.files:
+    print(f.path)
+    print(f.content)
 ```
 
 ---
 
-## 12. File Storage
+## 10. File Storage
 
 ```
 data/codegen/
-├── learned_templates.json       # Self-learned patterns
-├── template_stats.json          # Usage/success tracking
-└── static_templates.json        # Curated base templates (shipped with tool)
+├── learned_templates.json       # Self-learned patterns (legacy)
+├── template_stats.json          # Usage/success tracking (legacy)
+└── static_templates.json        # Curated base templates (legacy)
 ```
 
 ---
 
-## 13. Error Handling Strategy
+## 11. Error Handling
 
 | Scenario | Action |
 |----------|--------|
-| Template match confidence < 0.8 | Route to LLM |
-| LLM generation fails (API error) | Retry once, then return partial with warning |
-| Syntax validation fails | LLM fix loop (max 2 retries) |
+| Agent pipeline exception | Log warning, fall back to legacy pipeline |
+| LLM generation fails | `generation_error` set in state; validator catches |
+| Validation fails | LLM fix loop (max `PIPELINE_SETTINGS["max_retries"]`) |
 | Fix loop exhausted | Return code with `# FIXME` annotation |
 | No framework support | Return error with supported list |
-| Empty/invalid test case input | Return validation error |
+| Empty/invalid test case | Return validation error |
 
 ---
 
-## 14. Cost Optimization
-
-| Optimization | Savings |
-|-------------|---------|
-| Template handles common steps | ~70% fewer LLM calls after learning |
-| LLM verification (short prompt) vs full generation | ~60% fewer tokens per verified step |
-| Batch multiple steps in one LLM call | ~40% fewer API calls |
-| Cache identical step lookups | Eliminates duplicate calls |
-| Self-learning accumulation | Decreasing LLM dependency over time |
-
----
-
-## 15. Limitations & Future Work
-
-### Current Limitations
-- Element selectors are best-guess (user must verify)
-- Cannot execute tests against real app (no browser integration)
-- Limited to supported frameworks listed above
-- Template learning requires validation pass (won't learn from failed generations)
-
-### Future Enhancements
-- Browser extension to capture real selectors from app DOM
-- Visual test recording → manual test case extraction
-- Test maintenance agent (update selectors when app changes)
-- Coverage analysis integration (which manual tests are already automated)
-- Parallel generation for large test suites
+*End of LLD Document — Version 2.0*

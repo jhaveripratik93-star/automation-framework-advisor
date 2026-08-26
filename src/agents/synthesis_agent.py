@@ -33,7 +33,10 @@ _SYSTEM_PROMPT = (
     "Be concise. Respond in this exact format:\n"
     "VERDICT: <one sentence summary of what the data shows>\n"
     "GAPS: <comma-separated list of missing info, or 'none'>\n"
-    "NEEDS_MORE: <yes|no>"
+    "NEEDS_MORE: <yes|no>\n\n"
+    "CRITICAL RULE: If the tool results do NOT contain frameworks relevant to the user's "
+    "question (e.g. user asked about performance frameworks but results only show web UI "
+    "frameworks), you MUST set NEEDS_MORE: yes so a better tool can be tried."
 )
 
 _MAX_SYNTHESIS_ROUNDS = 2

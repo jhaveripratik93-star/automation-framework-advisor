@@ -64,9 +64,6 @@ _AMBIGUOUS_QUERIES = {
         "Do you want framework recommendations for testing micro-frontends, "
         "or building them?"
     ),
-    "best framework": (
-        "Best for what? (API testing / UI automation / performance / mobile)"
-    ),
 }
 
 
@@ -79,25 +76,33 @@ You are an intent classifier for an Automation Framework Advisory system.
 
 Your job: classify the user's message into exactly ONE of these categories:
 
-1. "tool_call" — The user wants data, comparisons, recommendations, migration plans, \
-framework details, coverage analysis, or any answer that requires retrieving structured \
-information from a knowledge base.
+1. "tool_call" — The user wants specific data that requires a knowledge base lookup:
+   - Comparing named frameworks (e.g. "Playwright vs Cypress")
+   - Asking for a recommendation WITH a specific use case (e.g. "best framework for Python API testing")
+   - Migration planning between named frameworks
+   - Coverage analysis for specific test cases
+   - Details about a specific named framework
+   - Asking which frameworks belong to a category
 
-2. "direct" — The user is greeting, thanking, asking a general explanation that can be \
-answered from general knowledge about test automation, or asking a follow-up that doesn't \
-need new data retrieval.
+2. "direct" — Answer from general knowledge, NO data lookup needed:
+   - Greetings, thanks, small talk
+   - Vague/casual questions without a specific use case (e.g. "what is a good test framework?", \
+"what is the best automation tool?", "which framework is awesome?")
+   - General explanations about testing concepts
+   - Follow-up clarifications that don't need new data
 
-3. "rejected" — The user's question is completely unrelated to test automation, \
-infrastructure automation, CI/CD, or framework selection (e.g., weather, recipes, \
-creative writing, coding unrelated to testing).
+3. "rejected" — Completely unrelated to test automation, infrastructure automation, CI/CD, \
+or framework selection (e.g. weather, recipes, creative writing).
 
-IMPORTANT RULES:
-- If in doubt between "tool_call" and "direct", choose "tool_call" (safer).
-- Questions about ANY testing/automation topic are in-scope, even if they mention \
-other technologies tangentially.
+CRITICAL RULES:
+- Vague recommendation questions WITHOUT a specific use case → "direct". \
+Examples: "what is a good framework?", "which is the best tool?", "what framework should I use?" → "direct".
+- Specific recommendation questions WITH a use case → "tool_call". \
+Examples: "best framework for React SPA with Python", "recommend for API testing" → "tool_call".
+- "What is X?" where X is a named framework → "tool_call".
+- "What is a test framework?" (generic concept) → "direct".
 - Greetings and thanks are always "direct".
-- "What is X?" where X is a framework → "tool_call" (we have specific data).
-- "Explain how testing works in general" → "direct" (no specific data needed).
+- If genuinely unsure, prefer "direct" over triggering an unnecessary tool call.
 
 Respond with ONLY a JSON object, no other text:
 {"action": "tool_call"|"direct"|"rejected", "reasoning": "one sentence explanation"}

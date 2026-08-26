@@ -379,13 +379,24 @@ class ToolExecutor:
             "api": ArchitectureType.API_ONLY,
             "microservice": ArchitectureType.MICROSERVICES,
             "mobile": ArchitectureType.NATIVE_MOBILE,
-            "performance": ArchitectureType.WEB_SPA,
-            "load": ArchitectureType.WEB_SPA,
         }
         arch = next(
             (v for k, v in arch_map.items() if k in use_case_lower),
             ArchitectureType.WEB_SPA,
         )
+
+        # For performance/load queries, pre-filter to only performance frameworks
+        # so the scoring engine doesn't rank web UI frameworks above K6/Locust
+        perf_keywords = {"performance", "load", "stress", "benchmark", "throughput"}
+        is_perf_query = any(kw in use_case_lower for kw in perf_keywords)
+        if is_perf_query:
+            from src.knowledge_base.schema import classify_framework_data
+            perf_frameworks = [
+                fw.framework_name for fw in self.kb.list_all()
+                if "performance_testing" in classify_framework_data(fw)
+            ]
+            if perf_frameworks:
+                return self._list_frameworks_by_category(category="performance_testing")
 
         profile = UserProfile(
             project_name="advisor_query",
