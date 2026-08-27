@@ -54,6 +54,8 @@ class PipelineState(TypedDict):
     _kb: Any
     _kg: Any
     _graphrag: Any
+    weight_profile: Any
+    user_profile: Any
 
 
 # ── Node factories ────────────────────────────────────────────────────
@@ -155,9 +157,9 @@ def make_reflect_node(reflection_agent):
 
 def make_format_node(format_agent):
     def format_response(state: PipelineState) -> dict:
-        result = format_agent.format(state["final_response"], state["user_message"])
-        logger.info("LangGraph[format]: fmt_type=%s", result.format_type)
-        return {"final_response": result.formatted}
+        result = format_agent.run_node(state)
+        logger.info("LangGraph[format]: response_len=%d", len(result.get("final_response", "")))
+        return result
     return format_response
 
 

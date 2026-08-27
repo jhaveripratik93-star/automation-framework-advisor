@@ -48,22 +48,30 @@ class GroqClient:
     ) -> None:
 
         self._api_key_override = api_key
-
-        # IMPORTANT:
-        # Read GROQ_MODEL when the client is created,
-        # rather than using a function default evaluated at import time.
-        self.model = model or os.getenv(
-            "GROQ_MODEL",
-            _DEFAULT_MODEL,
-        )
-
+        self.model = model or os.getenv("GROQ_MODEL", _DEFAULT_MODEL)
         self.temperature = temperature
         self.max_tokens = max_tokens
 
-        logger.info(
-            "GroqClient initialized: model=%s",
-            self.model,
-        )
+        # Cumulative token usage across all calls in a session
+        self._session_prompt_tokens: int = 0
+        self._session_completion_tokens: int = 0
+        self._session_total_tokens: int = 0
+
+        logger.info("GroqClient initialized: model=%s", self.model)
+
+    def reset_session_usage(self) -> None:
+        """Reset cumulative token counters — call before each pipeline run."""
+        self._session_prompt_tokens = 0
+        self._session_completion_tokens = 0
+        self._session_total_tokens = 0
+
+    def get_session_usage(self) -> dict:
+        """Return cumulative token usage since last reset."""
+        return {
+            "prompt_tokens": self._session_prompt_tokens,
+            "completion_tokens": self._session_completion_tokens,
+            "total_tokens": self._session_total_tokens,
+        }
 
     # -----------------------------------------------------------------
     # API key
@@ -164,6 +172,21 @@ class GroqClient:
 
             data = response.json()
 
+            # Capture token usage
+            usage = data.get("usage", {})
+
+            self._session_prompt_tokens     += usage.get("prompt_tokens", 0)
+            self._session_completion_tokens += usage.get("completion_tokens", 0)
+            self._session_total_tokens      += usage.get("total_tokens", 0)
+
+            logger.info(
+                "LLM TOKEN USAGE | model=%s | prompt=%s | completion=%s | total=%s",
+                    self.model,
+                    usage.get("prompt_tokens", 0),
+                    usage.get("completion_tokens", 0),
+                    usage.get("total_tokens", 0),
+                )
+
             message = data["choices"][0]["message"]
 
             content = (
@@ -181,6 +204,7 @@ class GroqClient:
             return {
                 "type": "text",
                 "content": content,
+                "usage": usage,
             }
 
         except httpx.HTTPStatusError as exc:

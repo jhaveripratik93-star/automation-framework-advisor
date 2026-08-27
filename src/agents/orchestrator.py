@@ -178,6 +178,8 @@ class AgentOrchestrator:
             "reflection_count": 0,
             "final_response": "",
             "conversation_history": self._conversation_memory.get_history(last_n=10),
+            "weight_profile": weight_profile,
+            "user_profile": self._profile,
         }
 
         result_state = pipeline.invoke(initial_state)
@@ -250,6 +252,8 @@ class AgentOrchestrator:
             "reflection_count": 0,
             "final_response": "",
             "conversation_history": self._conversation_memory.get_history(last_n=10),
+            "weight_profile": weight_profile,
+            "user_profile": self._profile,
         }
 
         final_state = None

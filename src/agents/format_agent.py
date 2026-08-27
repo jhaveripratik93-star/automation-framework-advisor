@@ -30,7 +30,8 @@ _SYSTEM_PROMPT = (
     "- Keep it compact: no excessive blank lines, no redundant headings\n"
     "- Use ### for main sections, avoid #### or deeper nesting\n"
     "- Do not add or remove factual content — only improve structure\n"
-    "- Aim for brevity: collapse verbose sentences, remove filler"
+    "- Aim for brevity: collapse verbose sentences, remove filler\n"
+    "- Do NOT add TLDR, summaries, or any content not in the original response"
 )
 
 
@@ -97,7 +98,177 @@ class FormatAgent:
         raw_response = state.get("evaluation_response", state.get("final_response", ""))
         user_message = state["user_message"]
         result = self.format(raw_response, user_message)
-        return {"final_response": result.formatted}
+
+        weight_profile = state.get("weight_profile")
+        already_has_scoring = any(
+            marker in result.formatted
+            for marker in ("Weighted Score", "Weight-Based", "Weighted score", "weighted score")
+        )
+        logger.info(
+            "FormatAgent.run_node: weight_profile=%s already_has_scoring=%s response_len=%d",
+            weight_profile.profile_name if weight_profile else None,
+            already_has_scoring,
+            len(result.formatted),
+        )
+        summary = "" if already_has_scoring else self._build_weight_summary(
+            weight_profile,
+            llm_response=result.formatted,
+            user_profile=state.get("user_profile"),
+            profile_context=state.get("profile_context", ""),
+        )
+        logger.info("FormatAgent.run_node: summary_len=%d", len(summary))
+        final = result.formatted + ("\n\n" + summary if summary else "")
+        return {"final_response": final}
+
+    # ------------------------------------------------------------------
+    # Weight-based summary (appended after LLM response)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _parse_profile_context(profile_context: str):
+        """Parse the profile_context string into a UserProfile.
+
+        profile_context format: "language=python, team=5, ci_cd=github_actions, ..."
+        Falls back to safe defaults for any missing field.
+        """
+        from src.models import UserProfile, ArchitectureType, ExperienceLevel
+
+        kv: dict[str, str] = {}
+        for part in profile_context.split(","):
+            part = part.strip()
+            if "=" in part:
+                k, _, v = part.partition("=")
+                kv[k.strip()] = v.strip()
+
+        # architecture
+        _arch_map = {
+            "web_spa": ArchitectureType.WEB_SPA,
+            "web_mpa": ArchitectureType.WEB_MPA,
+            "api_only": ArchitectureType.API_ONLY,
+            "microservices": ArchitectureType.MICROSERVICES,
+            "native_mobile": ArchitectureType.NATIVE_MOBILE,
+            "hybrid_mobile": ArchitectureType.HYBRID_MOBILE,
+            "desktop": ArchitectureType.DESKTOP,
+            "cloud_infrastructure": ArchitectureType.CLOUD_INFRASTRUCTURE,
+        }
+        arch_val = kv.get("architecture", "web_spa").lower()
+        arch = _arch_map.get(arch_val, ArchitectureType.WEB_SPA)
+
+        # experience
+        _exp_map = {
+            "beginner": ExperienceLevel.BEGINNER,
+            "intermediate": ExperienceLevel.INTERMEDIATE,
+            "advanced": ExperienceLevel.ADVANCED,
+            "expert": ExperienceLevel.EXPERT,
+        }
+        exp = _exp_map.get(kv.get("experience", "intermediate").lower(), ExperienceLevel.INTERMEDIATE)
+
+        try:
+            team_size = int(kv.get("team", "5"))
+        except ValueError:
+            team_size = 5
+
+        try:
+            legacy_count = int(kv.get("legacy_scripts", "0"))
+        except ValueError:
+            legacy_count = 0
+
+        return UserProfile(
+            project_name="weight_summary",
+            architecture_types=[arch],
+            primary_language=kv.get("language", "python"),
+            team_size=max(1, team_size),
+            automation_experience=exp,
+            ci_cd_tool=kv.get("ci_cd", "github_actions"),
+            legacy_test_count=legacy_count,
+        )
+
+    @staticmethod
+    def _build_weight_summary(
+        weight_profile,
+        llm_response: str = "",
+        user_profile=None,
+        profile_context: str = "",
+    ) -> str:
+        """Score only the frameworks mentioned in the LLM response.
+        Returns empty string if weight_profile is None, no frameworks found, or scoring fails.
+        """
+        if weight_profile is None:
+            logger.warning("FormatAgent._build_weight_summary: weight_profile is None — skipping")
+            return ""
+        try:
+            from src.scoring.engine import ScoringEngine
+            from src.models import UserProfile
+            from src.knowledge_base import KnowledgeBase
+
+            kb = KnowledgeBase(data_dir="data/frameworks")
+            kb.load()
+
+            # Extract only framework names that appear in the LLM response
+            response_lower = llm_response.lower()
+            mentioned = [
+                fw for fw in kb.list_all()
+                if fw.framework_name.lower() in response_lower
+            ]
+            if not mentioned:
+                logger.info("FormatAgent._build_weight_summary: no frameworks mentioned in response — skipping")
+                return ""
+
+            if user_profile is None:
+                user_profile = FormatAgent._parse_profile_context(profile_context)
+
+            engine = ScoringEngine(knowledge_base=kb, weight_profile=weight_profile)
+            matrix = engine.evaluate(user_profile)
+
+            # Keep only rankings for mentioned frameworks, sorted by score
+            mentioned_names = {fw.framework_name.lower() for fw in mentioned}
+            rankings = [
+                r for r in matrix.rankings
+                if r.framework.lower() in mentioned_names
+            ]
+            if not rankings:
+                return ""
+
+            # Re-rank from 1 within this subset
+            for i, r in enumerate(rankings):
+                r.rank = i + 1
+
+            _labels = {
+                "C1_language_compatibility": "Language",
+                "C2_api_validation": "API",
+                "C3_performance_load": "Perf",
+                "C4_cicd_integration": "CI/CD",
+                "C5_maintainability": "Maint.",
+                "C6_cloud_readiness": "Cloud",
+                "C7_license_cost": "Cost",
+            }
+            sorted_w = sorted(
+                [(lbl, weight_profile.get(cid)) for cid, lbl in _labels.items() if weight_profile.get(cid) > 0],
+                key=lambda x: -x[1],
+            )
+            priority_str = " > ".join(f"{lbl}({w:.0%})" for lbl, w in sorted_w)
+
+            lines = [
+                "---",
+                f"### ⚖️ Weight-Based Ranking *(preset: {weight_profile.profile_name})*",
+                f"**Priorities:** {priority_str}",
+                "",
+                "| Rank | Framework | Score | Top Strength | Key Weakness |",
+                "|---|---|---|---|---|",
+            ]
+            for r in rankings:
+                pro = r.pros[0] if r.pros else "—"
+                con = r.cons[0] if r.cons else "—"
+                lines.append(f"| {r.rank} | **{r.framework}** | {r.overall_score}/100 | {pro} | {con} |")
+
+            logger.info(
+                "FormatAgent._build_weight_summary: scored %d framework(s): %s",
+                len(rankings), [r.framework for r in rankings],
+            )
+            return "\n".join(lines)
+        except Exception:
+            logger.warning("FormatAgent: weight summary generation failed", exc_info=True)
+            return ""
 
     # ------------------------------------------------------------------
     # LLM-based formatting
@@ -256,44 +427,11 @@ class FormatAgent:
         # Strip leading/trailing blank lines
         result = "\n".join(compacted).strip()
 
-        # Ensure response ends with a complete sentence (not truncated mid-word)
-        result = FormatAgent._ensure_complete_ending(result)
-
         return result
 
     @staticmethod
     def _ensure_complete_ending(text: str) -> str:
-        """Ensure the response ends with a complete sentence, not a truncated fragment.
-
-        If the text appears cut off (no terminal punctuation), trims back to the
-        last complete sentence. Preserves markdown tables and list items as-is.
-        """
-        if not text:
-            return text
-
-        # Don't touch text that ends with a markdown table row or list
-        last_line = text.rstrip().rsplit("\n", 1)[-1].strip()
-        if last_line.startswith("|") or last_line.startswith("-") or last_line.startswith("*"):
-            return text
-
-        # Check if text ends with sentence-terminal punctuation
-        stripped = text.rstrip()
-        if stripped and stripped[-1] in ".!?:)\"'`":
-            return text
-
-        # Text appears truncated — find the last complete sentence
-        # Look for the last sentence-ending punctuation followed by a space or newline
-        import re
-        # Find last position of sentence-ending punctuation (. ! ?) not inside a table
-        matches = list(re.finditer(r'[.!?](?:\s|$)', stripped))
-        if matches:
-            last_match = matches[-1]
-            # Trim to end of last complete sentence
-            trimmed = stripped[:last_match.end()].rstrip()
-            if len(trimmed) > len(stripped) * 0.5:  # Only trim if we keep >50% of content
-                return trimmed
-
-        # Can't find a clean cut point — return as-is rather than losing content
+        """No-op — kept for compatibility."""
         return text
 
     # ------------------------------------------------------------------

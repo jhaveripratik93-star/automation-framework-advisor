@@ -42,6 +42,10 @@ class AgentState(TypedDict, total=False):
     # ── Conversation memory ───────────────────────────────────────────
     conversation_history: list[dict[str, str]]
 
+    # ── Weight profile + user profile (passed through for format-time summary) ──
+    weight_profile: Any
+    user_profile: Any
+
 
     # Runtime state (mutated by nodes)
     # action: str

@@ -91,7 +91,7 @@ class AdvisorLLM:
             self._history.append({"role": "assistant", "content": response})
             return response
         except Exception as exc:
-            logger.warning("AdvisorLLM.respond: %s: %s", type(exc).__name__, exc)
+            logger.warning("AdvisorLLM.respond: %s: %s", type(exc).__name__, exc, exc_info=True)
             return "I encountered an error processing your request. Please try again."
 
     # ── Background entity extraction ──────────────────────────────────

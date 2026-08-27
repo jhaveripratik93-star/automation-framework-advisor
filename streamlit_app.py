@@ -947,6 +947,8 @@ def _render_advisor_tab() -> None:
                 import time; time.sleep(0.4)
 
             try:
+                if hasattr(_client, "reset_session_usage"):
+                    _client.reset_session_usage()
                 response = advisor.run_pipeline(
                     user_input,
                     st.session_state.uploaded_docs_context,
@@ -956,6 +958,8 @@ def _render_advisor_tab() -> None:
                 )
             except Exception as exc:
                 logger.warning("Pipeline failed (%s) — direct respond", exc)
+                import traceback
+                logger.warning("Pipeline traceback: %s", traceback.format_exc())
                 response = advisor.respond(
                     user_input,
                     st.session_state.uploaded_docs_context,
@@ -964,6 +968,15 @@ def _render_advisor_tab() -> None:
 
             loading_slot.empty()
             st.markdown(response)
+            if hasattr(_client, "get_session_usage"):
+                usage = _client.get_session_usage()
+                logger.info(
+                    "TOKEN USAGE | query='%.60s' | prompt=%d | completion=%d | total=%d",
+                    user_input,
+                    usage["prompt_tokens"],
+                    usage["completion_tokens"],
+                    usage["total_tokens"],
+                )
 
         st.session_state.messages.append({"role": "assistant", "content": response})
 
