@@ -38,6 +38,7 @@ class PipelineState(TypedDict):
     profile_context: str
     uploaded_docs: str
     case_study: str
+    conversation_history: list[dict[str, str]]
 
     # Runtime state (mutated by nodes)
     action: str                        # "tool_call" | "direct"
@@ -62,7 +63,11 @@ class PipelineState(TypedDict):
 
 def make_decide_node(decision_agent):
     def decide(state: PipelineState) -> dict:
-        result = decision_agent.decide(state["user_message"], state["graph_context"])
+        result = decision_agent.decide(
+            state["user_message"],
+            state["graph_context"],
+            conversation_history=state.get("conversation_history", []),
+        )
         logger.info("LangGraph[decide]: action=%s", result.action)
         output: dict[str, Any] = {"action": result.action}
         # Short-circuit: if rejected or clarify, set final_response directly
@@ -81,6 +86,16 @@ def make_select_tools_node(tool_selection_agent, tool_executor):
         msg = state["user_message"]
         if state.get("synthesis_verdict") and state.get("round_num", 0) > 0:
             msg = f"{msg}\n\n[Synthesis feedback]: {state['synthesis_verdict']}"
+        # Augment with conversation context for short follow-up messages
+        conversation_history = state.get("conversation_history", [])
+        if conversation_history and len(msg.strip()) < 80:
+            # Short message likely a follow-up — prepend recent context
+            recent = conversation_history[-4:]  # last 2 exchanges
+            context_lines = []
+            for turn in recent:
+                context_lines.append(f"{turn['role']}: {turn['content'][:200]}")
+            if context_lines:
+                msg = f"[Conversation context]\n" + "\n".join(context_lines) + f"\n\n[Current message] {msg}"
         selection = tool_selection_agent.select(msg, available)
         logger.info("LangGraph[select_tools]: %d tool(s) selected", len(selection.tool_calls))
         # Store selection in state for execute_tools to consume
@@ -132,6 +147,7 @@ def make_evaluate_node(evaluation_agent):
             graph_context=state.get("graph_context", ""),
             profile_context=state.get("profile_context", ""),
             reflection_critique=state.get("reflection_critique", ""),
+            conversation_history=state.get("conversation_history", []),
             uploaded_docs=state.get("uploaded_docs", ""),
             case_study=state.get("case_study", ""),
         )

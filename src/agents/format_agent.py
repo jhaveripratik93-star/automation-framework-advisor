@@ -63,6 +63,9 @@ class FormatAgent:
         if not raw_response.strip():
             return FormatResult(formatted=raw_response, format_type="markdown")
 
+        # Strip TL;DR headings early — before any other formatting
+        raw_response = self._strip_tldr(raw_response)
+
         # Try LLM-based formatting if client is available
         if self._client:
             llm_result = self._format_with_llm(raw_response, user_message)
@@ -87,6 +90,7 @@ class FormatAgent:
 
         # Final pass: strip HTML, fix tables, and compact whitespace
         formatted = self._strip_html(formatted)
+        formatted = self._strip_tldr(formatted)
         formatted = self._fix_table_cells(formatted)
         formatted = self._compact(formatted)
 
@@ -288,6 +292,7 @@ class FormatAgent:
 
             # Always strip HTML, fix tables, and compact — even from LLM output
             formatted = self._strip_html(formatted)
+            formatted = self._strip_tldr(formatted)
             formatted = self._fix_table_cells(formatted)
             formatted = self._compact(formatted)
 
@@ -307,6 +312,17 @@ class FormatAgent:
     # ------------------------------------------------------------------
     # HTML stripping and cleanup
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _strip_tldr(text: str) -> str:
+        """Remove TL;DR / TLDR headings that the LLM sometimes generates."""
+        # Remove markdown headings: "## TL;DR", "### TLDR:", etc.
+        text = re.sub(r"^#{1,4}\s*(?:TL;?DR|TLDR)\s*:?\s*\n?", "", text, flags=re.MULTILINE | re.IGNORECASE)
+        # Remove bold-wrapped: "**TL;DR:**", "**TLDR**:", "**TL;DR**", etc.
+        text = re.sub(r"\*{1,2}(?:TL;?DR|TLDR):?\*{1,2}\s*:?\s*", "", text, flags=re.IGNORECASE)
+        # Remove plain "TL;DR:" at the start of a line
+        text = re.sub(r"^(?:TL;?DR|TLDR)\s*:\s*", "", text, flags=re.MULTILINE | re.IGNORECASE)
+        return text
 
     @staticmethod
     def _strip_html(text: str) -> str:
