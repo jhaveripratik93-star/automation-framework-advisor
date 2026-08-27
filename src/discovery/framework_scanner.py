@@ -64,6 +64,34 @@ _SCAN_INTERVAL_SECONDS = 86400
 
 _HTTP_TIMEOUT = 30.0
 
+# Canonical key order for framework YAML files — matches hand-crafted profiles
+# like ansible.yaml, cypress.yaml, playwright.yaml, etc.
+_YAML_KEY_ORDER = [
+    "framework_name",
+    "vendor",
+    "license",
+    "website",
+    "first_release",
+    "latest_version",
+    "category",
+    "languages_supported",
+    "architecture_fit",
+    "capabilities",
+    "cloud_providers",
+    "testing_capabilities",
+    "cicd_integration",
+    "cloud_grids",
+    "performance",
+    "maintainability",
+    "cloud_migration_metrics",
+    "pip_packages",
+    "install_commands",
+    "test_command",
+    "report_paths",
+    "limitations",
+    "versions",
+]
+
 
 @dataclass
 class DiscoveredFramework:
@@ -252,9 +280,24 @@ class FrameworkScanner:
 
         try:
             self._data_dir.mkdir(parents=True, exist_ok=True)
+
+            # Reorder keys to match canonical hand-crafted YAML structure
+            # and ensure all expected keys are present
+            ordered_profile: dict[str, Any] = {}
+            for key in _YAML_KEY_ORDER:
+                if key in profile:
+                    ordered_profile[key] = profile[key]
+                else:
+                    # Add missing keys with "Not Applicable" default
+                    ordered_profile[key] = "Not Applicable"
+            # Append any extra keys not in the canonical order
+            for key, val in profile.items():
+                if key not in ordered_profile:
+                    ordered_profile[key] = val
+
             with open(filepath, "w", encoding="utf-8") as f:
                 yaml.dump(
-                    profile,
+                    ordered_profile,
                     f,
                     default_flow_style=False,
                     allow_unicode=True,
@@ -978,87 +1021,122 @@ class FrameworkScanner:
         context_parts.append(f"""
 \nThe YAML profile MUST include exactly these top-level keys with REAL, SPECIFIC data for {name}.
 Do NOT use generic placeholder values. Every field must reflect the actual characteristics of {name}.
+Research your knowledge about {name} to provide accurate, detailed information.
 
 REQUIRED KEYS:
-- framework_name: string
-- vendor: string (the company or organization behind it)
-- license: string (SPDX identifier)
+- framework_name: string (official name, e.g. "Playwright", "Selenium WebDriver")
+- vendor: string (company or organization, e.g. "Microsoft", "Red Hat (IBM)")
+- license: string (SPDX identifier, e.g. "MIT", "Apache-2.0")
 - website: string (official URL)
-- first_release: string (year of first public release)
-- latest_version: string (current stable version number)
+- first_release: string (year of first public release — MUST NOT be empty, e.g. "2020")
+- latest_version: string (current stable version, e.g. "1.45+", "4.x")
 - category: "test_automation" or "cloud_infrastructure"
-- languages_supported: list of strings (all languages the framework supports)
-- architecture_fit: dict with keys: web_spa, web_mpa, native_mobile, hybrid_mobile, desktop, api_testing, microservices (boolean or "limited"/"partial" values)
-- capabilities: dict with keys: shadow_dom, iframe_cross_origin, multi_tab, multi_domain, file_upload_download, network_interception, parallel_execution, auto_wait, test_recorder, code_generation (boolean or string like "limited", "plugin (name)")
-- cicd_integration: dict with keys: docker_support, github_actions, jenkins, gitlab_ci, azure_devops, pre_built_docker_images (boolean or string values)
+- languages_supported: list of ALL languages the framework supports.
+  Include language variants with context, e.g. ["Python", "Java", "JavaScript", "C#", "Ruby"]
+  For IaC tools: include DSLs like ["YAML (playbooks)", "Python (modules)", "Jinja2 (templating)"]
 
-CRITICAL FIELDS — MUST BE POPULATED WITH SPECIFIC DATA (NOT empty or generic):
+- architecture_fit: dict — what types of applications this framework can test/manage.
+  Include ALL applicable keys with true/false/"limited"/"partial":
+    web_spa, web_mpa, native_mobile, hybrid_mobile, desktop, api_testing, microservices
+  For IaC frameworks, also include:
+    cloud_infrastructure, infrastructure_as_code, configuration_management, multi_cloud, hybrid_cloud, on_premise
+
+- capabilities: dict — what the framework can do. Include ALL keys with true/false/string:
+    shadow_dom, iframe_cross_origin, multi_tab, multi_domain, canvas_webgl,
+    file_upload_download, network_interception, visual_regression, parallel_execution,
+    auto_wait, test_recorder, code_generation, component_testing, accessibility_testing
+  Add framework-specific capabilities too (e.g. "gesture_support", "device_farm_support" for mobile;
+  "idempotent", "agentless", "vault_integration" for IaC).
+
+- cicd_integration: dict with ALL applicable keys:
+    docker_support, github_actions, jenkins, gitlab_ci, azure_devops, pre_built_docker_images
+  Add framework-specific CI tools (e.g. "ansible_tower", "terraform_cloud", "cypress_cloud").
+
+- cloud_providers: dict — if the framework interacts with cloud providers, list each with its
+  integration method: e.g. {{"aws": "amazon.aws collection", "azure": "azure.azcollection"}}
+  Use empty dict ONLY for pure test frameworks with no cloud provider integration.
+
+- testing_capabilities: dict — the framework's testing features:
+  e.g. {{"unit_testing": "pytest (native)", "integration_testing": "molecule + testinfra",
+         "compliance_testing": "ansible-lint", "dry_run": "--check --diff"}}
+  Use empty dict ONLY if the framework has no built-in testing features.
 
 - cloud_grids: dict listing cloud/grid providers that support this framework.
-  Include browserstack, sauce_labs, lambda_test, and any framework-specific cloud services (e.g. cypress_cloud for Cypress).
-  Use true/false/"limited" for each. If the framework is not applicable for cloud grids (e.g., it's an IaC tool), use: not_applicable: true
+  Include browserstack, sauce_labs, lambda_test, and any framework-specific cloud services.
+  Use true/false/"limited" for each. If not applicable, use: not_applicable: true
 
-- performance: dict with REAL performance characteristics:
-  - avg_test_execution_speed: "fast" / "moderate" / "slow" (based on actual framework speed)
-  - resource_footprint: "low" / "medium" / "high" (memory/CPU usage)
-  - startup_time_ms: integer (realistic cold-start time in milliseconds)
-  - parallel_overhead: "low" / "medium" / "high" (cost of parallelization)
+- performance: dict with REAL performance characteristics specific to {name}:
+  - avg_test_execution_speed: "very fast" / "fast" / "moderate" / "slow" (based on actual speed)
+  - resource_footprint: "low" / "medium" / "medium-high" / "high" (memory/CPU)
+  - startup_time_ms: integer (realistic cold-start time, e.g. 500 for Playwright, 5000 for Appium)
+  - parallel_overhead: string describing parallelization cost (e.g. "low (native worker processes)")
+  Add framework-specific performance metrics too (e.g. "max_virtual_users", "connection_methods").
 
-- maintainability: dict with REAL maintainability features:
-  - page_object_support: true/false/"custom pattern" (does it support POM natively?)
-  - fixture_support: true/false/string describing how fixtures work
-  - reusable_components: true/false/string
-  - built_in_reporting: true/false/string (describe the reporting)
+- maintainability: dict with REAL maintainability features for {name}:
+  - page_object_support: true/false/"custom pattern"/"keyword-based abstraction"
+  - fixture_support: true/false/string describing fixture mechanism (e.g. "roles, includes, imports")
+  - reusable_components: true/false/string (e.g. "roles and collections", "custom commands")
+  - built_in_reporting: true/false/string (e.g. "basic (dashboard in Cloud)", "callback plugins (JSON, JUnit)")
   - trace_viewer: true/false
-  - debugging_tools: string describing debugging capabilities (e.g. "excellent (time-travel)", "moderate (logs only)")
+  - debugging_tools: string (e.g. "excellent (time-travel)", "verbosity levels (-v to -vvvv), debugger strategy")
+  Add extras like: role_versioning, module_versioning, state_backends, etc. where applicable.
 
-- limitations: list of 5-10 SPECIFIC, REAL limitations of {name}. These must be genuine constraints that a team would encounter, such as:
-  - Language restrictions (e.g., "JavaScript only - no Python/Java support")
-  - Platform limitations (e.g., "Cannot test native mobile apps")
-  - Architecture constraints (e.g., "Single browser tab execution model")
-  - Cost/licensing issues (e.g., "Parallel execution requires paid cloud service")
-  - Setup complexity (e.g., "Complex emulator setup required")
-  Do NOT use generic limitations like "may be incomplete" or "manual review needed".
+- cloud_migration_metrics: dict — if the framework is used in cloud/infra contexts, include
+  KPI metrics like: configuration_coverage, drift_detection, deployment_frequency,
+  mean_time_to_recovery, change_failure_rate, compliance_score.
+  Use empty dict for pure test frameworks.
 
-- pip_packages: dict of Python package dependencies with version specs (e.g., {{"playwright": ">=1.40", "pytest": ">=7.0"}}).
-  Use empty dict {{}} ONLY if the framework is not a Python framework.
+- limitations: list of 5-10 SPECIFIC, REAL limitations of {name}. These must be genuine
+  constraints a team would encounter. Examples:
+  - "JavaScript/TypeScript ONLY - no Python/Java support"
+  - "Single browser tab execution model"
+  - "Parallel execution requires paid Cypress Cloud"
+  - "GPL-3.0 license may restrict some enterprise usage"
+  Do NOT include generic limitations like "may be incomplete" or "manual review needed".
+  Do NOT include "Community size: X stars" — that's not a limitation.
 
-- install_commands: list of commands needed AFTER package installation (e.g., ["playwright install --with-deps chromium"]).
-  Include any driver installs, browser downloads, SDK setups, or init commands specific to {name}.
-  Use empty list [] ONLY if no post-install setup is needed (rare).
+- pip_packages: dict of Python package dependencies with version specs.
+  e.g. {{"playwright": ">=1.40", "pytest-playwright": ">=0.4", "pytest": ">=7.0"}}
+  Use empty dict ONLY if the framework is not installable via pip.
 
-- test_command: string — the default CLI command to run tests (e.g., "pytest tests/", "npx cypress run", "mvn test")
+- install_commands: list of commands needed AFTER package installation.
+  e.g. ["playwright install --with-deps chromium", "appium driver install uiautomator2"]
+  Use empty list ONLY if truly no post-install setup is needed.
 
-- report_paths: list of strings — default output paths for test results/artifacts (e.g., ["playwright-report/", "test-results/"]).
-  Include paths for reports, screenshots, videos, or any artifacts {name} generates.
+- test_command: string — the default CLI command to run tests.
+  e.g. "pytest tests/", "npx cypress run", "mvn test", "robot tests/"
 
-- versions: list of version history entries (at least 2-4 major versions). Each entry must have:
-  - version: string (version number)
-  - release_date: string (YYYY-MM-DD format)
-  - min_runtime: string (e.g., "Node 18+", "Python 3.8+", "Java 11+")
-  - notable_features: list of strings (key features in this release)
-  - capabilities_added: list of dicts with keys: name, status ("added"/"improved"), description
-  - capabilities_deprecated: list of dicts with keys: name, status ("deprecated"/"removed"), description, replacement
-  - breaking_changes: list of dicts with keys: description, migration_effort ("low"/"medium"/"high"), affected_apis (list), workaround
+- report_paths: list of default output paths for test results/artifacts.
+  e.g. ["playwright-report/", "test-results/"], ["target/surefire-reports/"]
+
+- versions: list of 2-4 version history entries. EACH entry must have:
+  - version: string
+  - release_date: string (YYYY-MM-DD or at least YYYY-MM)
+  - min_runtime: string (e.g. "Node 18+", "Python 3.8+")
+  - notable_features: list of 2-4 strings describing key features
+  - capabilities_added: list of dicts {{name, status ("added"/"improved"), description}}
+  - capabilities_deprecated: list of dicts {{name, status ("deprecated"/"removed"), description, replacement}}
+  - breaking_changes: list of dicts {{description, migration_effort ("low"/"medium"/"high"), affected_apis (list), workaround}}
   - known_limitations: list of strings
-  Include the latest stable version and 2-3 previous major versions. For older versions, include eol_date if known.
+  For older versions include eol_date if known.
 
-Use true/false for booleans, use "limited" or "plugin (name)" for partial support.
+Use true/false for booleans, "limited" or "plugin (name)" for partial support.
+Generate REAL data based on your knowledge of {name}. Do NOT use placeholder text.
 """)
         return "\n".join(context_parts)
 
     def _generate_profile_template(self, name: str, info: dict[str, Any]) -> dict[str, Any]:
         """Generate a profile using template defaults when LLM is unavailable.
 
-        Attempts to produce meaningful, framework-specific data from gathered info
-        rather than empty/generic placeholders.
+        Derives as much framework-specific data as possible from GitHub, PyPI,
+        and npm metadata so the profile is close to hand-crafted quality.
         """
         github = info.get("github", {})
         discovered = info.get("discovered", {})
         pypi = info.get("pypi", {})
         npm = info.get("npm", {})
 
-        # Determine language
+        # ── Languages ─────────────────────────────────────────────────
         language = (
             github.get("language", "")
             or discovered.get("language", "")
@@ -1066,14 +1144,40 @@ Use true/false for booleans, use "limited" or "plugin (name)" for partial suppor
         )
         languages = [language] if language != "Unknown" else ["JavaScript"]
 
-        # Determine category from topics
+        # Enrich from PyPI classifiers
+        classifiers = pypi.get("classifiers", [])
+        for clf in classifiers:
+            if clf.startswith("Programming Language ::"):
+                parts = clf.split("::")
+                if len(parts) >= 2:
+                    lang_name = parts[1].strip()
+                    if lang_name and lang_name not in languages and lang_name not in ("3", "2"):
+                        languages.append(lang_name)
+
+        # Enrich from npm keywords
+        npm_keywords = npm.get("keywords", [])
+        lang_keyword_map = {
+            "typescript": "TypeScript", "python": "Python", "java": "Java",
+            "csharp": "C#", "ruby": "Ruby", "golang": "Go", "rust": "Rust",
+        }
+        for kw in npm_keywords:
+            mapped = lang_keyword_map.get(kw.lower())
+            if mapped and mapped not in languages:
+                languages.append(mapped)
+
+        # ── Category & description ────────────────────────────────────
         topics = github.get("topics", []) or discovered.get("topics", [])
+        desc = (github.get("description", "") or discovered.get("description", "")).lower()
+        readme = github.get("readme_excerpt", "").lower()
+
         is_infra = any(t in topics for t in ["infrastructure", "iac", "devops", "cloud"])
+        is_perf = any(t in topics for t in ["load-testing", "performance", "benchmark", "stress"])
+        is_security = any(t in topics for t in ["security", "penetration-testing", "vulnerability"])
+        is_bdd = any(t in topics for t in ["bdd", "gherkin", "cucumber"])
         category = "cloud_infrastructure" if is_infra else "test_automation"
 
-        # Determine architecture fit from topics/description
-        desc = (github.get("description", "") or discovered.get("description", "")).lower()
-        arch_fit = {
+        # ── Architecture fit ──────────────────────────────────────────
+        arch_fit: dict[str, Any] = {
             "web_spa": any(w in desc for w in ["web", "browser", "e2e", "ui"]),
             "web_mpa": any(w in desc for w in ["web", "browser", "e2e"]),
             "native_mobile": any(w in desc for w in ["mobile", "ios", "android", "native"]),
@@ -1082,8 +1186,20 @@ Use true/false for booleans, use "limited" or "plugin (name)" for partial suppor
             "api_testing": any(w in desc for w in ["api", "rest", "http", "graphql"]),
             "microservices": any(w in desc for w in ["microservice", "api", "contract"]),
         }
+        # IaC-specific architecture keys
+        if is_infra:
+            arch_fit.update({
+                "cloud_infrastructure": True,
+                "infrastructure_as_code": True,
+                "configuration_management": any(w in desc for w in ["configuration", "config"]),
+                "multi_cloud": any(w in (desc + " " + readme) for w in ["multi-cloud", "aws", "azure", "gcp"]),
+                "hybrid_cloud": any(w in desc for w in ["hybrid", "on-prem"]),
+                "on_premise": any(w in desc for w in ["on-prem", "bare metal", "server"]),
+            })
+        if is_perf:
+            arch_fit.update({"performance_testing": True, "load_testing": True})
 
-        # Determine license
+        # ── Metadata ──────────────────────────────────────────────────
         lic = (
             github.get("license", "")
             or discovered.get("license", "")
@@ -1107,14 +1223,26 @@ Use true/false for booleans, use "limited" or "plugin (name)" for partial suppor
         if full_name and "/" in full_name:
             vendor = full_name.split("/")[0]
 
-        # ── Derive performance characteristics from language/type ──────
+        # ── first_release: derive from GitHub created_at ──────────────
+        first_release = ""
+        github_created = github.get("created_at", "")
+        if github_created and len(github_created) >= 4:
+            first_release = github_created[:4]
+
+        # ── Language-based flags ──────────────────────────────────────
         is_python = language.lower() == "python"
         is_java = language.lower() in ("java", "kotlin")
         is_js = language.lower() in ("javascript", "typescript")
         is_go = language.lower() == "go"
+        is_rust = language.lower() == "rust"
+        is_ruby = language.lower() == "ruby"
+        is_csharp = language.lower() in ("c#", "csharp")
         is_mobile = arch_fit.get("native_mobile") or arch_fit.get("hybrid_mobile")
+        is_web = any(arch_fit.get(k) for k in ["web_spa", "web_mpa"])
 
-        if is_go:
+        # ── Derive performance characteristics from language/type ──────
+
+        if is_go or is_rust:
             perf_speed, perf_footprint, startup_ms = "fast", "low", 200
         elif is_js and not is_mobile:
             perf_speed, perf_footprint, startup_ms = "fast", "medium", 1000
@@ -1125,6 +1253,16 @@ Use true/false for booleans, use "limited" or "plugin (name)" for partial suppor
         else:
             perf_speed, perf_footprint, startup_ms = "moderate", "medium", 1500
 
+        perf: dict[str, Any] = {
+            "avg_test_execution_speed": perf_speed,
+            "resource_footprint": perf_footprint,
+            "startup_time_ms": startup_ms,
+            "parallel_overhead": "low" if is_go else "medium",
+        }
+        if is_perf:
+            perf["max_virtual_users"] = "10000+ per instance"
+            perf["distributed_execution"] = "native"
+
         # ── Derive install commands based on ecosystem ─────────────────
         install_commands: list[str] = []
         pip_packages: dict[str, str] = {}
@@ -1134,8 +1272,14 @@ Use true/false for booleans, use "limited" or "plugin (name)" for partial suppor
         if is_python:
             pkg_name = pypi.get("name", name.lower().replace(" ", "-"))
             pip_packages = {pkg_name: ">=1.0"}
+            requires_python = pypi.get("requires_python", "")
+            if requires_python:
+                pip_packages["python"] = requires_python
             test_command = "pytest tests/"
             report_paths = ["test-results/"]
+            if is_web:
+                install_commands = [f"{pkg_name} install" if "playwright" in pkg_name.lower()
+                                   else f"pip install {pkg_name}"]
         elif is_java:
             test_command = "mvn test"
             report_paths = ["target/surefire-reports/"]
@@ -1143,14 +1287,19 @@ Use true/false for booleans, use "limited" or "plugin (name)" for partial suppor
             npm_name = npm.get("name", name.lower().replace(" ", "-"))
             test_command = f"npx {npm_name} run"
             report_paths = ["test-results/"]
-            # Check if it's a browser testing tool
-            if any(w in desc for w in ["browser", "e2e", "ui", "web"]):
+            if is_web:
                 install_commands = [f"npx {npm_name} install"]
         elif is_go:
-            test_command = f"{name.lower()} run tests/"
-            report_paths = [f"{name.lower()}-results.json"]
+            test_command = f"{name.lower().replace(' ', '-')} run tests/"
+            report_paths = [f"{name.lower().replace(' ', '-')}-results.json"]
+        elif is_ruby:
+            test_command = "bundle exec rspec"
+            report_paths = ["spec/reports/"]
+        elif is_csharp:
+            test_command = "dotnet test"
+            report_paths = ["TestResults/"]
 
-        # ── Derive cloud grids from type ──────────────────────────────
+        # ── Cloud grids ───────────────────────────────────────────────
         if is_infra:
             cloud_grids: dict[str, Any] = {"not_applicable": True}
         elif is_mobile:
@@ -1158,18 +1307,115 @@ Use true/false for booleans, use "limited" or "plugin (name)" for partial suppor
                 "browserstack": True,
                 "sauce_labs": True,
                 "aws_device_farm": "limited",
+                "lambda_test": "limited",
             }
-        elif any(arch_fit.get(k) for k in ["web_spa", "web_mpa"]):
+        elif is_web:
             cloud_grids = {
                 "browserstack": True,
                 "sauce_labs": True,
                 "lambda_test": True,
             }
+        elif is_perf:
+            cloud_grids = {"standalone": True, "kubernetes": "native distributed mode"}
         else:
             cloud_grids = {"standalone": True}
 
-        # ── Derive limitations from known characteristics ─────────────
-        limitations = []
+        # ── Cloud providers (for IaC frameworks) ──────────────────────
+        cloud_providers: dict[str, Any] = {}
+        if is_infra:
+            cloud_providers = {
+                "aws": any(w in (desc + " " + readme) for w in ["aws", "amazon"]),
+                "azure": any(w in (desc + " " + readme) for w in ["azure", "microsoft"]),
+                "gcp": any(w in (desc + " " + readme) for w in ["gcp", "google cloud"]),
+                "kubernetes": any(w in (desc + " " + readme) for w in ["kubernetes", "k8s"]),
+            }
+            cloud_providers = {k: v for k, v in cloud_providers.items() if v}
+            if not cloud_providers:
+                cloud_providers = {"aws": True, "azure": True, "gcp": True}
+
+        # ── Testing capabilities ──────────────────────────────────────
+        testing_capabilities: dict[str, Any] = {}
+        if is_infra:
+            testing_capabilities = {
+                "unit_testing": "native test framework" if is_go else "via language test framework",
+                "linting": "built-in or community",
+                "dry_run": "check/plan mode",
+            }
+        elif is_web or is_mobile:
+            testing_capabilities = {
+                "unit_testing": "via test runner (pytest/jest/junit)",
+                "integration_testing": "built-in",
+                "visual_regression": "plugin or third-party",
+            }
+
+        # ── Cloud migration metrics (for IaC) ─────────────────────────
+        cloud_migration_metrics: dict[str, Any] = {}
+        if is_infra:
+            cloud_migration_metrics = {
+                "resource_coverage": "% of resources managed",
+                "deployment_frequency": "deployments per day/week",
+                "mean_time_to_recovery": "time to restore after failure",
+                "change_failure_rate": "% of changes causing failures",
+                "compliance_score": "% passing policy checks",
+            }
+
+        # ── Capabilities ──────────────────────────────────────────────
+        capabilities: dict[str, Any] = {
+            "shadow_dom": is_web and is_js,
+            "iframe_cross_origin": is_web,
+            "multi_tab": is_web,
+            "multi_domain": is_web,
+            "file_upload_download": is_web or is_mobile,
+            "network_interception": is_web and is_js,
+            "parallel_execution": True if is_perf else "via test runner",
+            "auto_wait": is_web and any(w in desc for w in ["playwright", "cypress", "testcafe"]),
+            "test_recorder": False,
+            "code_generation": False,
+        }
+        if is_web:
+            capabilities["visual_regression"] = "plugin or third-party"
+            capabilities["component_testing"] = any(w in desc for w in ["component", "storybook"])
+            capabilities["accessibility_testing"] = "plugin"
+        if is_mobile:
+            capabilities["gesture_support"] = True
+            capabilities["device_farm_support"] = True
+        if is_infra:
+            capabilities["idempotent"] = True
+            capabilities["state_management"] = any(w in desc for w in ["state", "terraform"])
+            capabilities["drift_detection"] = any(w in desc for w in ["drift", "refresh"])
+
+        # ── Maintainability ───────────────────────────────────────────
+        maintainability: dict[str, Any] = {
+            "page_object_support": "custom pattern" if is_web else (
+                "keyword-based abstraction" if is_bdd else False
+            ),
+            "fixture_support": (
+                "pytest fixtures" if is_python else
+                "via test framework (JUnit/TestNG)" if is_java else
+                "via test framework (Jest/Mocha)" if is_js else
+                "setup/teardown" if is_go else False
+            ),
+            "reusable_components": True,
+            "built_in_reporting": (
+                "basic (console + plugins)" if is_js else
+                "via test framework" if is_python or is_java else False
+            ),
+            "trace_viewer": is_web and any(w in desc for w in ["playwright"]),
+            "debugging_tools": (
+                "excellent (time-travel)" if any(w in desc for w in ["cypress"]) else
+                "good (DevTools Protocol)" if is_web and is_js else
+                "moderate (logs, IDE debugging)" if is_python or is_java else
+                "basic"
+            ),
+        }
+        if is_infra:
+            maintainability["module_versioning"] = True
+            maintainability["state_backends"] = "varies by provider"
+
+        # ── Limitations ───────────────────────────────────────────────
+        stars = github.get("stars", 0) or discovered.get("stars", 0)
+
+        limitations: list[str] = []
         if len(languages) == 1 and languages[0] != "Unknown":
             limitations.append(f"{languages[0]} only — no support for other languages")
         if is_mobile:
@@ -1177,63 +1423,54 @@ Use true/false for booleans, use "limited" or "plugin (name)" for partial suppor
             limitations.append("iOS testing requires macOS with Xcode")
         if is_java:
             limitations.append("JVM dependency adds startup overhead")
-        if not any(arch_fit.get(k) for k in ["web_spa", "web_mpa"]):
+        if is_infra:
+            limitations.append("NOT a test automation framework for applications")
+            limitations.append("Cannot test application behavior, only infrastructure/configuration")
+        if not is_web and not is_infra:
             limitations.append("No web browser testing support")
-        if not arch_fit.get("native_mobile"):
+        if not arch_fit.get("native_mobile") and not is_infra:
             limitations.append("Cannot test native mobile applications")
-        limitations.append(f"Community size: {github.get('stars', 0) or discovered.get('stars', 0)} GitHub stars")
-        limitations.append("Profile auto-generated from metadata — manual review recommended")
-        # Ensure at least 3 limitations
-        if len(limitations) < 3:
-            limitations.append("Limited documentation compared to mainstream alternatives")
+        if is_web and not arch_fit.get("api_testing"):
+            limitations.append("No built-in API testing support")
+        if is_perf:
+            limitations.append("Not a functional/UI test framework")
+        if is_security:
+            limitations.append("Security scanning only — not a functional test tool")
+        if stars < 2000:
+            limitations.append("Smaller community — fewer plugins and community resources")
+        if lic and "GPL" in lic.upper():
+            limitations.append(f"{lic} license may restrict some enterprise usage")
+        while len(limitations) < 3:
+            limitations.append("Limited ecosystem compared to mainstream alternatives")
 
-        profile = {
+        # ── CI/CD integration ─────────────────────────────────────────
+        cicd: dict[str, Any] = {
+            "docker_support": True,
+            "github_actions": True,
+            "jenkins": True,
+            "gitlab_ci": True,
+            "azure_devops": is_csharp or is_java,
+            "pre_built_docker_images": "community",
+        }
+
+        profile: dict[str, Any] = {
             "framework_name": name,
             "vendor": vendor,
             "license": lic,
             "website": website,
-            "first_release": "",
+            "first_release": first_release,
             "latest_version": pypi.get("version", "") or npm.get("version", ""),
             "category": category,
             "languages_supported": languages,
             "architecture_fit": arch_fit,
-            "capabilities": {
-                "shadow_dom": False,
-                "iframe_cross_origin": False,
-                "multi_tab": False,
-                "multi_domain": False,
-                "file_upload_download": False,
-                "network_interception": False,
-                "parallel_execution": False,
-                "auto_wait": False,
-                "test_recorder": False,
-                "code_generation": False,
-            },
-            "cicd_integration": {
-                "docker_support": True,
-                "github_actions": True,
-                "jenkins": True,
-                "gitlab_ci": True,
-                "azure_devops": False,
-                "pre_built_docker_images": "community",
-            },
+            "capabilities": capabilities,
+            "cicd_integration": cicd,
             "cloud_grids": cloud_grids,
-            "performance": {
-                "avg_test_execution_speed": perf_speed,
-                "resource_footprint": perf_footprint,
-                "startup_time_ms": startup_ms,
-                "parallel_overhead": "medium",
-            },
-            "maintainability": {
-                "page_object_support": "custom pattern" if any(
-                    arch_fit.get(k) for k in ["web_spa", "web_mpa", "native_mobile"]
-                ) else False,
-                "fixture_support": "via test framework" if is_python or is_java else False,
-                "reusable_components": True,
-                "built_in_reporting": False,
-                "trace_viewer": False,
-                "debugging_tools": "moderate (logs, IDE debugging)" if is_java or is_python else "basic",
-            },
+            "cloud_providers": cloud_providers,
+            "testing_capabilities": testing_capabilities,
+            "performance": perf,
+            "maintainability": maintainability,
+            "cloud_migration_metrics": cloud_migration_metrics,
             "limitations": limitations,
             "pip_packages": pip_packages,
             "install_commands": install_commands,
@@ -1378,13 +1615,48 @@ Use true/false for booleans, use "limited" or "plugin (name)" for partial suppor
                 "Framework '%s': cloud_grids was empty, set to not_applicable", name
             )
 
+        # ── Extended fields — fill from template if missing ───────────
+        for dict_field in ["cloud_providers", "testing_capabilities", "cloud_migration_metrics"]:
+            if not isinstance(profile.get(dict_field), dict):
+                profile[dict_field] = {}
+            if not profile[dict_field]:
+                if template is None:
+                    template = self._generate_profile_template(name, info)
+                tmpl_val = template.get(dict_field, {})
+                if tmpl_val:
+                    profile[dict_field] = tmpl_val
+                    logger.info("Framework '%s': %s filled from template", name, dict_field)
+
+        # Fill first_release if empty
+        if not profile.get("first_release"):
+            if template is None:
+                template = self._generate_profile_template(name, info)
+            profile["first_release"] = template.get("first_release", "")
+
+        # Clean up placeholder limitations that shouldn't be in final profiles
+        if isinstance(profile.get("limitations"), list):
+            profile["limitations"] = [
+                lim for lim in profile["limitations"]
+                if not any(placeholder in lim.lower() for placeholder in [
+                    "manual review recommended",
+                    "auto-generated",
+                    "may be incomplete",
+                    "community size:",
+                    "stars",
+                ])
+            ]
+            # Re-check: if we stripped everything, fill from template
+            if not profile["limitations"]:
+                if template is None:
+                    template = self._generate_profile_template(name, info)
+                profile["limitations"] = template.get("limitations", [])
+
         # Ensure versions section exists
         if not isinstance(profile.get("versions"), list) or not profile.get("versions"):
             if template is None:
                 template = self._generate_profile_template(name, info)
             profile["versions"] = template.get("versions", [])
             if not profile["versions"]:
-                # Generate from available info
                 language = ""
                 if isinstance(profile.get("languages_supported"), list) and profile["languages_supported"]:
                     language = profile["languages_supported"][0]
@@ -1392,6 +1664,24 @@ Use true/false for booleans, use "limited" or "plugin (name)" for partial suppor
             logger.warning(
                 "Framework '%s': versions was empty, filled with defaults", name
             )
+
+        # ── Final pass: ensure no field is left truly empty ───────────
+        # String fields: set to "Not Applicable" if empty
+        for str_field in ["website", "first_release", "latest_version", "test_command"]:
+            if not profile.get(str_field):
+                profile[str_field] = "Not Applicable"
+
+        # List fields: set to ["Not Applicable"] if empty
+        for list_field in ["limitations", "install_commands", "report_paths"]:
+            if isinstance(profile.get(list_field), list) and not profile[list_field]:
+                profile[list_field] = ["Not Applicable"]
+
+        # Dict fields: set to {"status": "Not Applicable"} if empty
+        for dict_field in ["cloud_grids", "cloud_providers", "testing_capabilities",
+                           "cloud_migration_metrics", "performance", "maintainability",
+                           "pip_packages"]:
+            if isinstance(profile.get(dict_field), dict) and not profile[dict_field]:
+                profile[dict_field] = {"status": "Not Applicable"}
 
         return profile
 

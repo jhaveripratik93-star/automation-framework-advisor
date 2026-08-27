@@ -501,7 +501,6 @@ def _render_sidebar() -> None:
             st.markdown('<div class="sidebar-section">📚 Available Frameworks</div>',
                         unsafe_allow_html=True)
             all_fws = kb.list_all()
-            # Group by category
             from collections import defaultdict
             fw_by_cat: dict = defaultdict(list)
             for _fw in all_fws:
