@@ -131,7 +131,7 @@ class DecisionAgent:
         self._client = llm_client
         self._memory = AgentMemory(agent_name="decision_agent", max_entries=20)
 
-    def decide(self, user_message: str, graph_context: str = "") -> DecisionResult:
+    def decide(self, user_message: str, graph_context: str = "", conversation_history: list[dict[str, str]] | None = None) -> DecisionResult:
         """Classify the user message — LLM-first with guardrail pre-check."""
         msg_lower = user_message.lower().strip()
 
@@ -173,9 +173,16 @@ class DecisionAgent:
             self._log_and_store(user_message, ambiguity_result)
             return ambiguity_result
 
+        # ── Build LLM input with conversation context for follow-ups ──
+        llm_input = user_message
+        if conversation_history and len(user_message.strip()) < 80:
+            recent = conversation_history[-4:]
+            context_lines = [f"{t['role']}: {t['content'][:200]}" for t in recent]
+            llm_input = "[Conversation context]\n" + "\n".join(context_lines) + f"\n\n[Current message] {user_message}"
+
         # ── LLM-based classification (primary path) ───────────────────
         if self._client and hasattr(self._client, "is_available") and self._client.is_available:
-            llm_result = self._classify_with_llm(user_message)
+            llm_result = self._classify_with_llm(llm_input)
             if llm_result is not None:
                 self._log_and_store(user_message, llm_result)
                 return llm_result
@@ -189,7 +196,8 @@ class DecisionAgent:
         """LangGraph node entry point."""
         user_message = state["user_message"]
         graph_context = state.get("graph_context", "")
-        result = self.decide(user_message, graph_context)
+        conversation_history = state.get("conversation_history", [])
+        result = self.decide(user_message, graph_context, conversation_history=conversation_history)
 
         output: dict[str, Any] = {
             "decision_action": result.action,

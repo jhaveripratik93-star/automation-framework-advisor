@@ -201,7 +201,7 @@ def test_decision_agent_guardrails():
     assert_in("injection", result.reasoning, "reasoning mentions injection")
 
     # Ambiguity detection
-    result = agent.decide("What is the best framework?")
+    result = agent.decide("I need help with microservice ui testing")
     assert_equal(result.action, "clarify", "ambiguous → clarify")
     assert_true(result.clarification is not None, "clarification provided")
 
