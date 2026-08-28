@@ -290,6 +290,51 @@ def _render_loading(steps: list[str], current: int, title: str = "AI is thinking
     """, unsafe_allow_html=True)
 
 
+# ── Copy-to-clipboard button for assistant messages ──────────────────
+_copy_id_counter = {"n": 0}
+
+
+def _render_copy_button(text: str) -> None:
+    """Render a copy button after an assistant message."""
+    import base64
+    _copy_id_counter["n"] += 1
+    btn_id = f"copy-btn-{_copy_id_counter['n']}"
+    b64 = base64.b64encode(text.encode("utf-8")).decode("ascii")
+    js = (
+        "(function(){"
+        f"var el=document.getElementById('{btn_id}');"
+        "var txt=atob(el.dataset.b64);"
+        "function mark(){"
+        f"el.innerHTML='<svg width=\'13\' height=\'13\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2.5\' stroke-linecap=\'round\' stroke-linejoin=\'round\'><polyline points=\'20 6 9 17 4 12\'></polyline></svg> Copied';"
+        "el.classList.add('copied');"
+        f"setTimeout(function(){{el.innerHTML='<svg width=\'13\' height=\'13\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'><rect x=\'9\' y=\'9\' width=\'13\' height=\'13\' rx=\'2\' ry=\'2\'></rect><path d=\'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1\'></path></svg> Copy';el.classList.remove('copied');}},1800);"
+        "}"
+        "if(navigator.clipboard&&window.isSecureContext){"
+        "navigator.clipboard.writeText(txt).then(mark).catch(function(){"
+        "var ta=document.createElement('textarea');"
+        "ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';"
+        "document.body.appendChild(ta);ta.select();document.execCommand('copy');"
+        "document.body.removeChild(ta);mark();"
+        "});"
+        "}else{"
+        "var ta=document.createElement('textarea');"
+        "ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';"
+        "document.body.appendChild(ta);ta.select();document.execCommand('copy');"
+        "document.body.removeChild(ta);mark();"
+        "}"
+        "})()"
+    )
+    html = (
+        f'<div class="copy-btn-row">'
+        f'<button class="copy-btn" id="{btn_id}" data-b64="{b64}" title="Copy response" onclick="{js}">'
+        f'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px">'
+        f'<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>'
+        f'<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>'
+        f'</svg> Copy</button></div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
+
+
 # ── Top navigation bar ────────────────────────────────────────────────
 def _render_topnav() -> None:
     page = st.session_state.page
@@ -908,11 +953,13 @@ def _render_advisor_tab() -> None:
             "- *'Best Python API testing framework'*\n"
             "- *'Migrate from Selenium to Playwright'*\n\n"
             "Upload test files in the sidebar for context-aware recommendations."
-        )})
+        ), "is_llm_response": False})
 
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"], avatar="🧭" if msg["role"] == "assistant" else "👤"):
             st.markdown(msg["content"])
+            if msg["role"] == "assistant" and msg.get("is_llm_response", False):
+                _render_copy_button(msg["content"])
 
     if user_input := st.chat_input("Ask about frameworks, migrations, or coverage..."):
         st.session_state.messages.append({"role": "user", "content": user_input})
@@ -922,7 +969,8 @@ def _render_advisor_tab() -> None:
         if _is_off_topic(user_input):
             with st.chat_message("assistant", avatar="🧭"):
                 st.markdown(_OFF_TOPIC_REPLY)
-            st.session_state.messages.append({"role": "assistant", "content": _OFF_TOPIC_REPLY})
+                _render_copy_button(_OFF_TOPIC_REPLY)
+            st.session_state.messages.append({"role": "assistant", "content": _OFF_TOPIC_REPLY, "is_llm_response": True})
             st.stop()
 
         wp = st.session_state.weight_profile
@@ -967,6 +1015,7 @@ def _render_advisor_tab() -> None:
 
             loading_slot.empty()
             st.markdown(response)
+            _render_copy_button(response)
             if hasattr(_client, "get_session_usage"):
                 usage = _client.get_session_usage()
                 logger.info(
@@ -977,7 +1026,7 @@ def _render_advisor_tab() -> None:
                     usage["total_tokens"],
                 )
 
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        st.session_state.messages.append({"role": "assistant", "content": response, "is_llm_response": True})
 
 
 # ── Tab: Code Studio ──────────────────────────────────────────────────
@@ -1275,11 +1324,11 @@ def _render_codegen_tab() -> None:
 
     # ── Framework selection ───────────────────────────────────────────
     _TARGET_FRAMEWORKS = {
-        "Playwright (TypeScript)": "playwright_ts",
+#        "Playwright (TypeScript)": "playwright_ts",
         "Playwright (Python)": "playwright_py",
         "Selenium (Python)": "selenium_py",
-        "Selenium (Java)": "selenium_java",
-        "Cypress (JavaScript)": "cypress_js",
+#        "Selenium (Java)": "selenium_java",
+#        "Cypress (JavaScript)": "cypress_js",
         "Robot Framework": "robot_framework",
     }
 

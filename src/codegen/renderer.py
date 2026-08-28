@@ -676,6 +676,13 @@ class CodeRenderer:
                 "  },\n"
                 "});\n"
             )
+        elif fw == "robot_framework":
+            return (
+                "outputdir: results\n"
+                "loglevel: INFO\n"
+                "report: report.html\n"
+                "log: log.html\n"
+            )
         return ""
 
     def _render_package_file(self, framework: TargetFramework) -> str:
@@ -723,6 +730,14 @@ class CodeRenderer:
                 '    "cypress": "^13.0.0"\n'
                 '  }\n'
                 '}\n'
+            )
+        elif fw == "robot_framework":
+            return (
+                "robotframework>=6.0\n"
+                "robotframework-seleniumlibrary>=6.0\n"
+                "robotframework-requests>=0.9\n"
+                "selenium>=4.15.0\n"
+                "webdriver-manager>=4.0.0\n"
             )
         return ""
 

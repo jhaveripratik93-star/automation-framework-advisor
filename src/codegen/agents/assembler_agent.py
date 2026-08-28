@@ -63,7 +63,7 @@ def run_assembler(state: CodeGenState, llm_client: Any) -> dict:
 
 def _looks_complete(code: str, framework: str) -> bool:
     """Heuristic: check if code already has imports and test structure."""
-    has_import = any(kw in code for kw in ("import ", "from ", "require("))
+    has_import = any(kw in code for kw in ("import ", "from ", "require(", "Library    ", "Resource    "))
     structure_markers = {
         "playwright_ts": ("test(", "test.describe("),
         "playwright_py": ("def test_",),

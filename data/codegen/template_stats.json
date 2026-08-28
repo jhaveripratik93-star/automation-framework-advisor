@@ -1,1 +1,654 @@
-{}
+{
+  "nav_goto": {
+    "uses": 12,
+    "successes": 12,
+    "history": [
+      {
+        "timestamp": "2026-08-28T10:03:47.311571",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.336648",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.356899",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.373912",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.391065",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.603917",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.739098",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:21.997624",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:24.035422",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:25.829765",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:27.663705",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:29.548237",
+        "success": true
+      }
+    ]
+  },
+  "fill_field": {
+    "uses": 28,
+    "successes": 28,
+    "history": [
+      {
+        "timestamp": "2026-08-28T10:03:47.316421",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.319195",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.339519",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.342285",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.359853",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.393955",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.396761",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.399893",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.402994",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.406346",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.585332",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.629637",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.639016",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.651655",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.723415",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.763975",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.767706",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.779653",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:22.002662",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:22.007041",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:24.039846",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:24.043820",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:25.834176",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:29.553513",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:29.557835",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:29.561875",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:29.565644",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:29.591138",
+        "success": true
+      }
+    ]
+  },
+  "click_element": {
+    "uses": 16,
+    "successes": 16,
+    "history": [
+      {
+        "timestamp": "2026-08-28T10:03:47.321873",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.345166",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.362810",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.379541",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.409276",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.590203",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.611962",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.655561",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.727365",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.747088",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.784031",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:22.011278",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:24.052275",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:25.838092",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:27.671727",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:29.596906",
+        "success": true
+      }
+    ]
+  },
+  "assert_element_text": {
+    "uses": 12,
+    "successes": 12,
+    "history": [
+      {
+        "timestamp": "2026-08-28T10:03:47.326860",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.369043",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.386116",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.415421",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.599719",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.620913",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.735146",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.756534",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:22.015704",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:25.847374",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:27.680282",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:29.605626",
+        "success": true
+      }
+    ]
+  },
+  "assert_visible": {
+    "uses": 6,
+    "successes": 6,
+    "history": [
+      {
+        "timestamp": "2026-08-28T10:03:47.329712",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.348195",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.572358",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.711306",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:22.046721",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:24.057266",
+        "success": true
+      }
+    ]
+  },
+  "assert_text_contains": {
+    "uses": 8,
+    "successes": 8,
+    "history": [
+      {
+        "timestamp": "2026-08-28T10:03:47.351114",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.412382",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.576440",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.659574",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.715143",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.788788",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:24.061856",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:29.601586",
+        "success": true
+      }
+    ]
+  },
+  "wait_element": {
+    "uses": 8,
+    "successes": 8,
+    "history": [
+      {
+        "timestamp": "2026-08-28T10:03:47.366350",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:03:47.382622",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.595479",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.616401",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.731423",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.752742",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:25.842175",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:27.675634",
+        "success": true
+      }
+    ]
+  },
+  "select_option": {
+    "uses": 4,
+    "successes": 4,
+    "history": [
+      {
+        "timestamp": "2026-08-28T10:03:47.376652",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.608028",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.743049",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:22:27.667976",
+        "success": true
+      }
+    ]
+  },
+  "learned_3024bbde": {
+    "uses": 7,
+    "successes": 7,
+    "history": [
+      {
+        "timestamp": "2026-08-28T10:12:28.968529",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:18:18.232114",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:18:25.638389",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.472387",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.554196",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.633675",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.689722",
+        "success": true
+      }
+    ]
+  },
+  "learned_441e5d4b": {
+    "uses": 11,
+    "successes": 11,
+    "history": [
+      {
+        "timestamp": "2026-08-28T10:12:28.972381",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:12:49.739773",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:18:18.236514",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:18:25.642442",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:18:42.763350",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.478532",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.559036",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.643082",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.639251",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.697221",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.771527",
+        "success": true
+      }
+    ]
+  },
+  "learned_468e5f4e": {
+    "uses": 9,
+    "successes": 9,
+    "history": [
+      {
+        "timestamp": "2026-08-28T10:18:18.240467",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:18:25.646128",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:18:42.767625",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.486149",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.563698",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.647118",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.644221",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.702915",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.775515",
+        "success": true
+      }
+    ]
+  },
+  "learned_b027af33": {
+    "uses": 5,
+    "successes": 5,
+    "history": [
+      {
+        "timestamp": "2026-08-28T10:18:26.075676",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.493031",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.568118",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.650839",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.707095",
+        "success": true
+      }
+    ]
+  },
+  "learned_3a95b4d0": {
+    "uses": 3,
+    "successes": 3,
+    "history": [
+      {
+        "timestamp": "2026-08-28T10:18:29.593357",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.580287",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.719648",
+        "success": true
+      }
+    ]
+  },
+  "learned_33650c37": {
+    "uses": 3,
+    "successes": 3,
+    "history": [
+      {
+        "timestamp": "2026-08-28T10:18:40.346809",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.625209",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.760210",
+        "success": true
+      }
+    ]
+  },
+  "learned_012280ca": {
+    "uses": 5,
+    "successes": 5,
+    "history": [
+      {
+        "timestamp": "2026-08-28T10:18:46.506780",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.519911",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:29.663472",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.676551",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.792530",
+        "success": true
+      }
+    ]
+  },
+  "learned_506186d4": {
+    "uses": 2,
+    "successes": 2,
+    "history": [
+      {
+        "timestamp": "2026-08-28T10:21:29.547792",
+        "success": true
+      },
+      {
+        "timestamp": "2026-08-28T10:21:36.685206",
+        "success": true
+      }
+    ]
+  }
+}

@@ -13,6 +13,9 @@ import os
 from pathlib import Path
 from typing import Any
 
+import re
+import time
+
 import httpx
 from dotenv import load_dotenv
 
@@ -158,15 +161,29 @@ class GroqClient:
                 len(all_messages),
             )
 
-            response = httpx.post(
-                f"{_API_BASE}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-                timeout=_TIMEOUT,
-            )
+            max_retries = 3
+            for attempt in range(max_retries):
+                response = httpx.post(
+                    f"{_API_BASE}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                    timeout=_TIMEOUT,
+                )
+                if response.status_code != 429 or attempt == max_retries - 1:
+                    break
+                # Parse retry-after from error message, default to 5s
+                wait = 5.0
+                match = re.search(r"try again in ([\d.]+)s", response.text)
+                if match:
+                    wait = float(match.group(1)) + 0.5
+                logger.warning(
+                    "GroqClient.chat: 429 rate limit — waiting %.1fs (attempt %d/%d)",
+                    wait, attempt + 1, max_retries,
+                )
+                time.sleep(wait)
 
             response.raise_for_status()
 

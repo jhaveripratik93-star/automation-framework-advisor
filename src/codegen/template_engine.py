@@ -34,6 +34,7 @@ _STATIC_PATTERNS: list[dict[str, Any]] = [
             "selenium_py": "driver.get('{url}')",
             "selenium_java": "driver.get(\"{url}\");",
             "cypress_js": "cy.visit('{url}');",
+            "robot_framework": "Go To    {url}",
         },
     },
     {
@@ -46,6 +47,7 @@ _STATIC_PATTERNS: list[dict[str, Any]] = [
             "selenium_py": "driver.get(base_url + '/{page_name_slug}')",
             "selenium_java": "driver.get(baseUrl + \"/{page_name_slug}\");",
             "cypress_js": "cy.visit('/{page_name_slug}');",
+            "robot_framework": "Go To    ${{BASE_URL}}/{page_name_slug}",
         },
     },
     # Click actions
@@ -59,6 +61,7 @@ _STATIC_PATTERNS: list[dict[str, Any]] = [
             "selenium_py": "driver.find_element(By.CSS_SELECTOR, '{selector}').click()",
             "selenium_java": "driver.findElement(By.cssSelector(\"{selector}\")).click();",
             "cypress_js": "cy.get('{selector}').click();",
+            "robot_framework": "Click Element    {selector}",
         },
     },
     {
@@ -71,6 +74,7 @@ _STATIC_PATTERNS: list[dict[str, Any]] = [
             "selenium_py": "driver.find_element(By.XPATH, \"//button[contains(text(), '{button_name}')]\").click()",
             "selenium_java": "driver.findElement(By.xpath(\"//button[contains(text(), '{button_name}')]\")).click();",
             "cypress_js": "cy.contains('button', '{button_name}').click();",
+            "robot_framework": "Click Button    {button_name}",
         },
     },
     {
@@ -83,6 +87,7 @@ _STATIC_PATTERNS: list[dict[str, Any]] = [
             "selenium_py": "driver.find_element(By.LINK_TEXT, '{link_name}').click()",
             "selenium_java": "driver.findElement(By.linkText(\"{link_name}\")).click();",
             "cypress_js": "cy.contains('a', '{link_name}').click();",
+            "robot_framework": "Click Link    {link_name}",
         },
     },
     # Fill / Input actions
@@ -96,6 +101,7 @@ _STATIC_PATTERNS: list[dict[str, Any]] = [
             "selenium_py": "driver.find_element(By.CSS_SELECTOR, '{selector}').send_keys('{value}')",
             "selenium_java": "driver.findElement(By.cssSelector(\"{selector}\")).sendKeys(\"{value}\");",
             "cypress_js": "cy.get('{selector}').type('{value}');",
+            "robot_framework": "Input Text    {selector}    {value}",
         },
     },
     {
@@ -108,6 +114,7 @@ _STATIC_PATTERNS: list[dict[str, Any]] = [
             "selenium_py": "driver.find_element(By.CSS_SELECTOR, '{selector}').send_keys('{value}')",
             "selenium_java": "driver.findElement(By.cssSelector(\"{selector}\")).sendKeys(\"{value}\");",
             "cypress_js": "cy.get('{selector}').type('{value}');",
+            "robot_framework": "Input Text    {selector}    {value}",
         },
     },
     # Select / Dropdown actions
@@ -121,6 +128,7 @@ _STATIC_PATTERNS: list[dict[str, Any]] = [
             "selenium_py": "Select(driver.find_element(By.CSS_SELECTOR, '{selector}')).select_by_visible_text('{option}')",
             "selenium_java": "new Select(driver.findElement(By.cssSelector(\"{selector}\"))).selectByVisibleText(\"{option}\");",
             "cypress_js": "cy.get('{selector}').select('{option}');",
+            "robot_framework": "Select From List By Label    {selector}    {option}",
         },
     },
     # Assertion: element visible
@@ -134,6 +142,7 @@ _STATIC_PATTERNS: list[dict[str, Any]] = [
             "selenium_py": "assert driver.find_element(By.CSS_SELECTOR, '{selector}').is_displayed()",
             "selenium_java": "assertTrue(driver.findElement(By.cssSelector(\"{selector}\")).isDisplayed());",
             "cypress_js": "cy.get('{selector}').should('be.visible');",
+            "robot_framework": "Element Should Be Visible    {selector}",
         },
     },
     # Assertion: text content
@@ -147,6 +156,7 @@ _STATIC_PATTERNS: list[dict[str, Any]] = [
             "selenium_py": "assert '{text}' in driver.page_source",
             "selenium_java": "assertTrue(driver.getPageSource().contains(\"{text}\"));",
             "cypress_js": "cy.contains('{text}').should('exist');",
+            "robot_framework": "Page Should Contain    {text}",
         },
     },
     {
@@ -159,6 +169,7 @@ _STATIC_PATTERNS: list[dict[str, Any]] = [
             "selenium_py": "assert '{text}' in driver.find_element(By.CSS_SELECTOR, '{selector}').text",
             "selenium_java": "assertTrue(driver.findElement(By.cssSelector(\"{selector}\")).getText().contains(\"{text}\"));",
             "cypress_js": "cy.get('{selector}').should('contain.text', '{text}');",
+            "robot_framework": "Element Should Contain    {selector}    {text}",
         },
     },
     # Assertion: URL
@@ -172,6 +183,7 @@ _STATIC_PATTERNS: list[dict[str, Any]] = [
             "selenium_py": "assert driver.current_url == '{url}'",
             "selenium_java": "assertEquals(\"{url}\", driver.getCurrentUrl());",
             "cypress_js": "cy.url().should('include', '{url}');",
+            "robot_framework": "Location Should Contain    {url}",
         },
     },
     # Wait actions
@@ -185,6 +197,7 @@ _STATIC_PATTERNS: list[dict[str, Any]] = [
             "selenium_py": "WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.CSS_SELECTOR, '{selector}')))",
             "selenium_java": "new WebDriverWait(driver, Duration.ofSeconds(10)).until(ExpectedConditions.visibilityOfElementLocated(By.cssSelector(\"{selector}\")));",
             "cypress_js": "cy.get('{selector}').should('be.visible');",
+            "robot_framework": "Wait Until Element Is Visible    {selector}",
         },
     },
     {
@@ -197,6 +210,7 @@ _STATIC_PATTERNS: list[dict[str, Any]] = [
             "selenium_py": "import time; time.sleep({seconds})",
             "selenium_java": "Thread.sleep({seconds}000);",
             "cypress_js": "cy.wait({seconds}000);",
+            "robot_framework": "Sleep    {seconds}s",
         },
     },
     # Hover
@@ -210,6 +224,7 @@ _STATIC_PATTERNS: list[dict[str, Any]] = [
             "selenium_py": "ActionChains(driver).move_to_element(driver.find_element(By.CSS_SELECTOR, '{selector}')).perform()",
             "selenium_java": "new Actions(driver).moveToElement(driver.findElement(By.cssSelector(\"{selector}\"))).perform();",
             "cypress_js": "cy.get('{selector}').trigger('mouseover');",
+            "robot_framework": "Mouse Over    {selector}",
         },
     },
     # Upload
@@ -223,6 +238,7 @@ _STATIC_PATTERNS: list[dict[str, Any]] = [
             "selenium_py": "driver.find_element(By.CSS_SELECTOR, '{selector}').send_keys('{file_path}')",
             "selenium_java": "driver.findElement(By.cssSelector(\"{selector}\")).sendKeys(\"{file_path}\");",
             "cypress_js": "cy.get('{selector}').attachFile('{file_path}');",
+            "robot_framework": "Choose File    {selector}    {file_path}",
         },
     },
     # Scroll
@@ -236,6 +252,7 @@ _STATIC_PATTERNS: list[dict[str, Any]] = [
             "selenium_py": "driver.execute_script('arguments[0].scrollIntoView(true);', driver.find_element(By.CSS_SELECTOR, '{selector}'))",
             "selenium_java": "((JavascriptExecutor) driver).executeScript(\"arguments[0].scrollIntoView(true);\", driver.findElement(By.cssSelector(\"{selector}\")));",
             "cypress_js": "cy.get('{selector}').scrollIntoView();",
+            "robot_framework": "Scroll Element Into View    {selector}",
         },
     },
     # Keyboard actions
@@ -249,6 +266,7 @@ _STATIC_PATTERNS: list[dict[str, Any]] = [
             "selenium_py": "from selenium.webdriver.common.keys import Keys; driver.switch_to.active_element.send_keys(Keys.{key_upper})",
             "selenium_java": "driver.switchTo().activeElement().sendKeys(Keys.{key_upper});",
             "cypress_js": "cy.focused().type('{{{}}}');".format("{key_cypress}"),
+            "robot_framework": "Press Key    {selector}    \\{key_normalized}",
         },
     },
 ]

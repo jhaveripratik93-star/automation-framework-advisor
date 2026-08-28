@@ -322,12 +322,8 @@ class CodeGenOrchestrator:
                 step.step_number, match.pattern_id, match.confidence,
             )
 
-            # Optional: LLM verification of template output
+            # Optional: LLM verification of template output — disabled to conserve TPM
             verified = True
-            if match.confidence < 0.95:  # Only verify if not near-perfect
-                verified = self._llm_generator.verify_code(
-                    step.action, match.generated_code, framework,
-                )
 
             if verified:
                 stats.template_handled += 1
