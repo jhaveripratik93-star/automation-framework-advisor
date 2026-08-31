@@ -1,6 +1,7 @@
 """Assembler Agent — combines per-test code into a final project-ready file."""
 from __future__ import annotations
 
+import json
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -9,6 +10,7 @@ from src.codegen.agent_config import (
     ASSEMBLER_USER_TEMPLATE,
     PIPELINE_SETTINGS,
 )
+from src.codegen.agents.static_checker import run_static_check
 
 if TYPE_CHECKING:
     from src.codegen.pipeline import CodeGenState
@@ -27,23 +29,42 @@ def run_assembler(state: CodeGenState, llm_client: Any) -> dict:
     if not code.strip():
         return {"assembled_code": "// No code generated"}
 
-    # If there's only one test and it already looks complete, skip LLM assembly
+    # If there's only one test and it already looks complete, skip LLM assembly.
+    # Robot Framework is excluded: its *** Variables *** section is routinely
+    # omitted by the generator and must be added by the assembler.
     framework = state.get("framework", "playwright_ts")
-    if _looks_complete(code, framework):
+    if framework != "robot_framework" and _looks_complete(code, framework):
         logger.info("Assembler: code already complete, skipping LLM assembly")
         return {"assembled_code": code}
 
     scenario = state.get("scenario", {})
+    arch = state.get("suite_architecture", {})
     tc = state["test_case"]
+
+    symbol_table = json.dumps(arch.get("symbols", []), indent=2) if arch else "none"
+    dependency_graph = json.dumps(arch.get("tests", []), indent=2) if arch else "none"
+    common_code = "\n".join(
+        f"{s.get('symbol', '')} → {s.get('defined_in', '?')}"
+        for s in arch.get("shared_code", [])
+    ) or "none"
+
+    # Run static check and append undeclared symbols as explicit instructions
+    static = run_static_check(code, framework)
+    undeclared_note = (
+        "\n\nUNDECLARED SYMBOLS DETECTED — you MUST declare all of these before they are used:\n"
+        + "\n".join(f"  - {s}" for s in sorted(static.undeclared))
+        if not static.is_clean else ""
+    )
 
     prompt = ASSEMBLER_USER_TEMPLATE.format(
         framework=framework,
-        count=1,
+        suite_architecture=json.dumps(arch, indent=2)[:2000] if arch else "none",
+        symbol_table=symbol_table[:2000],
+        dependency_graph=dependency_graph[:1000],
         test_functions=code[:5000],
-        page_objects=", ".join(scenario.get("page_object_hints", [])) or "none",
-        fixtures=", ".join(scenario.get("fixture_hints", [])) or "none",
-        imports=_infer_imports(framework),
-    )
+        common_code=common_code,
+        project_context="none",
+    ) + undeclared_note
 
     try:
         result = llm_client.chat(

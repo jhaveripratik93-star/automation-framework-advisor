@@ -22,6 +22,7 @@ from src.codegen.agents.assembler_agent import run_assembler
 from src.codegen.agents.scenario_planner import run_scenario_planner
 from src.codegen.agents.selector_resolver import run_selector_resolver
 from src.codegen.agents.step_generator import run_step_generator
+from src.codegen.agents.suite_architect_agent import run_suite_architect
 from src.codegen.agents.validator_agent import run_validator, should_retry_validation
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,9 @@ class CodeGenState(TypedDict):
     # Populated by ScenarioPlanner
     scenario: dict[str, Any]           # structured scenario analysis
     classified_steps: list[dict]       # steps with action_type added
+
+    # Populated by SuiteArchitect
+    suite_architecture: dict[str, Any] # symbol/dependency contract
 
     # Populated by SelectorResolver
     resolved_selectors: dict[str, str] # merged user + LLM-resolved selectors
@@ -64,6 +68,13 @@ def _make_plan_node(llm_client: Any):
         logger.info("CodeGenPipeline[plan]: analysing test case '%s'", state["test_case"].get("title", ""))
         return run_scenario_planner(state, llm_client)
     return plan
+
+
+def _make_architect_node(llm_client: Any):
+    def architect(state: CodeGenState) -> dict:
+        logger.info("CodeGenPipeline[architect]: building suite architecture")
+        return run_suite_architect(state, llm_client)
+    return architect
 
 
 def _make_resolve_node(llm_client: Any):
@@ -104,15 +115,17 @@ def build_codegen_pipeline(llm_client: Any) -> Any:
     """
     graph = StateGraph(CodeGenState)
 
-    graph.add_node("plan",     _make_plan_node(llm_client))
-    graph.add_node("resolve",  _make_resolve_node(llm_client))
-    graph.add_node("generate", _make_generate_node(llm_client))
-    graph.add_node("validate", _make_validate_node(llm_client))
-    graph.add_node("assemble", _make_assemble_node(llm_client))
+    graph.add_node("plan",      _make_plan_node(llm_client))
+    graph.add_node("architect", _make_architect_node(llm_client))
+    graph.add_node("resolve",   _make_resolve_node(llm_client))
+    graph.add_node("generate",  _make_generate_node(llm_client))
+    graph.add_node("validate",  _make_validate_node(llm_client))
+    graph.add_node("assemble",  _make_assemble_node(llm_client))
 
     graph.set_entry_point("plan")
-    graph.add_edge("plan",     "resolve")
-    graph.add_edge("resolve",  "generate")
+    graph.add_edge("plan",      "architect")
+    graph.add_edge("architect", "resolve")
+    graph.add_edge("resolve",   "generate")
     graph.add_edge("generate", "validate")
     graph.add_conditional_edges(
         "validate",
@@ -141,6 +154,7 @@ def run_codegen_pipeline(
         "selector_map": selector_map,
         "scenario": {},
         "classified_steps": [],
+        "suite_architecture": {},
         "resolved_selectors": {},
         "generated_code": "",
         "generation_error": "",

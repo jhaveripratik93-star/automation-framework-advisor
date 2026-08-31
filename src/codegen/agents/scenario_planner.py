@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.codegen.agent_config import (
     ACTION_KEYWORDS,
+    FRAMEWORK_CONTEXT,
     PIPELINE_SETTINGS,
     SCENARIO_PLANNER_SYSTEM,
     SCENARIO_PLANNER_USER_TEMPLATE,
@@ -35,21 +36,27 @@ def run_scenario_planner(state: CodeGenState, llm_client: Any) -> dict:
         return {"scenario": {}, "classified_steps": _classify_all_steps(state)}
 
     tc = state["test_case"]
+    framework = state.get("framework", "playwright_ts")
     steps_text = "\n".join(
         f"  {s['step_number']}. {s['action']}"
         + (f" [data: {s['test_data']}]" if s.get("test_data") else "")
         + (f" → {s['expected_result']}" if s.get("expected_result") else "")
         for s in tc.get("steps", [])
     )
+    test_cases_text = (
+        f"ID: {tc.get('id', '')}\n"
+        f"Title: {tc.get('title', '')}\n"
+        f"Category: {tc.get('category', '')}\n"
+        f"Priority: {tc.get('priority', 'medium')}\n"
+        f"Preconditions: {', '.join(tc.get('preconditions', [])) or 'none'}\n"
+        f"Steps:\n{steps_text}\n"
+        f"Expected results: {', '.join(tc.get('expected_results', [])) or 'see steps'}"
+    )
 
     prompt = SCENARIO_PLANNER_USER_TEMPLATE.format(
-        title=tc.get("title", ""),
-        test_id=tc.get("id", ""),
-        category=tc.get("category", ""),
-        priority=tc.get("priority", "medium"),
-        preconditions=", ".join(tc.get("preconditions", [])) or "none",
-        steps=steps_text,
-        expected_results=", ".join(tc.get("expected_results", [])) or "see steps",
+        test_cases=test_cases_text,
+        framework_context=FRAMEWORK_CONTEXT.get(framework, ""),
+        project_context="none",
     )
 
     scenario: dict = {}

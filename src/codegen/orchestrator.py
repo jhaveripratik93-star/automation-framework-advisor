@@ -93,11 +93,15 @@ class CodeGenOrchestrator:
     def _generate_with_agents(self, request: CodeGenRequest) -> GeneratedTestSuite:
         """Generate using the LangGraph 5-agent pipeline."""
         from src.codegen.pipeline import run_codegen_pipeline
+        from src.codegen.renderer import _FRAMEWORK_CONFIG
 
         start_time = time.time()
         framework = request.target_framework
+        cfg = _FRAMEWORK_CONFIG.get(framework.value, _FRAMEWORK_CONFIG["playwright_ts"])
         files: list[GeneratedFile] = []
         stats = GenerationStats(total_steps=sum(len(tc.steps) for tc in request.test_cases))
+        last_state: dict = {}
+        _per_tc_states: list[dict] = []
 
         for tc in request.test_cases:
             tc_dict = {
@@ -126,13 +130,13 @@ class CodeGenOrchestrator:
                 selector_map=dict(request.selector_map),
                 llm_client=self._llm_client,
             )
+            last_state = final_state
+            _per_tc_states.append(final_state)
 
             code = final_state.get("assembled_code") or final_state.get("generated_code", "")
             is_valid = final_state.get("validation_result", {}).get("is_valid", True)
             stats.llm_handled += len(tc.steps)
 
-            from src.codegen.renderer import _FRAMEWORK_CONFIG
-            cfg = _FRAMEWORK_CONFIG.get(framework.value, _FRAMEWORK_CONFIG["playwright_ts"])
             slug = re.sub(r"[^a-z0-9]+", "_", tc.title.lower()).strip("_")[:50] or "test"
             files.append(GeneratedFile(
                 path=f"tests/{slug}{cfg['extension']}",
@@ -142,11 +146,40 @@ class CodeGenOrchestrator:
                 confidence=0.9 if is_valid else 0.6,
             ))
 
+        # --- Generate supporting files from suite architecture ---
+        arch = last_state.get("suite_architecture", {})
+        files += self._generate_common_files(arch, framework.value, cfg)
+
+        # Config file (e.g. playwright.config.ts, pytest.ini, robot.yaml)
+        config_content = self._renderer._render_config(framework)
+        if config_content:
+            files.append(GeneratedFile(
+                path=cfg["config_file"],
+                content=config_content,
+                file_type=FileType.CONFIG,
+                source=GenerationSource.TEMPLATE,
+            ))
+
+        # Package/dependency file (requirements.txt, package.json)
+        pkg_content = self._renderer._render_package_file(framework)
+        if pkg_content:
+            files.append(GeneratedFile(
+                path=cfg["package_file"],
+                content=pkg_content,
+                file_type=FileType.PACKAGE,
+                source=GenerationSource.TEMPLATE,
+            ))
+
         elapsed_ms = int((time.time() - start_time) * 1000)
         stats.time_elapsed_ms = elapsed_ms
 
-        from src.codegen.renderer import _FRAMEWORK_CONFIG
-        cfg = _FRAMEWORK_CONFIG.get(framework.value, _FRAMEWORK_CONFIG["playwright_ts"])
+        # Collect undefined symbols across all test cases for suite-level validation
+        all_undefined: list[str] = []
+        for gf_state in _per_tc_states:
+            vr = gf_state.get("validation_result", {})
+            all_undefined.extend(vr.get("undefined_symbols", []))
+        all_undefined = list(dict.fromkeys(all_undefined))  # deduplicate, preserve order
+
         suite = GeneratedTestSuite(
             framework=framework.value,
             language=cfg["language"],
@@ -155,7 +188,10 @@ class CodeGenOrchestrator:
             run_command=cfg["run_command"],
             selector_map=request.selector_map,
             confidence_score=sum(f.confidence for f in files) / max(len(files), 1),
-            validation=ValidationResult(is_valid=True),
+            validation=ValidationResult(
+                is_valid=len(all_undefined) == 0,
+                undefined_symbols=all_undefined,
+            ),
             stats=stats,
         )
         logger.info(
@@ -163,6 +199,103 @@ class CodeGenOrchestrator:
             len(files), elapsed_ms,
         )
         return suite
+
+    def _generate_common_files(
+        self,
+        arch: dict,
+        framework_value: str,
+        cfg: dict,
+    ) -> list[GeneratedFile]:
+        """Generate page objects, fixtures, and common resource files from suite architecture."""
+        files: list[GeneratedFile] = []
+        if not arch:
+            return files
+
+        # Collect files declared in the architecture that are NOT test files
+        for file_entry in arch.get("files", []):
+            path: str = file_entry.get("path", "")
+            purpose: str = file_entry.get("purpose", "")
+            symbols: list[str] = file_entry.get("symbols_defined", [])
+
+            if not path or path.startswith("tests/"):
+                continue  # test files are already generated per test case
+
+            # Determine file type from path/purpose
+            if any(x in path for x in ("page", "pages")):
+                file_type = FileType.PAGE_OBJECT
+            elif any(x in path for x in ("fixture", "conftest", "setup")):
+                file_type = FileType.FIXTURE
+            elif any(x in path for x in ("util", "helper", "common", "resource", "keyword")):
+                file_type = FileType.UTILITY
+            else:
+                file_type = FileType.UTILITY
+
+            # Build a stub with declared symbols listed as comments/placeholders
+            content = self._stub_common_file(path, purpose, symbols, framework_value, cfg)
+            files.append(GeneratedFile(
+                path=path,
+                content=content,
+                file_type=file_type,
+                source=GenerationSource.LLM,
+                confidence=0.7,
+            ))
+
+        return files
+
+    def _stub_common_file(
+        self,
+        path: str,
+        purpose: str,
+        symbols: list[str],
+        framework_value: str,
+        cfg: dict,
+    ) -> str:
+        """Generate a stub for a common/shared file declared in the architecture."""
+        is_robot = framework_value == "robot_framework"
+        is_py = cfg.get("language") == "Python"
+        is_ts = cfg.get("language") == "TypeScript"
+        is_java = cfg.get("language") == "Java"
+
+        if is_robot:
+            sym_lines = "\n".join(f"    # {s}" for s in symbols)
+            return (
+                f"*** Settings ***\n"
+                f"Documentation    {purpose}\n\n"
+                f"*** Variables ***\n"
+                f"# Declare shared variables here\n\n"
+                f"*** Keywords ***\n"
+                f"{sym_lines}\n"
+            )
+        elif is_py:
+            sym_lines = "\n\n".join(
+                f"def {s}():\n    raise NotImplementedError  # TODO: implement"
+                for s in symbols if re.match(r"^[a-zA-Z_]", s)
+            )
+            return (
+                f'"""\n{purpose}\n"""\n\n'
+                + (sym_lines or "# TODO: implement shared helpers\n")
+            )
+        elif is_ts:
+            sym_lines = "\n\n".join(
+                f"export async function {s}() {{\n  // TODO: implement\n}}"
+                for s in symbols if re.match(r"^[a-zA-Z_]", s)
+            )
+            return (
+                f"// {purpose}\n\n"
+                + (sym_lines or "// TODO: implement shared helpers\n")
+            )
+        elif is_java:
+            sym_lines = "\n\n".join(
+                f"    public static void {s}() {{\n        // TODO: implement\n    }}"
+                for s in symbols if re.match(r"^[a-zA-Z_]", s)
+            )
+            class_name = re.sub(r"[^a-zA-Z0-9]", "", path.split("/")[-1].split(".")[0]) or "CommonHelper"
+            return (
+                f"// {purpose}\npublic class {class_name} {{\n"
+                + (sym_lines or "    // TODO: implement shared helpers\n")
+                + "\n}\n"
+            )
+        return f"# {purpose}\n# Symbols: {', '.join(symbols)}\n"
 
     def _generate_legacy(self, request: CodeGenRequest) -> GeneratedTestSuite:
         """Original template+LLM pipeline (fallback)."""
