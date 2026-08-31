@@ -546,13 +546,29 @@ def _render_sidebar() -> None:
             st.markdown('<div class="sidebar-section">📚 Available Frameworks</div>',
                         unsafe_allow_html=True)
             all_fws = kb.list_all()
-            from collections import defaultdict
-            fw_by_cat: dict = defaultdict(list)
+            st.caption(f"{len(all_fws)} framework(s) in knowledge base")
+
+            from src.knowledge_base.schema import FRAMEWORK_CATEGORIES, classify_framework_data
+
+            # Assign each framework to its PRIMARY category only (first match)
+            # so no framework is counted twice
+            assigned: set = set()
+            cat_frameworks: dict = {cat_id: [] for cat_id in FRAMEWORK_CATEGORIES}
             for _fw in all_fws:
-                fw_by_cat[_fw.category or "Other"].append(_fw.framework_name)
-            for _cat, _names in sorted(fw_by_cat.items()):
-                with st.expander(f"{_cat} ({len(_names)})", expanded=False):
-                    for _name in sorted(_names):
+                cats = classify_framework_data(_fw)
+                if cats:
+                    cat_frameworks[cats[0]].append(_fw.framework_name)
+                    assigned.add(_fw.framework_name)
+
+            for _cat_id, _cat_def in FRAMEWORK_CATEGORIES.items():
+                names = sorted(cat_frameworks.get(_cat_id, []))
+                if not names:
+                    continue
+                with st.expander(
+                    f"{_cat_def['icon']} {_cat_def['label']} ({len(names)})",
+                    expanded=False,
+                ):
+                    for _name in names:
                         st.markdown(f"· {_name}")
 
             st.markdown("---")
