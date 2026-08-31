@@ -71,7 +71,7 @@ class EvaluationAgent:
     @llm_retry(max_retries=3, initial_wait=1.0)
     def _call_llm(self, messages: list[dict[str, str]], system: str) -> str:
         """LLM call with retry policy for transient failures."""
-        result = self._client.chat(messages=messages, system=system, tools=None)
+        result = self._client.chat(messages=messages, system=system, tools=None, max_tokens=1500)
         return result.get("content", "").strip()
 
     def evaluate(

@@ -241,6 +241,7 @@ class DecisionAgent:
         result = self._client.chat(
             messages=[{"role": "user", "content": user_message}],
             system=_DECISION_SYSTEM_PROMPT,
+            max_tokens=50,
         )
         return result.get("content", "").strip()
 

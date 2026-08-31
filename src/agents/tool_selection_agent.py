@@ -321,6 +321,7 @@ class ToolSelectionAgent:
         result = self._client.chat(
             messages=[{"role": "user", "content": user_message}],
             system=system_prompt,
+            max_tokens=200,
         )
         return result.get("content", "").strip()
 

@@ -114,6 +114,7 @@ class GroqClient:
         messages: list[dict[str, Any]],
         system: str = "",
         tools: list[dict] | None = None,
+        max_tokens: int | None = None,
     ) -> dict:
 
         api_key = self._get_api_key()
@@ -146,7 +147,7 @@ class GroqClient:
             "model": self.model,
             "messages": all_messages,
             "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
+            "max_tokens": max_tokens if max_tokens is not None else self.max_tokens,
         }
 
         # Add tools only when provided.

@@ -135,7 +135,19 @@ class AgentOrchestrator:
         weight_profile=None,
     ) -> str:
         """Execute the LangGraph pipeline and return the final response string."""
+        from src.agents.cache import response_cache, make_query_cache_key
+
         logger.info("AgentOrchestrator.run: START query='%.80s'", user_message)
+
+        # ── Response cache check ──────────────────────────────────────
+        cache_key = make_query_cache_key(user_message, uploaded_docs, case_study)
+        cached = response_cache.get(cache_key)
+        if cached is not None:
+            logger.info("AgentOrchestrator.run: CACHE HIT response_len=%d", len(cached))
+            self._conversation_memory.add_turn("user", user_message)
+            self._conversation_memory.add_turn("assistant", cached)
+            return cached
+
         self._callback_handler.on_node_start("orchestrator")
 
         graph_context = self._graphrag.retrieve_context(user_message)
@@ -185,12 +197,16 @@ class AgentOrchestrator:
         result_state = pipeline.invoke(initial_state)
         response = result_state.get("final_response", "")
 
+        # Store in response cache
+        response_cache.set(cache_key, response)
+
         # Update conversation memory
         self._conversation_memory.add_turn("user", user_message)
         self._conversation_memory.add_turn("assistant", response)
 
         self._callback_handler.on_node_end("orchestrator", f"response_len={len(response)}")
-        logger.info("AgentOrchestrator.run: DONE response_len=%d", len(response))
+        logger.info("AgentOrchestrator.run: DONE response_len=%d (cache stats: %s)",
+                     len(response), response_cache.stats)
         return response
 
     # ------------------------------------------------------------------

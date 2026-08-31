@@ -65,6 +65,7 @@ class SynthesisAgent:
         result = self._client.chat(
             messages=[{"role": "user", "content": prompt}],
             system=_SYSTEM_PROMPT,
+            max_tokens=100,
         )
         return result.get("content", "").strip()
 

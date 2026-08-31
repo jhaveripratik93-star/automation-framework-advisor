@@ -34,7 +34,7 @@ class MockLLMClient:
         self.last_system = ""
         self.last_messages = []
 
-    def chat(self, messages, system="", tools=None):
+    def chat(self, messages, system="", tools=None, max_tokens=None):
         self.call_count += 1
         self.last_system = system
         self.last_messages = messages

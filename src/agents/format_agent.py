@@ -285,6 +285,7 @@ class FormatAgent:
             result = self._client.chat(
                 messages=[{"role": "user", "content": prompt}],
                 system=_SYSTEM_PROMPT,
+                max_tokens=1500,
             )
             formatted = result.get("content", "").strip()
             if not formatted:

@@ -67,6 +67,7 @@ class ReflectionAgent:
         result = self._client.chat(
             messages=[{"role": "user", "content": prompt}],
             system=_SYSTEM_PROMPT,
+            max_tokens=50,
         )
         return result.get("content", "").strip()
 
