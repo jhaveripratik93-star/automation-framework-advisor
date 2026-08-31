@@ -643,7 +643,8 @@ def _render_sidebar() -> None:
                     st.caption(f"…and {len(caps)-8} more")
                 st.markdown("---")
                 if st.button("🗑 Clear all", key="sb_clear_cov"):
-                    for k in ("excel_test_cases", "excel_summary", "coverage_result", "cicd_yaml"):
+                    for k in ("excel_test_cases", "excel_summary", "coverage_result", "cicd_yaml",
+                              "cov_selected_frameworks"):
                         st.session_state[k] = [] if k == "excel_test_cases" else ""
                     st.rerun()
             else:
@@ -653,7 +654,7 @@ def _render_sidebar() -> None:
                         unsafe_allow_html=True)
             st.caption("• Excel columns: Test ID, Description, Capability, Steps, Expected Result")
             st.caption("• Capability field drives analysis — 'smoke', 'e2e', 'api' all work")
-            st.caption("• Leave framework filter empty to compare all 17 frameworks")
+            st.caption("• Select specific frameworks to compare, or leave empty for all")
 
         elif page == "codegen":
             st.markdown('<div class="sidebar-section">🤖 Test Generator</div>',
@@ -1674,7 +1675,197 @@ def _code_language(framework: str) -> str:
     return lang_map.get(framework, "text")
 
 
+# ── Coverage results renderer ────────────────────────────────────────
+def _render_coverage_results(display: dict) -> None:
+    """Render the new table-based coverage report using Streamlit widgets."""
+    import pandas as pd
+
+    if not display:
+        return
+
+    matrix   = display["matrix"]
+    fw_names = display["fw_names"]
+    fw_scores = display["fw_scores"]
+    tc_order  = display["tc_order"]
+    total     = len(tc_order)
+
+    st.markdown("---")
+    st.markdown("## 📊 Test Case Coverage Analysis")
+
+    # ── Per-test-case table ───────────────────────────────────────────
+    st.markdown("### 🧪 Test Case × Framework Support Matrix")
+    st.caption(
+        "✅ = Supported (native/plugin)  ·  ❌ = Not supported  ·  "
+        "Rows = test cases, Columns = frameworks"
+    )
+
+    rows = []
+    for tc_id in tc_order:
+        d = matrix[tc_id]
+        desc = d["description"] or tc_id
+        cap  = d["capability"].title()
+        row  = {"Test ID": tc_id, "Description": desc[:60] + ("…" if len(desc) > 60 else ""), "Capability": cap}
+        for fw in fw_names:
+            level = d["support"].get(fw, "false")
+            row[fw] = "✅" if level != "false" else "❌"
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+    # Style: green bg for ✅, red for ❌
+    def _colour_cell(val):
+        if val == "✅":
+            return "background-color:#d4edda;color:#155724;font-weight:600;text-align:center"
+        if val == "❌":
+            return "background-color:#f8d7da;color:#721c24;font-weight:600;text-align:center"
+        return ""
+
+    fw_cols = [c for c in df.columns if c not in ("Test ID", "Description", "Capability")]
+    styled = df.style.applymap(_colour_cell, subset=fw_cols)
+    st.dataframe(styled, use_container_width=True, hide_index=True)
+
+    # ── Per-framework detail expanders ────────────────────────────────
+    st.markdown("### 🔍 Framework Detail — Which Tests Are Supported")
+    for fw in fw_names:
+        scores   = fw_scores[fw]
+        sup_ids  = scores["supported"]
+        unsup_ids = scores["unsupported"]
+        pct      = scores["pct"]
+        badge    = "✅ Full" if pct == 100 else ("⚠️ Partial" if pct >= 50 else "❌ Low")
+
+        with st.expander(f"{badge} **{fw}** — {pct:.0f}% coverage ({len(sup_ids)}/{total} tests)", expanded=False):
+            col_sup, col_unsup = st.columns(2)
+            with col_sup:
+                st.markdown(f"**✅ Supported ({len(sup_ids)} tests)**")
+                if sup_ids:
+                    for tc_id in sup_ids:
+                        desc = matrix[tc_id]["description"] or tc_id
+                        st.markdown(f"  - `{tc_id}` — {desc[:55]}")
+                else:
+                    st.caption("None")
+            with col_unsup:
+                st.markdown(f"**❌ Not Supported ({len(unsup_ids)} tests)**")
+                if unsup_ids:
+                    for tc_id in unsup_ids:
+                        desc = matrix[tc_id]["description"] or tc_id
+                        cap  = matrix[tc_id]["capability"].title()
+                        # Find alternatives that support this TC
+                        alts = [f for f in fw_names if f != fw and matrix[tc_id]["support"].get(f, "false") != "false"][:3]
+                        alt_txt = f" → try: *{', '.join(alts)}*" if alts else ""
+                        st.markdown(f"  - `{tc_id}` — {desc[:45]}{alt_txt}")
+                else:
+                    st.caption("None")
+
+    # ── Summary table ─────────────────────────────────────────────────
+    st.markdown("### 🏆 Framework Coverage Summary")
+    st.caption("Ranked by coverage — best fit at the top.")
+
+    summary_rows = []
+    for rank, fw in enumerate(fw_names, 1):
+        scores    = fw_scores[fw]
+        sup_count = len(scores["supported"])
+        unsup_count = len(scores["unsupported"])
+        pct       = scores["pct"]
+        if pct == 100:
+            verdict = "✅ Best fit — covers all test cases"
+        elif pct >= 80:
+            verdict = f"🟢 Strong fit — {unsup_count} test(s) need alternatives"
+        elif pct >= 50:
+            verdict = f"🟡 Partial fit — {unsup_count} test(s) not supported"
+        else:
+            verdict = f"🔴 Poor fit — only {sup_count} of {total} tests supported"
+        summary_rows.append({
+            "Rank": f"#{rank}",
+            "Framework": fw,
+            "Supported ✅": sup_count,
+            "Not Supported ❌": unsup_count,
+            "Coverage %": f"{pct:.0f}%",
+            "Verdict": verdict,
+        })
+
+    summary_df = pd.DataFrame(summary_rows)
+
+    def _colour_verdict(val):
+        if val.startswith("✅"):
+            return "background-color:#d4edda;color:#155724"
+        if val.startswith("🟢"):
+            return "background-color:#d1ecf1;color:#0c5460"
+        if val.startswith("🟡"):
+            return "background-color:#fff3cd;color:#856404"
+        return "background-color:#f8d7da;color:#721c24"
+
+    def _colour_pct(val):
+        pct = int(val.replace("%", ""))
+        if pct == 100:
+            return "color:#155724;font-weight:700"
+        if pct >= 80:
+            return "color:#0c5460;font-weight:600"
+        if pct >= 50:
+            return "color:#856404"
+        return "color:#721c24"
+
+    styled_summary = (
+        summary_df.style
+        .applymap(_colour_verdict, subset=["Verdict"])
+        .applymap(_colour_pct, subset=["Coverage %"])
+    )
+    st.dataframe(styled_summary, use_container_width=True, hide_index=True)
+
+    # ── Recommendation callout ────────────────────────────────────────
+    if fw_names:
+        best = fw_names[0]
+        best_pct = fw_scores[best]["pct"]
+        unsup = fw_scores[best]["unsupported"]
+        if best_pct == 100:
+            st.success(f"🏆 **{best}** covers **100%** of your test cases natively — recommended as primary framework.")
+        else:
+            # Find which frameworks cover the gaps
+            gap_coverage: dict[str, list[str]] = {}
+            for tc_id in unsup:
+                for fw in fw_names[1:]:
+                    if matrix[tc_id]["support"].get(fw, "false") != "false":
+                        gap_coverage.setdefault(fw, []).append(tc_id)
+                        break
+            if gap_coverage:
+                combo = [best] + list(gap_coverage.keys())[:2]
+                st.info(
+                    f"🏆 **{best}** has the best single-framework coverage at **{best_pct:.0f}%**. "
+                    f"Combine with **{', '.join(list(gap_coverage.keys())[:2])}** "
+                    f"to cover the remaining {len(unsup)} test case(s)."
+                )
+            else:
+                st.info(f"🏆 **{best}** has the best coverage at **{best_pct:.0f}%** ({len(fw_scores[best]['supported'])}/{total} tests).")
+
+
 # ── Tab: Coverage Analyser ────────────────────────────────────────────
+def _normalise_coverage_records(records: list[dict]) -> list[dict]:
+    """Normalise JSON/CSV records to the internal coverage format."""
+    _ALIASES = {
+        "id":                  ["id", "test_id", "testid", "test id", "tc"],
+        "description":         ["description", "desc", "title", "name", "test name"],
+        "required_capability": ["required_capability", "capability", "type", "category", "test type"],
+        "steps":               ["steps", "step", "test steps", "actions"],
+        "expected_result":     ["expected_result", "expected", "expected result", "outcome"],
+    }
+
+    def _pick(row: dict, aliases: list[str]) -> str:
+        row_lower = {k.strip().lower(): v for k, v in row.items()}
+        for alias in aliases:
+            if alias in row_lower:
+                return str(row_lower[alias] or "")
+        return ""
+
+    return [
+        {
+            "id":                  _pick(r, _ALIASES["id"]),
+            "description":         _pick(r, _ALIASES["description"]),
+            "required_capability": _pick(r, _ALIASES["required_capability"]).lower() or "ui automation",
+            "steps":               _pick(r, _ALIASES["steps"]),
+            "expected_result":     _pick(r, _ALIASES["expected_result"]),
+        }
+        for r in records
+    ]
+
+
 def _render_coverage_tab() -> None:
     st.markdown("""
     <div class="page-header">
@@ -1687,6 +1878,16 @@ def _render_coverage_tab() -> None:
     """, unsafe_allow_html=True)
 
     tcs = st.session_state.excel_test_cases
+
+    # ── Framework selector ────────────────────────────────────────────
+    all_fw_names = sorted([fw.framework_name for fw in kb.list_all()])
+    selected_frameworks = st.multiselect(
+        "🔍 Frameworks to compare (leave empty to evaluate all)",
+        options=all_fw_names,
+        default=st.session_state.get("cov_selected_frameworks", []),
+        key="cov_selected_frameworks",
+        help="Select specific frameworks to compare. If none selected, all frameworks are evaluated.",
+    )
 
     # ── Metric cards ──────────────────────────────────────────────────
     if tcs:
@@ -1719,17 +1920,53 @@ def _render_coverage_tab() -> None:
         """, unsafe_allow_html=True)
 
     # ── Upload + auto-analyse ─────────────────────────────────────────
-    with st.expander("📥 Upload Test Cases (Excel)", expanded=not bool(tcs)):
+    with st.expander("📥 Upload Test Cases", expanded=not bool(tcs)):
         st.markdown(
-            "Expected columns *(order & case don't matter)*: "
+            "Expected fields *(column names / JSON keys)*: "
             "`Test ID` · `Description` · `Required Capability` · `Steps` · `Expected Result`"
         )
-        xl_file = st.file_uploader("Excel file (.xlsx)", type=["xlsx"], key="xl_upload")
-        cicd_platform = st.selectbox(
-            "CI/CD platform for export",
-            ["GitHub Actions", "GitLab CI", "Azure DevOps"],
-            key="cicd_platform",
-        )
+
+        tab_xl, tab_json, tab_csv = st.tabs(["📊 Excel", "📋 JSON", "📄 CSV"])
+
+        upload_file = None
+        upload_type = None
+
+        with tab_xl:
+            upload_file_xl = st.file_uploader("Excel file (.xlsx)", type=["xlsx"], key="xl_upload")
+            if upload_file_xl:
+                upload_file, upload_type = upload_file_xl, "xlsx"
+
+        with tab_json:
+            st.caption("JSON must be an array of objects with the expected fields.")
+            upload_file_json = st.file_uploader("JSON file (.json)", type=["json"], key="cov_json_upload")
+            if upload_file_json:
+                upload_file, upload_type = upload_file_json, "json"
+            with st.expander("📖 Expected JSON format", expanded=False):
+                st.code("""
+[
+  {
+    "id": "TC001",
+    "description": "Login with valid credentials",
+    "required_capability": "ui automation",
+    "steps": "Navigate to login page, enter credentials, click login",
+    "expected_result": "Dashboard is displayed"
+  }
+]
+                """, language="json")
+
+        with tab_csv:
+            st.caption("CSV must have a header row. Column names are matched case-insensitively.")
+            upload_file_csv = st.file_uploader("CSV file (.csv)", type=["csv"], key="cov_csv_upload")
+            if upload_file_csv:
+                upload_file, upload_type = upload_file_csv, "csv"
+            with st.expander("📖 Expected CSV format", expanded=False):
+                st.code("id,description,required_capability,steps,expected_result\nTC001,Login test,ui automation,Navigate and login,Dashboard shown", language="text")
+
+        # cicd_platform = st.selectbox(
+        #     "CI/CD platform for export",
+        #     ["GitHub Actions", "GitLab CI", "Azure DevOps"],
+        #     key="cicd_platform",
+        # )
         col_parse, col_reset = st.columns([1, 1])
         with col_parse:
             parse_clicked = st.button("📂 Parse & Analyse", key="btn_parse_xl",
@@ -1737,168 +1974,186 @@ def _render_coverage_tab() -> None:
         with col_reset:
             if st.button("🗑 Clear", key="btn_clear_xl", use_container_width=True):
                 for k in ("excel_test_cases", "excel_summary", "coverage_result",
-                          "coverage_best_fw", "coverage_best_pct", "cicd_yaml"):
+                          "coverage_best_fw", "coverage_best_pct", "cicd_yaml",
+                          "cov_selected_frameworks"):
                     st.session_state[k] = [] if k == "excel_test_cases" else ""
                 st.rerun()
 
         if parse_clicked:
-            if xl_file is None:
-                st.warning("Upload an Excel file first.")
+            if upload_file is None:
+                st.warning("Upload a file first (Excel, JSON, or CSV).")
             else:
                 from src.tools.excel_parser import parse_excel_test_cases, summarise_excel
                 from src.tools.coverage_engine import analyze_coverage, render_coverage_report
+                import json as _json
 
-                raw        = xl_file.read()
-                test_cases = parse_excel_test_cases(raw)
-                if not test_cases:
-                    st.error("Could not parse any test cases. Check column headers.")
-                else:
-                    _COV_STEPS = [
-                        "Parsing Excel",
-                        "Building capability map",
-                        "Scoring frameworks",
-                        "Finding best combinations",
-                        "Generating report",
-                    ]
-                    loading_slot = st.empty()
-                    try:
+                _COV_STEPS = [
+                    "Parsing file",
+                    "Building capability map",
+                    "Scoring frameworks",
+                    "Finding best combinations",
+                    "Generating report",
+                ]
+                loading_slot = st.empty()
+                try:
+                    raw = upload_file.read()
+                    if upload_type == "xlsx":
+                        test_cases = parse_excel_test_cases(raw)
+                    elif upload_type == "json":
+                        records = _json.loads(raw.decode("utf-8"))
+                        # Unwrap {"test_cases": [...]} envelope if present
+                        if isinstance(records, dict):
+                            records = records.get("test_cases", records.get("data", [records]))
+                        if not isinstance(records, list):
+                            raise ValueError("JSON must be an array of objects")
+                        test_cases = _normalise_coverage_records(records)
+                    elif upload_type == "csv":
+                        import csv, io as _io
+                        reader = csv.DictReader(_io.StringIO(raw.decode("utf-8")))
+                        test_cases = _normalise_coverage_records(list(reader))
+                    else:
+                        test_cases = []
+
+                    if not test_cases:
+                        loading_slot.empty()
+                        st.error("Could not parse any test cases. Check the file format.")
+                    else:
                         for step_i in range(len(_COV_STEPS) - 1):
                             with loading_slot.container():
                                 _render_loading(_COV_STEPS, step_i, "Analysing coverage…")
                             import time; time.sleep(0.25)
 
-                        analysis = analyze_coverage(test_cases, kb)
+                        _fw_filter = st.session_state.get("cov_selected_frameworks") or None
+                        analysis = analyze_coverage(test_cases, kb, frameworks=_fw_filter)
                         report   = render_coverage_report(analysis, len(test_cases))
 
-                        cov_data = analysis["coverage"]
-                        if cov_data:
-                            best = max(cov_data.items(), key=lambda x: x[1]["pct_with_partial"])
-                            st.session_state.coverage_best_fw  = best[0]
-                            st.session_state.coverage_best_pct = f"{best[1]['pct_with_partial']:.0f}%"
+                        from src.tools.coverage_engine import build_display_coverage
+                        display = build_display_coverage(analysis)
+                        if display["fw_scores"]:
+                            best_fw = display["fw_names"][0]
+                            best_pct = display["fw_scores"][best_fw]["pct"]
+                            st.session_state.coverage_best_fw  = best_fw
+                            st.session_state.coverage_best_pct = f"{best_pct:.0f}%"
 
                         with loading_slot.container():
                             _render_loading(_COV_STEPS, len(_COV_STEPS) - 1, "Done!")
                         import time; time.sleep(0.2)
                         loading_slot.empty()
 
-                        st.session_state.excel_test_cases = test_cases
-                        st.session_state.excel_summary    = summarise_excel(test_cases)
-                        st.session_state.coverage_result  = report
-                        st.session_state.cicd_yaml        = _build_cicd_yaml(test_cases, cicd_platform)
+                        st.session_state.excel_test_cases   = test_cases
+                        st.session_state.coverage_result    = report
+                        st.session_state.coverage_analysis  = display
                         st.rerun()
-                    except Exception as exc:
-                        loading_slot.empty()
-                        st.error(f"Analysis failed: {exc}")
-                        logger.error("Coverage analysis error: %s", exc)
+                except Exception as exc:
+                    loading_slot.empty()
+                    st.error(f"Analysis failed: {exc}")
+                    logger.error("Coverage analysis error: %s", exc)
 
-        if st.session_state.excel_summary:
-            st.markdown(st.session_state.excel_summary)
 
     # ── Results ───────────────────────────────────────────────────────
-    if st.session_state.coverage_result:
-        st.markdown("---")
-        st.markdown(st.session_state.coverage_result)
+    if st.session_state.coverage_result == "__COVERAGE_READY__":
+        _render_coverage_results(st.session_state.get("coverage_analysis", {}))
 
-    if st.session_state.cicd_yaml:
-        st.markdown("---")
-        st.markdown("### ⬇️ CI/CD Pipeline Export")
-        platform = st.session_state.get("cicd_platform", "GitHub Actions")
-        filename_map = {
-            "GitHub Actions": "github-actions.yml",
-            "GitLab CI":      ".gitlab-ci.yml",
-            "Azure DevOps":   "azure-pipelines.yml",
-        }
-        filename = filename_map.get(platform, "ci-pipeline.yml")
-        st.code(st.session_state.cicd_yaml, language="yaml")
-        st.download_button(
-            label=f"⬇ Download {filename}",
-            data=st.session_state.cicd_yaml,
-            file_name=filename,
-            mime="text/yaml",
-            key="btn_download_cicd",
-        )
+    # if st.session_state.cicd_yaml:
+    #     st.markdown("---")
+    #     st.markdown("### ⬇️ CI/CD Pipeline Export")
+    #     platform = st.session_state.get("cicd_platform", "GitHub Actions")
+    #     filename_map = {
+    #         "GitHub Actions": "github-actions.yml",
+    #         "GitLab CI":      ".gitlab-ci.yml",
+    #         "Azure DevOps":   "azure-pipelines.yml",
+    #     }
+    #     filename = filename_map.get(platform, "ci-pipeline.yml")
+    #     st.code(st.session_state.cicd_yaml, language="yaml")
+    #     st.download_button(
+    #         label=f"⬇ Download {filename}",
+    #         data=st.session_state.cicd_yaml,
+    #         file_name=filename,
+    #         mime="text/yaml",
+    #         key="btn_download_cicd",
+    #     )
 
     # ── Manual entry (only when no Excel loaded) ──────────────────────
-    if not tcs:
-        st.markdown("---")
-        with st.expander("✏️ Or enter test cases manually", expanded=False):
-            st.caption(
-                "Same fields as Excel: `id`, `description`, `capability`, "
-                "`steps`, `expected_result`. Capability drives analysis — "
-                "`smoke`, `regression`, `e2e` all work via semantic matching."
-            )
-            st.markdown("**Quick template:**")
-            tcol1, tcol2, tcol3 = st.columns([1, 2, 1])
-            with tcol1:
-                tmpl_count = st.number_input(
-                    "# test cases", min_value=1, max_value=20, value=3, key="tmpl_count"
-                )
-            with tcol2:
-                tmpl_cap = st.selectbox(
-                    "Capability",
-                    ["ui automation", "api testing", "mobile testing",
-                     "performance testing", "visual testing",
-                     "accessibility testing", "network mocking",
-                     "cross browser", "parallel execution", "e2e testing"],
-                    key="tmpl_cap",
-                )
-            with tcol3:
-                st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-                if st.button("📝 Generate", key="btn_gen_tmpl"):
-                    import json as _json
-                    st.session_state["manual_tc_prefill"] = _json.dumps([
-                        {
-                            "id": f"TC{i+1:03d}",
-                            "description": f"Test case {i+1} description",
-                            "capability": tmpl_cap,
-                            "steps": "Step 1\nStep 2",
-                            "expected_result": "Expected outcome",
-                        }
-                        for i in range(int(tmpl_count))
-                    ], indent=2)
+    # if not tcs:
+    #     st.markdown("---")
+    #     with st.expander("✏️ Or enter test cases manually", expanded=False):
+    #         st.caption(
+    #             "Same fields as Excel: `id`, `description`, `capability`, "
+    #             "`steps`, `expected_result`. Capability drives analysis — "
+    #             "`smoke`, `regression`, `e2e` all work via semantic matching."
+    #         )
+    #         st.markdown("**Quick template:**")
+    #         tcol1, tcol2, tcol3 = st.columns([1, 2, 1])
+    #         with tcol1:
+    #             tmpl_count = st.number_input(
+    #                 "# test cases", min_value=1, max_value=20, value=3, key="tmpl_count"
+    #             )
+    #         with tcol2:
+    #             tmpl_cap = st.selectbox(
+    #                 "Capability",
+    #                 ["ui automation", "api testing", "mobile testing",
+    #                  "performance testing", "visual testing",
+    #                  "accessibility testing", "network mocking",
+    #                  "cross browser", "parallel execution", "e2e testing"],
+    #                 key="tmpl_cap",
+    #             )
+    #         with tcol3:
+    #             st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+    #             if st.button("📝 Generate", key="btn_gen_tmpl"):
+    #                 import json as _json
+    #                 st.session_state["manual_tc_prefill"] = _json.dumps([
+    #                     {
+    #                         "id": f"TC{i+1:03d}",
+    #                         "description": f"Test case {i+1} description",
+    #                         "capability": tmpl_cap,
+    #                         "steps": "Step 1\nStep 2",
+    #                         "expected_result": "Expected outcome",
+    #                     }
+    #                     for i in range(int(tmpl_count))
+    #                 ], indent=2)
 
-            manual_json = st.text_area(
-                "Test cases JSON",
-                value=st.session_state.get("manual_tc_prefill", ""),
-                height=220,
-                key="manual_tc_json",
-                placeholder='[{"id":"TC001","description":"Login test","capability":"ui automation"}]',
-            )
+    #         manual_json = st.text_area(
+    #             "Test cases JSON",
+    #             value=st.session_state.get("manual_tc_prefill", ""),
+    #             height=220,
+    #             key="manual_tc_json",
+    #             placeholder='[{"id":"TC001","description":"Login test","capability":"ui automation"}]',
+    #         )
 
-            if st.button("▶ Analyse Manual Input", key="btn_manual_analyse", type="primary"):
-                import json
-                try:
-                    from src.tools.excel_parser import summarise_excel
-                    from src.tools.coverage_engine import analyze_coverage, render_coverage_report
-                    raw_tcs = json.loads(manual_json)
-                    if not isinstance(raw_tcs, list):
-                        raise ValueError("Must be a JSON array")
-                    normalised = [{
-                        "id": tc.get("id") or tc.get("test_id") or "",
-                        "description": tc.get("description") or tc.get("desc") or "",
-                        "required_capability": (
-                            tc.get("required_capability") or tc.get("capability")
-                            or tc.get("type") or "ui automation"
-                        ).lower(),
-                        "steps": tc.get("steps") or "",
-                        "expected_result": tc.get("expected_result") or "",
-                    } for tc in raw_tcs]
+    #         if st.button("▶ Analyse Manual Input", key="btn_manual_analyse", type="primary"):
+    #             import json
+    #             try:
+    #                 from src.tools.excel_parser import summarise_excel
+    #                 from src.tools.coverage_engine import analyze_coverage, render_coverage_report
+    #                 raw_tcs = json.loads(manual_json)
+    #                 if not isinstance(raw_tcs, list):
+    #                     raise ValueError("Must be a JSON array")
+    #                 normalised = [{
+    #                     "id": tc.get("id") or tc.get("test_id") or "",
+    #                     "description": tc.get("description") or tc.get("desc") or "",
+    #                     "required_capability": (
+    #                         tc.get("required_capability") or tc.get("capability")
+    #                         or tc.get("type") or "ui automation"
+    #                     ).lower(),
+    #                     "steps": tc.get("steps") or "",
+    #                     "expected_result": tc.get("expected_result") or "",
+    #                 } for tc in raw_tcs]
 
-                    analysis = analyze_coverage(normalised, kb)
-                    report   = render_coverage_report(analysis, len(normalised))
-                    cov_data = analysis["coverage"]
-                    if cov_data:
-                        best = max(cov_data.items(), key=lambda x: x[1]["pct_with_partial"])
-                        st.session_state.coverage_best_fw  = best[0]
-                        st.session_state.coverage_best_pct = f"{best[1]['pct_with_partial']:.0f}%"
+    #                 analysis = analyze_coverage(normalised, kb)
+    #                 report   = render_coverage_report(analysis, len(normalised))
+    #                 cov_data = analysis["coverage"]
+    #                 if cov_data:
+    #                     best = max(cov_data.items(), key=lambda x: x[1]["pct_with_partial"])
+    #                     st.session_state.coverage_best_fw  = best[0]
+    #                     st.session_state.coverage_best_pct = f"{best[1]['pct_with_partial']:.0f}%"
 
-                    st.session_state.coverage_result  = report
-                    st.session_state.cicd_yaml        = _build_cicd_yaml(normalised, "GitHub Actions")
-                    st.session_state.excel_summary    = summarise_excel(normalised)
-                    st.session_state.excel_test_cases = normalised
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"Invalid input: {exc}")
+    #                 st.session_state.coverage_result  = report
+    #                 # st.session_state.cicd_yaml        = _build_cicd_yaml(normalised, "GitHub Actions")
+    #                 st.session_state.excel_summary    = summarise_excel(normalised)
+    #                 st.session_state.excel_test_cases = normalised
+    #                 st.rerun()
+    #             except Exception as exc:
+    #                 st.error(f"Invalid input: {exc}")
 
 
 def _build_cicd_yaml(test_cases: list[dict], platform: str) -> str:

@@ -39,10 +39,10 @@
       },
       "confidence_threshold": 0.8,
       "source": "learned",
-      "usage_count": 21,
-      "success_count": 21,
+      "usage_count": 25,
+      "success_count": 25,
       "created_at": "2026-08-28T10:12:20.382199",
-      "last_used_at": "2026-08-31T15:07:16.163854",
+      "last_used_at": "2026-08-31T15:31:18.643841",
       "enabled": true
     },
     {
@@ -54,10 +54,10 @@
       },
       "confidence_threshold": 0.8,
       "source": "learned",
-      "usage_count": 25,
-      "success_count": 25,
+      "usage_count": 29,
+      "success_count": 29,
       "created_at": "2026-08-28T10:12:21.960411",
-      "last_used_at": "2026-08-31T15:07:16.268792",
+      "last_used_at": "2026-08-31T15:31:18.785782",
       "enabled": true
     },
     {
@@ -69,10 +69,10 @@
       },
       "confidence_threshold": 0.8,
       "source": "learned",
-      "usage_count": 10,
-      "success_count": 10,
+      "usage_count": 12,
+      "success_count": 12,
       "created_at": "2026-08-28T10:12:35.171179",
-      "last_used_at": "2026-08-31T15:07:16.199721",
+      "last_used_at": "2026-08-31T15:31:18.697793",
       "enabled": true
     },
     {
@@ -84,10 +84,10 @@
       },
       "confidence_threshold": 0.8,
       "source": "learned",
-      "usage_count": 10,
-      "success_count": 10,
+      "usage_count": 12,
+      "success_count": 12,
       "created_at": "2026-08-28T10:12:46.651305",
-      "last_used_at": "2026-08-31T15:07:16.251884",
+      "last_used_at": "2026-08-31T15:31:18.766008",
       "enabled": true
     },
     {
@@ -99,10 +99,10 @@
       },
       "confidence_threshold": 0.8,
       "source": "learned",
-      "usage_count": 30,
-      "success_count": 30,
+      "usage_count": 36,
+      "success_count": 36,
       "created_at": "2026-08-28T10:12:51.913328",
-      "last_used_at": "2026-08-31T15:07:16.273892",
+      "last_used_at": "2026-08-31T15:31:18.792912",
       "enabled": true
     },
     {
@@ -114,10 +114,10 @@
       },
       "confidence_threshold": 0.8,
       "source": "learned",
-      "usage_count": 19,
-      "success_count": 19,
+      "usage_count": 23,
+      "success_count": 23,
       "created_at": "2026-08-28T10:18:21.918751",
-      "last_used_at": "2026-08-31T15:07:16.180874",
+      "last_used_at": "2026-08-31T15:31:18.672515",
       "enabled": true
     },
     {
@@ -129,10 +129,10 @@
       },
       "confidence_threshold": 0.8,
       "source": "learned",
-      "usage_count": 19,
-      "success_count": 19,
+      "usage_count": 23,
+      "success_count": 23,
       "created_at": "2026-08-28T10:18:23.858883",
-      "last_used_at": "2026-08-31T15:07:16.294254",
+      "last_used_at": "2026-08-31T15:31:18.820653",
       "enabled": true
     },
     {
