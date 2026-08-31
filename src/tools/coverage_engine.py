@@ -355,168 +355,52 @@ def analyze_coverage(
     }
 
 
-def render_coverage_report(analysis: dict, total: int) -> str:
-    """Render the analysis dict to a markdown string."""
+# ── Support simplification for display ───────────────────────────────────────
+
+def _is_supported(level: str) -> bool:
+    """Collapse all non-false levels to supported."""
+    return level != "false"
+
+
+def build_display_coverage(analysis: dict) -> dict:
+    """Return a simplified coverage dict for the new table-based UI.
+
+    Returns:
+      {
+        "matrix":    same as analysis["matrix"],
+        "fw_names":  ordered list of framework names (best coverage first),
+        "fw_scores": {fw_name: {"supported": [tc_ids], "unsupported": [tc_ids], "pct": float}},
+        "tc_order":  [tc_id, ...] in input order,
+      }
+    """
     matrix   = analysis["matrix"]
     coverage = analysis["coverage"]
-    fw_names = analysis["fw_names"]
-    kb       = analysis["kb"]
-    lines: list[str] = ["# Test Case Coverage Analysis\n"]
 
-    # ── Summary table ─────────────────────────────────────────────────
-    lines += [
-        "## Coverage Summary\n",
-        "| Framework | Native ✅ | Plugin/3rd-party ⚠️ | Uncovered ❌ | Native% | With-plugin% | Status |",
-        "|---|---|---|---|---|---|---|",
-    ]
-    sorted_cov = sorted(coverage.items(), key=lambda x: -x[1]["pct_with_partial"])
-    for fw_name, data in sorted_cov:
-        if data["pct"] == 100:
-            status = "✅ FULL NATIVE"
-        elif data["pct_with_partial"] == 100:
-            status = "🟡 FULL (plugins needed)"
-        elif data["pct_with_partial"] >= 70:
-            status = "⚠️ PARTIAL"
-        else:
-            status = "❌ LOW"
-        lines.append(
-            f"| **{fw_name}** | {data['count']} | {data['partial_count']} "
-            f"| {len(data['uncovered'])} "
-            f"| {data['pct']:.0f}% | {data['pct_with_partial']:.0f}% | {status} |"
-        )
-    lines.append("")
+    # Compute supported/unsupported per framework using simplified binary view
+    fw_scores: dict[str, dict] = {}
+    total = len(matrix)
+    for fw_name, data in coverage.items():
+        supported   = data["covered"] + data["partial"]
+        unsupported = data["uncovered"]
+        pct = len(supported) / total * 100 if total else 0
+        fw_scores[fw_name] = {
+            "supported":   supported,
+            "unsupported": unsupported,
+            "pct":         pct,
+        }
 
-    # ── Support level legend ──────────────────────────────────────────
-    lines += [
-        "### 📖 Support Level Guide",
-        "| Level | Meaning |",
-        "|---|---|",
-        "| ✅ Native | Built-in, no extra setup |",
-        "| 🔌 Plugin | Requires an official plugin/extension |",
-        "| 🔧 Third-party | Needs a separate third-party library |",
-        "| ⚡ Partial | Limited/experimental support |",
-        "| ❌ False | Not supported |",
-        "",
-    ]
+    fw_names_sorted = sorted(fw_scores.keys(), key=lambda n: -fw_scores[n]["pct"])
+    tc_order = list(matrix.keys())
 
-    # ── Capability resolution notes (show any semantic fallbacks) ─────
-    fallbacks = [(tc_id, d) for tc_id, d in matrix.items()
-                 if "fallback" in d["resolved_label"]]
-    if fallbacks:
-        lines.append("### ℹ️ Capability Resolution Notes")
-        lines.append("The following test case capabilities were not directly recognised "
-                     "and were mapped via semantic matching:\n")
-        lines.append("| Test ID | Original Capability | Resolved As | YAML Keys Used |")
-        lines.append("|---|---|---|---|")
-        for tc_id, d in fallbacks:
-            lines.append(
-                f"| {tc_id} | `{d['capability']}` | `{d['resolved_label']}` "
-                f"| {', '.join(d['yaml_keys'][:4])} |"
-            )
-        lines.append("")
-
-    # ── Gap analysis (top 5 frameworks) ──────────────────────────────
-    lines.append("## Gap Analysis\n")
-    for fw_name, data in sorted_cov[:5]:
-        if not data["uncovered"] and not data["partial"]:
-            lines.append(f"### {fw_name} — ✅ Full native coverage\n")
-            continue
-
-        lines.append(f"### {fw_name} — {data['pct']:.0f}% native / "
-                     f"{data['pct_with_partial']:.0f}% with plugins\n")
-
-        if data["uncovered"]:
-            lines.append("**❌ Uncovered (no support):**")
-            uncov_by_cap: dict[str, list[str]] = {}
-            for tc_id in data["uncovered"]:
-                cap = matrix[tc_id]["resolved_label"]
-                uncov_by_cap.setdefault(cap, []).append(tc_id)
-            for cap, tc_ids in uncov_by_cap.items():
-                yaml_keys = matrix[tc_ids[0]]["yaml_keys"]
-                # Find frameworks that DO support this natively
-                alts = [
-                    f.framework_name for f in kb.list_all()
-                    if f.framework_name != fw_name
-                    and score_framework_for_capability(
-                        f.capabilities, f.architecture_fit, yaml_keys
-                    )[0] in ("native", "plugin")
-                ][:3]
-                alt_text = f" → Consider: **{', '.join(alts)}**" if alts else ""
-                lines.append(f"  - **{cap}** ({len(tc_ids)} tests){alt_text}")
-            lines.append("")
-
-        if data["partial"]:
-            lines.append("**⚠️ Partial/Plugin support (extra setup needed):**")
-            part_by_cap: dict[str, list[str]] = {}
-            for tc_id in data["partial"]:
-                cap = matrix[tc_id]["resolved_label"]
-                level = matrix[tc_id]["support"].get(fw_name, "false")
-                part_by_cap.setdefault(f"{cap} [{level}]", []).append(tc_id)
-            for cap_level, tc_ids in part_by_cap.items():
-                lines.append(f"  - **{cap_level}** ({len(tc_ids)} tests)")
-            lines.append("")
-
-    # ── Recommended combinations ──────────────────────────────────────
-    lines.append("## Recommended Combinations for 100% Coverage\n")
-    combos = _find_coverage_combinations(matrix, coverage)
-    for i, combo in enumerate(combos[:3], 1):
-        names = [c[0] for c in combo]
-        cov = _calc_combo_coverage(names, matrix)
-        lines.append(f"### Option {i}: {' + '.join(names)}")
-        lines.append(f"**Coverage:** {cov['pct']:.0f}% native + "
-                     f"{cov['pct_with_partial']:.0f}% with plugins "
-                     f"({cov['count']}/{total})\n")
-        for fw_name, caps in combo:
-            lines.append(f"  - **{fw_name}**: {', '.join(list(set(caps))[:4])}")
-        if cov["uncovered"]:
-            lines.append(f"\n**Still uncovered:** {', '.join(cov['uncovered'][:3])}")
-        lines.append("")
-
-    return "\n".join(lines)
-
-
-def _find_coverage_combinations(matrix: dict, coverage: dict) -> list:
-    """Greedy set-cover considering both native and partial support."""
-    combinations = []
-    all_tc = set(matrix.keys())
-    sorted_fw = sorted(coverage.items(), key=lambda x: -x[1]["pct_with_partial"])
-
-    for start_fw, start_data in sorted_fw[:3]:
-        covered_native  = set(start_data["covered"])
-        covered_partial = set(start_data["partial"])
-        covered_all     = covered_native | covered_partial
-        combo = [(start_fw, [matrix[t]["resolved_label"] for t in covered_all])]
-        remaining = all_tc - covered_all
-
-        while remaining and len(combo) < 4:
-            best_fw, best_covers = None, []
-            for fw_name, fw_data in coverage.items():
-                if fw_name in [c[0] for c in combo]:
-                    continue
-                new = (set(fw_data["covered"]) | set(fw_data["partial"])) & remaining
-                if len(new) > len(best_covers):
-                    best_fw, best_covers = fw_name, list(new)
-            if best_fw and best_covers:
-                combo.append((best_fw, [matrix[t]["resolved_label"] for t in best_covers]))
-                covered_all.update(best_covers)
-                remaining -= set(best_covers)
-            else:
-                break
-        combinations.append(combo)
-
-    return sorted(combinations, key=lambda c: (len(c), -sum(len(caps) for _, caps in c)))
-
-
-def _calc_combo_coverage(fw_names: list[str], matrix: dict) -> dict:
-    covered = {t for t, d in matrix.items()
-               if d["support"].get(fw_names[0] if fw_names else "") in ("native",)}
-    covered_wp = {t for t, d in matrix.items()
-                  if any(d["support"].get(fw) in ("native", "plugin", "third-party", "partial")
-                         for fw in fw_names)}
-    uncovered = [t for t in matrix if t not in covered_wp]
     return {
-        "count":            len(covered),
-        "pct":              len(covered) / len(matrix) * 100 if matrix else 0,
-        "pct_with_partial": len(covered_wp) / len(matrix) * 100 if matrix else 0,
-        "uncovered":        uncovered,
+        "matrix":    matrix,
+        "fw_names":  fw_names_sorted,
+        "fw_scores": fw_scores,
+        "tc_order":  tc_order,
     }
+
+
+def render_coverage_report(analysis: dict, total: int) -> str:
+    """Return a sentinel string — actual rendering is done by render_coverage_ui()."""
+    return "__COVERAGE_READY__"
+
