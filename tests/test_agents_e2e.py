@@ -34,7 +34,7 @@ class MockLLMClient:
         self.last_system = ""
         self.last_messages = []
 
-    def chat(self, messages, system="", tools=None, max_tokens=None):
+    def chat(self, messages, system="", tools=None, max_tokens=None, caller="", response_format=None):
         self.call_count += 1
         self.last_system = system
         self.last_messages = messages
@@ -209,18 +209,23 @@ def test_decision_agent_guardrails():
 
 
 def test_decision_agent_llm_classification():
-    """Test LLM-based classification path."""
+    """Test LLM-based classification path (only reached for ambiguous queries)."""
     client = MockLLMClient()
     agent = DecisionAgent(llm_client=client)
 
+    # "Compare" matches heuristic keyword → tool_call via heuristic (no LLM)
     result = agent.decide("Compare Playwright and Cypress for web testing")
     assert_equal(result.action, "tool_call", "comparison → tool_call")
-    assert_in("llm", result.reasoning, "reasoning indicates LLM")
+    assert_in("heuristic", result.reasoning, "resolved by heuristic, not LLM")
+
+    # Ambiguous query with no keyword match → falls through to LLM
+    result = agent.decide("Should I switch my testing approach for a new project?")
+    assert_equal(result.action, "tool_call", "ambiguous → LLM classifies as tool_call")
 
     # Verify memory stored
     assert_true(len(agent.memory) > 0, "memory has entries")
 
-    print("✓ DecisionAgent LLM classification works correctly")
+    print("✓ DecisionAgent heuristic-first + LLM escalation works correctly")
 
 
 def test_decision_agent_heuristic_fallback():

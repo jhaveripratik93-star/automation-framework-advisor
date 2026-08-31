@@ -115,6 +115,8 @@ class GroqClient:
         system: str = "",
         tools: list[dict] | None = None,
         max_tokens: int | None = None,
+        caller: str = "",
+        response_format: dict[str, str] | None = None,
     ) -> dict:
 
         api_key = self._get_api_key()
@@ -153,6 +155,10 @@ class GroqClient:
         # Add tools only when provided.
         if tools:
             payload["tools"] = tools
+
+        # Force JSON output when requested.
+        if response_format:
+            payload["response_format"] = response_format
 
         try:
 
@@ -197,8 +203,10 @@ class GroqClient:
             self._session_completion_tokens += usage.get("completion_tokens", 0)
             self._session_total_tokens      += usage.get("total_tokens", 0)
 
+            agent_label = f" agent={caller}" if caller else ""
             logger.info(
-                "LLM TOKEN USAGE | model=%s | prompt=%s | completion=%s | total=%s",
+                "LLM TOKEN USAGE |%s model=%s | prompt=%s | completion=%s | total=%s",
+                    agent_label,
                     self.model,
                     usage.get("prompt_tokens", 0),
                     usage.get("completion_tokens", 0),

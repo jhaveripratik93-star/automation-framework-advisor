@@ -64,6 +64,10 @@ class EvaluationAgent:
     that reference previous interactions when relevant.
     """
 
+    # Short follow-up threshold: messages below this length get full
+    # conversation context; longer messages get a compact summary.
+    _SHORT_FOLLOWUP_CHARS = 60
+
     def __init__(self, llm_client) -> None:
         self._client = llm_client
         self._memory = AgentMemory(agent_name="evaluation_agent", max_entries=15)
@@ -71,7 +75,7 @@ class EvaluationAgent:
     @llm_retry(max_retries=3, initial_wait=1.0)
     def _call_llm(self, messages: list[dict[str, str]], system: str) -> str:
         """LLM call with retry policy for transient failures."""
-        result = self._client.chat(messages=messages, system=system, tools=None, max_tokens=1500)
+        result = self._client.chat(messages=messages, system=system, tools=None, max_tokens=1500, caller="EvaluationAgent")
         return result.get("content", "").strip()
 
     def evaluate(
@@ -125,8 +129,9 @@ class EvaluationAgent:
 
         messages = []
         if conversation_history:
-            for msg in conversation_history[-6:]:
-                messages.append({"role": msg["role"], "content": msg["content"][:500]})
+            is_followup = len(user_message.strip()) < self._SHORT_FOLLOWUP_CHARS
+            history_msgs = self._build_history_messages(conversation_history, is_followup)
+            messages.extend(history_msgs)
         messages.append({"role": "user", "content": prompt})
 
         try:
@@ -162,8 +167,9 @@ class EvaluationAgent:
 
         messages = []
         if conversation_history:
-            for msg in conversation_history[-4:]:
-                messages.append({"role": msg["role"], "content": msg["content"][:400]})
+            is_followup = len(user_message.strip()) < self._SHORT_FOLLOWUP_CHARS
+            history_msgs = self._build_history_messages(conversation_history, is_followup)
+            messages.extend(history_msgs)
         messages.append({"role": "user", "content": user_message})
 
         try:
@@ -187,6 +193,81 @@ class EvaluationAgent:
             tool_results_used=[],
             reasoning="direct answer (no tool results)",
         )
+
+    # ──────────────────────────────────────────────────────────────────
+    # Conversation history compression
+    # ──────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _summarize_history(history: list[dict[str, str]]) -> str:
+        """Compress conversation history into a single compact paragraph (~100 tokens).
+
+        Extracts the key entities and intents from recent turns instead of
+        sending the full raw text.
+        """
+        if not history:
+            return ""
+
+        # Take last 6 turns (3 exchanges max)
+        recent = history[-6:]
+
+        user_msgs = []
+        assistant_topics = []
+
+        for turn in recent:
+            content = turn.get("content", "").strip()
+            if turn["role"] == "user":
+                # Keep user messages short — they carry intent
+                user_msgs.append(content[:80])
+            elif turn["role"] == "assistant":
+                # Extract just the first sentence of assistant responses
+                first_sentence = content.split(".")[0].strip()
+                if first_sentence:
+                    assistant_topics.append(first_sentence[:100])
+
+        parts = []
+        if user_msgs:
+            parts.append("User asked about: " + "; ".join(user_msgs))
+        if assistant_topics:
+            parts.append("Previously discussed: " + "; ".join(assistant_topics[-2:]))
+
+        summary = ". ".join(parts)
+        # Cap at ~400 chars (~100 tokens)
+        if len(summary) > 400:
+            summary = summary[:397] + "..."
+        return summary
+
+    @staticmethod
+    def _build_history_messages(
+        history: list[dict[str, str]],
+        is_short_followup: bool,
+    ) -> list[dict[str, str]]:
+        """Build conversation history messages for the LLM.
+
+        For short follow-ups (< 60 chars): inject last 2 exchanges as raw
+        messages so the LLM has full context to interpret the follow-up.
+
+        For longer messages: inject a single compact summary as a system-style
+        user message (~100 tokens instead of ~3000).
+        """
+        if not history:
+            return []
+
+        if is_short_followup:
+            # Short follow-up needs full recent context to interpret
+            messages = []
+            for turn in history[-4:]:  # last 2 exchanges
+                messages.append({
+                    "role": turn["role"],
+                    "content": turn["content"][:300],
+                })
+            return messages
+
+        # Longer message — inject compact summary only
+        summary = EvaluationAgent._summarize_history(history)
+        if summary:
+            return [{"role": "user", "content": f"[Prior conversation context] {summary}"}]
+        return []
 
     def run_node(self, state: AgentState) -> dict[str, Any]:
         """LangGraph node entry point — reads/writes from shared state."""

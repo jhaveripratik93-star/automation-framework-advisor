@@ -19,19 +19,21 @@ logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = (
     "You are a formatting agent for an automation framework advisor. "
-    "Reformat the response into clean, compact markdown. Rules:\n"
-    "- Use tables for comparisons, numbered phases for migration plans, "
-    "and clear headings throughout. "
+    "Reformat the response into clean, compact markdown Output ONLY. "
+    "Do NOT explain what you are doing. Do NOT include reasoning, planning, "
+    "or meta-commentary like 'We need to...', 'Let me...', 'The original content...'. "
+    "Just output the final formatted result directly.\n\n"
+    "Rules:\n"
     "- Output ONLY the reformatted response — no preamble, no repetition of the question"
     "- Use markdown ONLY (no HTML tags whatsoever — no <br>, <b>, <table>, etc.)\n"
+    "- Use ### for main sections\n"
     "- Use markdown tables (| col | col |) for comparisons\n"
     "- Use numbered lists for migration phases/steps\n"
     "- Use **bold** for emphasis, not HTML\n"
     "- Keep it compact: no excessive blank lines, no redundant headings\n"
-    "- Use ### for main sections, avoid #### or deeper nesting\n"
-    "- Do not add or remove factual content — only improve structure\n"
     "- Aim for brevity: collapse verbose sentences, remove filler\n"
-    "- Do NOT add TLDR, summaries, or any content not in the original response"
+    "- No HTML tags, no TL;DR, no preamble, no filler\n"
+    "- Do not add or remove factual content — only improve structure"
 )
 
 
@@ -63,8 +65,9 @@ class FormatAgent:
         if not raw_response.strip():
             return FormatResult(formatted=raw_response, format_type="markdown")
 
-        # Strip TL;DR headings early — before any other formatting
+        # Strip TL;DR headings and reasoning preamble early
         raw_response = self._strip_tldr(raw_response)
+        raw_response = self._strip_reasoning_preamble(raw_response)
 
         # Try LLM-based formatting if client is available
         if self._client:
@@ -286,12 +289,14 @@ class FormatAgent:
                 messages=[{"role": "user", "content": prompt}],
                 system=_SYSTEM_PROMPT,
                 max_tokens=1500,
+                caller="FormatAgent",
             )
             formatted = result.get("content", "").strip()
             if not formatted:
                 return None
 
             # Always strip HTML, fix tables, and compact — even from LLM output
+            formatted = self._strip_reasoning_preamble(formatted)
             formatted = self._strip_html(formatted)
             formatted = self._strip_tldr(formatted)
             formatted = self._fix_table_cells(formatted)
@@ -313,6 +318,54 @@ class FormatAgent:
     # ------------------------------------------------------------------
     # HTML stripping and cleanup
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _strip_reasoning_preamble(text: str) -> str:
+        """Strip LLM chain-of-thought reasoning that leaks before the actual content.
+
+        Detects patterns like:
+          'We need to reformat...'
+          'Let me restructure...'
+          'The original content includes...'
+          'I'll format this as...'
+        and removes everything up to the first markdown heading or content line.
+        """
+        lines = text.split("\n")
+
+        # Reasoning markers — if a line starts with any of these, it's preamble
+        _REASONING_STARTS = [
+            "we need to", "let me", "let's", "i'll", "i will",
+            "the original content", "the original response", "the response",
+            "we must", "we should", "we'll", "first,", "now,",
+            "the user asks", "this is a request", "probably we",
+            "might need to", "we only have", "we need to keep",
+        ]
+
+        # Find where the real content starts
+        first_content_idx = 0
+        for i, line in enumerate(lines):
+            stripped = line.strip().lower()
+            if not stripped:
+                continue
+            # If it's a markdown heading or table, that's real content
+            if stripped.startswith("#") or stripped.startswith("|"):
+                first_content_idx = i
+                break
+            # If it doesn't match any reasoning pattern, it's content
+            if not any(stripped.startswith(p) for p in _REASONING_STARTS):
+                first_content_idx = i
+                break
+            # This line is reasoning — keep scanning
+            first_content_idx = i + 1
+
+        if first_content_idx > 0:
+            stripped_text = "\n".join(lines[first_content_idx:])
+            # Only strip if we still have meaningful content left
+            if len(stripped_text.strip()) > len(text.strip()) * 0.3:
+                logger.info("FormatAgent: stripped %d lines of reasoning preamble", first_content_idx)
+                return stripped_text
+
+        return text
 
     @staticmethod
     def _strip_tldr(text: str) -> str:

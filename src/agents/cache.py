@@ -85,16 +85,120 @@ class TTLCache:
 
 
 def make_tool_cache_key(tool_name: str, arguments: dict[str, Any]) -> str:
-    """Build a deterministic cache key from tool name and arguments."""
-    # Sort arguments for consistency regardless of dict order
-    sorted_args = json.dumps(arguments, sort_keys=True, default=str)
+    """Build a deterministic cache key from tool name and arguments.
+
+    Normalizes framework names to lowercase and sorts lists so that
+    ("Playwright", "Cypress") and ("Cypress", "Playwright") hit the same key.
+    """
+    normalized = _normalize_arguments(arguments)
+    sorted_args = json.dumps(normalized, sort_keys=True, default=str)
     return f"tool:{tool_name}:{sorted_args}"
 
 
 def make_query_cache_key(user_message: str, uploaded_docs: str = "", case_study: str = "") -> str:
-    """Build a cache key from the query and context inputs."""
-    raw = f"{user_message.strip().lower()}|{uploaded_docs[:100]}|{case_study[:100]}"
+    """Build a semantic cache key from the query and context inputs.
+
+    Normalizes the query so that semantically equivalent questions hash
+    to the same key:
+      - "Compare Playwright and Cypress" == "compare cypress vs playwright"
+      - "What is Selenium?" == "what is selenium"
+      - "Recommend a framework for API testing" == "recommend framework for api testing"
+    """
+    normalized = _normalize_query(user_message)
+    raw = f"{normalized}|{uploaded_docs[:100].strip().lower()}|{case_study[:100].strip().lower()}"
     return f"query:{hashlib.sha256(raw.encode()).hexdigest()[:16]}"
+
+
+# ── Query normalization helpers ───────────────────────────────────────
+
+# Filler words that don't change query semantics
+_STOP_WORDS = frozenset({
+    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+    "do", "does", "did", "can", "could", "would", "should", "will",
+    "i", "me", "my", "we", "our", "you", "your",
+    "it", "its", "that", "this", "these", "those",
+    "of", "in", "on", "at", "to", "for", "with", "by", "from", "about",
+    "and", "or", "but", "not", "no", "so", "if", "than",
+    "what", "which", "how", "please", "help",
+    "just", "also", "very", "really", "quite",
+    "vs", "between", "using", "use", "need", "want",
+})
+
+# Synonym pairs — map to a canonical form
+_SYNONYMS = {
+    "versus": "vs",
+    "compare": "compare",
+    "comparison": "compare",
+    "comparing": "compare",
+    "recommend": "recommend",
+    "recommendation": "recommend",
+    "recommendations": "recommend",
+    "suggesting": "recommend",
+    "suggest": "recommend",
+    "migrate": "migrate",
+    "migration": "migrate",
+    "migrating": "migrate",
+    "move": "migrate",
+    "moving": "migrate",
+    "switch": "migrate",
+    "switching": "migrate",
+    "transition": "migrate",
+    "capabilities": "capability",
+    "limitations": "limitation",
+    "details": "detail",
+    "framework": "framework",
+    "frameworks": "framework",
+    "tool": "framework",
+    "tools": "framework",
+    "testing": "test",
+    "tests": "test",
+}
+
+
+def _normalize_query(query: str) -> str:
+    """Normalize a query for semantic cache matching.
+
+    Steps:
+      1. Lowercase
+      2. Remove punctuation
+      3. Replace synonyms with canonical forms
+      4. Remove stop words
+      5. Sort remaining tokens (so word order doesn't matter)
+    """
+    import re
+
+    text = query.lower().strip()
+    # Remove punctuation except hyphens in compound words
+    text = re.sub(r"[^\w\s-]", " ", text)
+    # Split into tokens
+    tokens = text.split()
+    # Replace synonyms
+    tokens = [_SYNONYMS.get(t, t) for t in tokens]
+    # Remove stop words
+    tokens = [t for t in tokens if t not in _STOP_WORDS and len(t) > 1]
+    # Sort for order independence ("Playwright vs Cypress" == "Cypress vs Playwright")
+    tokens.sort()
+    return " ".join(tokens)
+
+
+def _normalize_arguments(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Normalize tool arguments for cache key consistency.
+
+    - Lowercase all string values
+    - Sort lists (so ["Playwright", "Cypress"] == ["Cypress", "Playwright"])
+    """
+    normalized = {}
+    for k, v in arguments.items():
+        if isinstance(v, str):
+            normalized[k] = v.strip().lower()
+        elif isinstance(v, list):
+            normalized[k] = sorted(
+                item.strip().lower() if isinstance(item, str) else item
+                for item in v
+            )
+        else:
+            normalized[k] = v
+    return normalized
 
 
 # ── Shared singleton instances ────────────────────────────────────────
