@@ -125,6 +125,7 @@ class ValidationResult(BaseModel):
     imports_ok: bool = True
     errors: list[str] = []
     warnings: list[str] = []
+    undefined_symbols: list[str] = []
 
 
 class GeneratedTestSuite(BaseModel):

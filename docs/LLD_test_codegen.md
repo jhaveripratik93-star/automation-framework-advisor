@@ -26,26 +26,62 @@ This module converts **manual test cases** (natural language descriptions) into 
 ## 2. Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    CodeGenOrchestrator                          │
-│  (src/codegen/orchestrator.py)                                  │
-│                                                                 │
-│  generate() → tries _generate_with_agents() first              │
-│             → falls back to _generate_legacy() on exception     │
-└──────────┬──────────────────────────────────────────────────────┘
-           │
-    ┌──────┴──────────────────────────────────────────────┐
-    │                                                     │
-    ▼                                                     ▼
-┌──────────────────────────────────┐   ┌──────────────────────────────────┐
-│  LangGraph Agent Pipeline        │   │  Legacy Template+LLM Pipeline    │
-│  (src/codegen/pipeline.py)       │   │                                  │
-│                                  │   │  TemplateEngine                  │
-│  plan → resolve → generate       │   │  LLMGenerator                    │
-│       → validate → assemble      │   │  CodeValidator                   │
-│                                  │   │  TestOptimizer                   │
-│  Config: agent_config.py         │   │  CodeRenderer                    │
-└──────────────────────────────────┘   └──────────────────────────────────┘
+                    ┌─────────────────────┐
+                    │   ALL TEST CASES    │
+                    └──────────┬──────────┘
+                               ↓
+                    ┌─────────────────────┐
+                    │ SUITE ARCHITECT     │
+                    │                     │
+                    │ • dependencies      │
+                    │ • shared variables  │
+                    │ • helpers           │
+                    │ • fixtures          │
+                    │ • page objects      │
+                    │ • files             │
+                    │ • symbol ownership  │
+                    └──────────┬──────────┘
+                               ↓
+                    ┌─────────────────────┐
+                    │ SELECTOR RESOLVER  │
+                    └──────────┬──────────┘
+                               ↓
+              ┌────────────────┴────────────────┐
+              ↓                                 ↓
+     ┌──────────────────┐              ┌──────────────────┐
+     │ COMMON CODE GEN  │              │ TEST CODE GEN    │
+     │                  │              │                  │
+     │ helpers          │              │ TC01             │
+     │ fixtures         │              │ TC02             │
+     │ page objects     │              │ TC03             │
+     │ clients          │              │ ...              │
+     └────────┬─────────┘              └────────┬─────────┘
+              └────────────────┬────────────────┘
+                               ↓
+                    ┌─────────────────────┐
+                    │ SYMBOL VALIDATOR    │
+                    │                     │
+                    │ undefined symbols   │
+                    │ duplicate symbols   │
+                    │ imports             │
+                    │ signatures          │
+                    │ scope               │
+                    └──────────┬──────────┘
+                               ↓
+                    ┌─────────────────────┐
+                    │ ASSEMBLER / LINKER  │
+                    └──────────┬──────────┘
+                               ↓
+                    ┌─────────────────────┐
+                    │ FINAL VALIDATOR     │
+                    │                     │
+                    │ "Can this actually  │
+                    │  run?"              │
+                    └──────────┬──────────┘
+                               ↓
+                    ┌─────────────────────┐
+                    │ REPAIR IF REQUIRED  │
+                    └─────────────────────┘
 ```
 
 ---

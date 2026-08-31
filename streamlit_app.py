@@ -1477,24 +1477,35 @@ def _render_codegen_tab() -> None:
 
     # ── Selector Map (optional) ───────────────────────────────────────
     st.markdown("---")
-    with st.expander("🎯 Selector Map (optional — improves accuracy)"):
+    if "codegen_selector_map" not in st.session_state:
+        st.session_state.codegen_selector_map = {}
+
+    with st.expander("🎯 Selector Map (optional — improves accuracy)", expanded=False):
         st.caption("Map element descriptions to actual CSS selectors. One per line: `element name = selector`")
         selector_raw = st.text_area(
             "Selectors",
             height=120,
             placeholder="username field = [data-testid='username']\nlogin button = #login-btn\nerror message = .alert-error",
-            value="\n".join(
-                f"{k} = {v}" for k, v in st.session_state.get("codegen_selector_map", {}).items()
-            ),
             key="codegen_selectors_raw",
         )
-        # Parse selector map
-        selector_map = {}
-        for line in selector_raw.strip().split("\n"):
-            if "=" in line:
-                parts = line.split("=", 1)
-                selector_map[parts[0].strip().lower()] = parts[1].strip()
-        st.session_state.codegen_selector_map = selector_map
+        if st.button("💾 Apply Selectors", key="btn_apply_selectors"):
+            parsed: dict[str, str] = {}
+            for line in selector_raw.strip().split("\n"):
+                if "=" in line:
+                    parts = line.split("=", 1)
+                    k = parts[0].strip().lower()
+                    v = parts[1].strip()
+                    if k and v:
+                        parsed[k] = v
+            st.session_state.codegen_selector_map = parsed
+            st.success(f"✓ {len(parsed)} selector(s) saved" if parsed else "⚠️ No valid selectors found")
+
+    # Show currently saved selectors
+    saved_selectors = st.session_state.codegen_selector_map
+    if saved_selectors:
+        st.caption(f"🎯 **{len(saved_selectors)} selector(s) active:** " +
+                   ", ".join(f"`{k}`" for k in list(saved_selectors.keys())[:5]) +
+                   (f" +{len(saved_selectors)-5} more" if len(saved_selectors) > 5 else ""))
 
     # ── Options ───────────────────────────────────────────────────────
     with st.expander("⚙️ Generation Options"):
@@ -1551,15 +1562,19 @@ def _render_codegen_tab() -> None:
             include_comments=gen_comments,
         )
 
-        request = CodeGenRequest(
-            test_cases=manual_tests,
-            target_framework=framework,
-            options=options,
-            selector_map=st.session_state.get("codegen_selector_map", {}),
-        )
-
         with st.spinner("🤖 Generating automated test code..."):
             try:
+                selector_map = st.session_state.get("codegen_selector_map", {})
+                logger.info(
+                    "CodeGen: framework=%s test_cases=%d selectors=%s",
+                    fw_value, len(manual_tests), list(selector_map.keys()),
+                )
+                request = CodeGenRequest(
+                    test_cases=manual_tests,
+                    target_framework=framework,
+                    options=options,
+                    selector_map=selector_map,
+                )
                 orchestrator = CodeGenOrchestrator(llm_client=_client)
                 result = orchestrator.generate(request)
                 st.session_state.codegen_result = result
@@ -1591,9 +1606,33 @@ def _render_codegen_tab() -> None:
         st.markdown(f"**Framework:** {result.framework} | **Run:** `{result.run_command}`")
         st.markdown(f"**Install:** `{result.install_instructions}`")
 
+        # Validation warnings — surface undefined symbols from static checker
+        vr = result.validation
+        _undefined = vr.undefined_symbols if hasattr(vr, "undefined_symbols") else []
+        if _undefined:
+            st.warning(
+                f"⚠️ **{len(_undefined)} undeclared symbol(s) detected by static checker** — "
+                "the assembler was instructed to fix these. Verify the output:\n"
+                + "\n".join(f"  - `{s}`" for s in _undefined)
+            )
+        if hasattr(vr, "errors") and vr.errors:
+            st.error("Validation issues: " + "; ".join(vr.errors))
+
         # Display each generated file
+        _FILE_TYPE_ICONS = {
+            "test": "🧪",
+            "page_object": "📄",
+            "fixture": "🔧",
+            "utility": "🛠️",
+            "config": "⚙️",
+            "package": "📦",
+            "data": "📊",
+        }
+        _AUTO_EXPAND = {"test", "page_object", "fixture", "utility"}
         for gf in result.files:
-            with st.expander(f"📄 {gf.path} ({gf.file_type.value})", expanded=(gf.file_type.value == "test")):
+            icon = _FILE_TYPE_ICONS.get(gf.file_type.value, "📄")
+            label = f"{icon} `{gf.path}` ({gf.file_type.value})"
+            with st.expander(label, expanded=(gf.file_type.value in _AUTO_EXPAND)):
                 st.code(gf.content, language=_code_language(result.framework))
 
         # Download as ZIP

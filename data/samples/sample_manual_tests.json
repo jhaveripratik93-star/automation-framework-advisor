@@ -10,19 +10,19 @@
         {
           "step_number": 1,
           "action": "Navigate to the login page",
-          "test_data": "",
+          "test_data": "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
           "expected_result": "Login page is displayed"
         },
         {
           "step_number": 2,
-          "action": "Enter 'admin@example.com' in the email field",
-          "test_data": "admin@example.com",
-          "expected_result": "Email is entered"
+          "action": "Enter 'Admin' in the username field",
+          "test_data": "Admin",
+          "expected_result": "Username is entered"
         },
         {
           "step_number": 3,
-          "action": "Enter 'SecurePass123!' in the password field",
-          "test_data": "SecurePass123!",
+          "action": "Enter 'admin123' in the Password field",
+          "test_data": "admin123",
           "expected_result": "Password is entered (masked)"
         },
         {
@@ -36,15 +36,9 @@
           "action": "Verify the URL contains '/dashboard'",
           "test_data": "",
           "expected_result": "User is redirected to dashboard"
-        },
-        {
-          "step_number": 6,
-          "action": "Verify the welcome message is visible",
-          "test_data": "",
-          "expected_result": "Welcome message is displayed"
         }
       ],
-      "expected_results": ["User is logged in and redirected to dashboard", "Welcome message is shown"],
+      "expected_results": ["User is logged in and redirected to dashboard"],
       "priority": "high",
       "category": "authentication",
       "tags": ["login", "smoke", "regression"]

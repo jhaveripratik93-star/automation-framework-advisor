@@ -23,7 +23,7 @@ _ELEMENT_KEYWORDS = (
     "menu", "option", "dropdown", "select", "checkbox", "radio",
     "textarea", "text box", "textbox", "label", "header", "modal",
     "dialog", "popup", "toast", "alert", "notification", "banner",
-    "table", "row", "column", "cell", "list", "item", "card",
+    "table", "row", "column", "cell", "list", "item", "card", "navigate"
 )
 
 
@@ -33,15 +33,22 @@ def run_selector_resolver(state: CodeGenState, llm_client: Any) -> dict:
         logger.info("SelectorResolver: skipped (disabled in PIPELINE_SETTINGS)")
         return {"resolved_selectors": state.get("selector_map", {})}
 
-    # Merge user-provided selectors with any already resolved
-    known = dict(state.get("selector_map", {}))
+    # User-provided selectors always take priority
+    known = {k.lower(): v for k, v in state.get("selector_map", {}).items()}
     elements = _extract_element_names(state)
 
-    # Only resolve elements not already in the known map
-    unresolved = [e for e in elements if e.lower() not in {k.lower() for k in known}]
+    # Skip elements already covered by user map (exact or substring match)
+    known_keys = set(known.keys())
+    unresolved = [
+        e for e in elements
+        if e not in known_keys and not any(e in k or k in e for k in known_keys)
+    ]
 
     if not unresolved:
-        logger.info("SelectorResolver: all %d elements already resolved", len(known))
+        logger.info(
+            "SelectorResolver: all %d elements covered by user map (%d provided)",
+            len(elements), len(known),
+        )
         return {"resolved_selectors": known}
 
     framework = state.get("framework", "playwright_ts")
@@ -65,13 +72,15 @@ def run_selector_resolver(state: CodeGenState, llm_client: Any) -> dict:
         match = re.search(r"\{.*\}", raw, re.DOTALL)
         if match:
             resolved = json.loads(match.group())
-        logger.info("SelectorResolver: resolved %d/%d elements", len(resolved), len(unresolved))
+        logger.info("SelectorResolver: resolved %d/%d elements via LLM", len(resolved), len(unresolved))
     except Exception as exc:
         logger.warning("SelectorResolver: LLM call failed (%s) — using data-testid fallback", exc)
         resolved = {e: f"[data-testid='{_slugify(e)}']" for e in unresolved}
 
-    # Merge: user-provided selectors take priority over LLM-resolved ones
+    # User-provided selectors always win over LLM-resolved ones
     merged = {**resolved, **known}
+    logger.info("SelectorResolver: final map has %d selectors (%d user, %d llm)",
+                len(merged), len(known), len(resolved))
     return {"resolved_selectors": merged}
 
 

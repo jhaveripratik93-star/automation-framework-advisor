@@ -1,6 +1,7 @@
 """Step Generator Agent — generates test code for the full test case in one LLM call."""
 from __future__ import annotations
 
+import json
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -23,6 +24,7 @@ def run_step_generator(state: CodeGenState, llm_client: Any) -> dict:
     framework = state.get("framework", "playwright_ts")
     scenario = state.get("scenario", {})
     selectors = state.get("resolved_selectors", {})
+    arch = state.get("suite_architecture", {})
 
     system = STEP_GENERATOR_SYSTEM.get(framework, STEP_GENERATOR_SYSTEM["playwright_ts"])
     fw_context = FRAMEWORK_CONTEXT.get(framework, "")
@@ -45,10 +47,16 @@ def run_step_generator(state: CodeGenState, llm_client: Any) -> dict:
         f"Expected results: {', '.join(expected)}" if expected else ""
     )
 
+    # Build symbol contract: symbols this test is allowed to use
+    test_id = tc.get("id", "")
+    symbol_contract = _build_symbol_contract(arch, test_id)
+    test_dependencies = _build_test_dependencies(arch, test_id)
+    common_code = _build_common_code(arch)
+
     prompt = STEP_GENERATOR_USER_TEMPLATE.format(
         framework=framework,
         title=tc.get("title", ""),
-        test_id=tc.get("id", ""),
+        test_id=test_id,
         category=tc.get("category", ""),
         test_type=scenario.get("test_type", "e2e"),
         auth_required=scenario.get("auth_required", False),
@@ -59,6 +67,10 @@ def run_step_generator(state: CodeGenState, llm_client: Any) -> dict:
         selectors=selectors_text,
         preconditions_section=preconditions_section,
         expected_results_section=expected_section,
+        suite_architecture=json.dumps(arch, indent=2)[:3000] if arch else "not available",
+        symbol_contract=symbol_contract,
+        test_dependencies=test_dependencies,
+        common_code=common_code,
     )
 
     try:
@@ -75,6 +87,54 @@ def run_step_generator(state: CodeGenState, llm_client: Any) -> dict:
             "generated_code": f"// TODO: Generation failed — {exc}\n// Test: {tc.get('title', '')}",
             "generation_error": str(exc),
         }
+
+
+def _build_symbol_contract(arch: dict, test_id: str) -> str:
+    """Extract symbols available to this test from the architecture."""
+    if not arch:
+        return "not available — do not invent symbols"
+    symbols = arch.get("symbols", [])
+    test_entry = next((t for t in arch.get("tests", []) if t.get("test_id") == test_id), {})
+    allowed_calls = set(test_entry.get("calls", []))
+    lines = []
+    for s in symbols:
+        name = s.get("name", "")
+        if not name:
+            continue
+        scope = s.get("scope", "global")
+        if scope in ("global", "module") or name in allowed_calls:
+            lines.append(
+                f"  {s.get('kind', 'symbol')} {name}{s.get('signature', '')} "
+                f"[defined in: {s.get('defined_in', '?')}]"
+            )
+    return "\n".join(lines) if lines else "none declared — use only framework built-ins"
+
+
+def _build_test_dependencies(arch: dict, test_id: str) -> str:
+    test_entry = next((t for t in arch.get("tests", []) if t.get("test_id") == test_id), {})
+    deps = test_entry.get("depends_on_tests", [])
+    reads = test_entry.get("reads", [])
+    writes = test_entry.get("writes", [])
+    if not deps and not reads and not writes:
+        return "none"
+    parts = []
+    if deps:
+        parts.append(f"depends on: {', '.join(deps)}")
+    if reads:
+        parts.append(f"reads: {', '.join(reads)}")
+    if writes:
+        parts.append(f"writes: {', '.join(writes)}")
+    return " | ".join(parts)
+
+
+def _build_common_code(arch: dict) -> str:
+    shared = arch.get("shared_code", [])
+    if not shared:
+        return "none"
+    return "\n".join(
+        f"  {s.get('symbol', '')} → {s.get('defined_in', '?')} (used by: {', '.join(s.get('used_by', []))})"
+        for s in shared
+    )
 
 
 def _format_steps(steps: list[dict]) -> str:

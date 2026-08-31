@@ -11,6 +11,7 @@ from src.codegen.agent_config import (
     VALIDATOR_SYSTEM,
     VALIDATOR_USER_TEMPLATE,
 )
+from src.codegen.agents.static_checker import run_static_check
 
 if TYPE_CHECKING:
     from src.codegen.pipeline import CodeGenState
@@ -36,15 +37,36 @@ def run_validator(state: CodeGenState, llm_client: Any) -> dict:
 
     tc = state["test_case"]
     framework = state.get("framework", "playwright_ts")
+    arch = state.get("suite_architecture", {})
     max_retries = PIPELINE_SETTINGS.get("max_validation_retries", 2)
     attempts = state.get("validation_attempts", 0)
 
+    # --- Deterministic static check (no LLM) ---
+    static = run_static_check(code, framework)
+    if not static.is_clean:
+        logger.warning("Validator[static]: %s", static.summary())
+    else:
+        logger.info("Validator[static]: OK")
+
+    # Build symbol table and dependency graph from architecture
+    symbol_table = json.dumps(arch.get("symbols", []), indent=2) if arch else "not available"
+    dependency_graph = json.dumps(arch.get("tests", []), indent=2) if arch else "not available"
+
+    # Inject static findings as a concrete list so the LLM fixes exactly these
+    static_findings = (
+        f"\n\nSTATIC PRE-CHECK FOUND UNDECLARED SYMBOLS — you MUST fix all of these:\n"
+        + "\n".join(f"  - {s}" for s in sorted(static.undeclared))
+        if not static.is_clean else ""
+    )
+
     prompt = VALIDATOR_USER_TEMPLATE.format(
         framework=framework,
-        code=code[:6000],
-        title=tc.get("title", ""),
-        expected_results=", ".join(tc.get("expected_results", [])) or "see test steps",
-    )
+        suite_architecture=json.dumps(arch, indent=2)[:2000] if arch else "not available",
+        symbol_table=symbol_table[:2000],
+        dependency_graph=dependency_graph[:1000],
+        code=code[:4000],
+        test_cases=f"{tc.get('title', '')} — {', '.join(tc.get('expected_results', [])) or 'see steps'}",
+    ) + static_findings
 
     validation: dict = {"is_valid": True, "issues": [], "warnings": [], "fixed_code": ""}
     try:
@@ -76,6 +98,13 @@ def run_validator(state: CodeGenState, llm_client: Any) -> dict:
 
     if validation.get("warnings"):
         logger.debug("Validator: warnings: %s", validation["warnings"])
+
+    # Always attach static findings to the result so the UI can surface them
+    validation.setdefault("undefined_symbols", [])
+    if not static.is_clean:
+        for sym in sorted(static.undeclared):
+            if sym not in validation["undefined_symbols"]:
+                validation["undefined_symbols"].append(sym)
 
     return {
         "validation_result": validation,
