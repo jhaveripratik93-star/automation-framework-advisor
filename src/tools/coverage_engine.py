@@ -187,25 +187,63 @@ def resolve_capability(
     if raw in cap_map:
         return raw, cap_map[raw]
 
-    # 2. Substring match
+    # 2. Domain-keyword routing — map broad terms to the right semantic group
+    #    BEFORE substring/token matching (which is error-prone for compound terms
+    #    like "UI Validation" or "API Performance").
+    _DOMAIN_ROUTES: list[tuple[list[str], str]] = [
+        # (trigger keywords, target label)
+        (["ui", "gui", "frontend", "front-end", "browser", "web", "visual ui"], "ui automation"),
+        (["api", "rest", "graphql", "http", "endpoint", "service"], "api testing"),
+        (["performance", "load", "stress", "throughput", "latency"], "performance testing"),
+        (["mobile", "ios", "android", "device"], "mobile testing"),
+        (["accessibility", "a11y", "wcag"], "accessibility testing"),
+        (["visual", "screenshot", "snapshot"], "visual testing"),
+        (["network", "mock", "stub", "intercept"], "network mocking"),
+        (["file", "upload", "download", "attachment"], "file handling"),
+        (["security", "vulnerability", "penetration"], "security testing"),
+        (["database", "sql", "db "], "database testing"),
+    ]
+    raw_tokens = set(t for t in raw.split() if len(t) > 1)
+
+    # "API Performance" -> matches both api and performance; prefer the more
+    # specific combination. Collect all matching domain labels.
+    matched_labels: list[str] = []
+    for triggers, target in _DOMAIN_ROUTES:
+        if any(trig.strip() in raw_tokens or trig in raw for trig in triggers):
+            if target in cap_map and target not in matched_labels:
+                matched_labels.append(target)
+
+    if matched_labels:
+        # Merge keys from all matched domains (e.g. api + performance)
+        merged_keys: list[str] = []
+        for lbl in matched_labels:
+            for k in cap_map[lbl]:
+                if k not in merged_keys:
+                    merged_keys.append(k)
+        combined_label = " + ".join(matched_labels)
+        logger.debug("Domain route: '%s' → '%s'", raw, combined_label)
+        return combined_label, merged_keys
+
+    # 3. Exact substring match (only for whole-label containment, more conservative)
     for label, keys in cap_map.items():
-        if raw in label or label in raw:
+        if raw == label:
             return label, keys
 
-    # 3. Token overlap
-    raw_tokens = set(t for t in raw.split() if len(t) > 2)
+    # 4. Token overlap (require meaningful tokens, skip generic ones)
+    _GENERIC = {"testing", "test", "validation", "verify", "check", "automation"}
+    raw_meaningful = raw_tokens - _GENERIC
     best_label, best_keys, best_score = "", [], 0
     for label, keys in cap_map.items():
-        label_tokens = set(t for t in label.split() if len(t) > 2)
-        score = len(raw_tokens & label_tokens)
+        label_tokens = set(t for t in label.split() if len(t) > 1) - _GENERIC
+        score = len(raw_meaningful & label_tokens)
         if score > best_score:
             best_score, best_label, best_keys = score, label, keys
 
     if best_score > 0:
-        logger.debug("Semantic fallback: '%s' → '%s' (score=%d)", raw, best_label, best_score)
+        logger.debug("Token overlap: '%s' → '%s' (score=%d)", raw, best_label, best_score)
         return best_label, best_keys
 
-    # 4. Hard fallback — return empty keys so all frameworks score "false"
+    # 5. Hard fallback — return empty keys so all frameworks score "false"
     logger.debug("No match for capability '%s' — marking as unsupported", raw)
     return f"{raw} (unsupported)", []
 
