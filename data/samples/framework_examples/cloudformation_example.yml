@@ -1,0 +1,26 @@
+# AWS CloudFormation — Infrastructure as Code example
+# Deploy: aws cloudformation deploy --template-file cloudformation_example.yml \
+#                                    --stack-name test-env
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Test environment — S3 bucket for test artefacts
+
+Resources:
+  TestArtefactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: my-test-artefacts-bucket
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Environment
+          Value: test
+        - Key: ManagedBy
+          Value: cloudformation
+
+Outputs:
+  BucketName:
+    Description: Name of the test artefacts bucket
+    Value: !Ref TestArtefactsBucket
+    Export:
+      Name: TestArtefactsBucketName

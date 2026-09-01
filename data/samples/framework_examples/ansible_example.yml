@@ -1,0 +1,44 @@
+# Ansible — Infrastructure automation example
+# Install: pip install ansible
+# Run:     ansible-playbook -i inventory.ini ansible_example.yml
+
+---
+- name: Deploy test environment
+  hosts: test_servers
+  become: true
+
+  vars:
+    app_user: deploy
+    app_dir: /opt/myapp
+
+  tasks:
+    - name: Install Python and pip
+      apt:
+        name:
+          - python3
+          - python3-pip
+        state: present
+        update_cache: true
+
+    - name: Install test dependencies
+      pip:
+        name:
+          - pytest
+          - playwright
+        executable: pip3
+
+    - name: Copy test suite
+      copy:
+        src: tests/
+        dest: "{{ app_dir }}/tests/"
+        owner: "{{ app_user }}"
+        mode: "0755"
+
+    - name: Run smoke tests
+      command: pytest {{ app_dir }}/tests/smoke/ -v
+      register: test_result
+
+    - name: Assert tests passed
+      assert:
+        that: test_result.rc == 0
+        fail_msg: "Smoke tests failed"
