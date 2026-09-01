@@ -36,6 +36,42 @@ def _normalise(records: list[dict]) -> list[dict]:
         for r in records
     ]
 
+# ── Tab: Coverage Analyser ────────────────────────────────────────────
+def _unwrap_test_cases(data) -> list[dict]:
+    """Extract the flat list of test-case dicts from various JSON envelope shapes.
+
+    Handles:
+      - Flat array: [ {tc}, {tc}, ... ]
+      - Dict envelope: {"test_cases": [...]} or {"data": [...]}
+      - List-wrapped envelope: [ {"test_cases": [...]} ]
+      - Multiple wrapper objects: [ {"test_cases": [...]}, {"test_cases": [...]} ]
+    """
+    # Dict envelope: {"test_cases": [...]} / {"data": [...]}
+    if isinstance(data, dict):
+        if "test_cases" in data and isinstance(data["test_cases"], list):
+            return data["test_cases"]
+        if "data" in data and isinstance(data["data"], list):
+            return data["data"]
+        # A single test case dict
+        return [data]
+
+    if isinstance(data, list):
+        # If any element is a wrapper object holding test_cases, flatten them
+        flattened: list[dict] = []
+        found_wrapper = False
+        for item in data:
+            if isinstance(item, dict) and isinstance(item.get("test_cases"), list):
+                flattened.extend(item["test_cases"])
+                found_wrapper = True
+            elif isinstance(item, dict) and isinstance(item.get("data"), list):
+                flattened.extend(item["data"])
+                found_wrapper = True
+            else:
+                flattened.append(item)
+        return flattened if found_wrapper else data
+
+    return data
+
 
 def render() -> None:
     # ── Deferred clear — before any widgets ──────────────────────────
@@ -176,8 +212,7 @@ def _parse_and_analyse(upload_file, upload_type: str, kb) -> None:
                 test_cases = parse_excel_test_cases(raw)
             elif upload_type == "json":
                 records = _json.loads(raw.decode("utf-8"))
-                if isinstance(records, dict):
-                    records = records.get("test_cases", records.get("data", [records]))
+                records = _unwrap_test_cases(records)
                 if not isinstance(records, list):
                     raise ValueError("JSON must be an array of objects")
                 test_cases = _normalise(records)
