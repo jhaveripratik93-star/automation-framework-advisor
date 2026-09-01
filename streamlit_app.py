@@ -218,6 +218,13 @@ _DEFAULTS: dict = {
     # Code Studio
     "playground_code": "",
     "last_converted_code": "",
+    "studio_source_code": "",
+    "studio_from_fw": "",
+    "studio_to_fw": "",
+    "studio_mode": "Single file (paste)",
+    "studio_gap_block": "",
+    "studio_cicd_block": "",
+    "studio_widget_key_v": 0,
     "multi_convert_result": None,
     # Coverage
     "excel_test_cases": [],
@@ -400,6 +407,28 @@ def _render_sidebar() -> None:
         """, unsafe_allow_html=True)
 
         if page in ("advisor"):
+            # ── Clear advisor ─────────────────────────────────────────────
+            if st.button("🔄 Clear & Reset Advisor", key="sb_clear_advisor", use_container_width=True):
+                st.session_state["_advisor_reset_pending"] = True
+                st.rerun()
+
+            if st.session_state.pop("_advisor_reset_pending", False):
+                st.session_state.messages = []
+                st.session_state.uploaded_docs_context = ""
+                st.session_state.case_study_context = ""
+                st.session_state.case_study_urls = []
+                st.session_state["_case_studies_loaded"] = False
+                st.session_state.weight_profile = WeightProfile.default()
+                st.session_state.weight_preset = "balanced"
+                for _cid in CRITERIA_IDS:
+                    st.session_state[f"w_{_cid}"] = float(
+                        round(WeightProfile.default().weights.get(_cid, 0.0), 2)
+                    )
+                st.cache_resource.clear()
+                st.rerun()
+
+            st.markdown("---")
+
             # ── Scoring Weights ───────────────────────────────────────────
             st.markdown('<div class="sidebar-section">⚖️ Scoring Weights</div>',
                         unsafe_allow_html=True)
@@ -460,11 +489,16 @@ def _render_sidebar() -> None:
                         {k: v / total for k, v in raw_weights.items()} if total > 0
                         else {k: 1 / len(raw_weights) for k in raw_weights}
                     )
-                    st.session_state.weight_profile = WeightProfile(
+                    st.session_state["_pending_weight_profile"] = WeightProfile(
                         weights=normalised, profile_name="custom"
                     )
-                    st.session_state["weight_preset"] = "custom"
-                    st.success("Weights applied ✓")
+                    st.rerun()
+
+            # Apply pending weight profile after widgets are rendered
+            if "_pending_weight_profile" in st.session_state:
+                st.session_state.weight_profile = st.session_state.pop("_pending_weight_profile")
+                st.session_state["weight_preset"] = "custom"
+                st.rerun()
 
             st.markdown("---")
 
@@ -628,7 +662,14 @@ def _render_sidebar() -> None:
                         unsafe_allow_html=True)
             st.caption("Select frameworks in the main panel. Upload files or paste code to convert.")
 
-            if st.session_state.multi_convert_result:
+            _has_single = bool(st.session_state.get("studio_source_code"))
+            _has_multi  = bool(st.session_state.get("multi_convert_result"))
+
+            if _has_single:
+                st.markdown("**Single file:** converted ✓")
+                st.caption(f"{len(st.session_state.last_converted_code.splitlines())} lines")
+
+            if _has_multi:
                 result = st.session_state.multi_convert_result
                 gaps = result.get("gaps", [])
                 st.markdown('<div class="sidebar-section">Last Result</div>',
@@ -639,8 +680,16 @@ def _render_sidebar() -> None:
                     st.warning(f"⚠️ {len(gaps)} capability gap(s)")
                 else:
                     st.success("✓ Full coverage")
-                if st.button("🗑 Clear results", key="sb_clear_multi"):
-                    st.session_state.pop("multi_convert_result", None)
+
+            if _has_single or _has_multi:
+                if st.button("🗑 Clear Studio", key="sb_clear_multi", use_container_width=True):
+                    for _k in ("last_converted_code", "studio_source_code",
+                               "studio_gap_block", "studio_cicd_block"):
+                        st.session_state[_k] = ""
+                    st.session_state.multi_convert_result = None
+                    st.session_state.studio_widget_key_v += 1
+                    st.session_state.pop("multi_convert_from", None)
+                    st.session_state.pop("multi_convert_to", None)
                     st.rerun()
 
         elif page == "coverage":
@@ -659,9 +708,7 @@ def _render_sidebar() -> None:
                     st.caption(f"…and {len(caps)-8} more")
                 st.markdown("---")
                 if st.button("🗑 Clear all", key="sb_clear_cov"):
-                    for k in ("excel_test_cases", "excel_summary", "coverage_result", "cicd_yaml",
-                              "cov_selected_frameworks"):
-                        st.session_state[k] = [] if k == "excel_test_cases" else ""
+                    st.session_state["_cov_clear_pending"] = True
                     st.rerun()
             else:
                 st.caption("No test cases loaded yet. Upload an Excel file or enter manually.")
@@ -1086,6 +1133,8 @@ def _render_code_studio_tab() -> None:
     )
     st.markdown("---")
 
+    v = st.session_state.studio_widget_key_v
+
     if mode == "Single file (paste)":
         # Empty state when no code pasted
         if not st.session_state.get("last_converted_code"):
@@ -1095,9 +1144,30 @@ def _render_code_studio_tab() -> None:
         source_code = st.text_area(
             "Paste source test code here", height=200,
             placeholder=f"Paste your {from_fw} test code here…",
-            key="convert_source",
+            key=f"convert_source_{v}",
         )
         do_convert = st.button("🔄 Convert", key="btn_convert", type="primary")
+
+        # Restore persisted single-file result
+        if st.session_state.get("last_converted_code") and not do_convert:
+            runnable   = st.session_state.last_converted_code
+            gap_block  = st.session_state.get("studio_gap_block", "")
+            cicd_block = st.session_state.get("studio_cicd_block", "")
+            with st.expander("🐍 Converted Test Code", expanded=True):
+                st.code(runnable, language="python")
+                st.download_button(
+                    label="⬇ Download converted file",
+                    data=runnable,
+                    file_name="test_converted.py",
+                    mime="text/x-python",
+                    key="btn_dl_single",
+                )
+            if gap_block.strip():
+                with st.expander("⚠️ Capability Gaps & Helper Scripts", expanded=False):
+                    st.markdown(gap_block.strip())
+            if cicd_block.strip():
+                with st.expander("⚙️ CI/CD Integration", expanded=False):
+                    st.markdown(cicd_block.strip())
 
         if do_convert:
             if not source_code.strip():
@@ -1157,25 +1227,10 @@ def _render_code_studio_tab() -> None:
                     runnable = code_blocks[0].strip() if code_blocks else code_part.strip()
 
                     st.session_state.last_converted_code = runnable
-                    st.success("✓ Converted successfully")
-
-                    with st.expander("🐍 Converted Test Code", expanded=True):
-                        st.code(runnable, language="python")
-                        st.download_button(
-                            label="⬇ Download converted file",
-                            data=runnable,
-                            file_name="test_converted.py",
-                            mime="text/x-python",
-                            key="btn_dl_single",
-                        )
-
-                    if gap_block.strip():
-                        with st.expander("⚠️ Capability Gaps & Helper Scripts", expanded=True):
-                            st.markdown(gap_block.strip())
-
-                    if cicd_block.strip():
-                        with st.expander("⚙️ CI/CD Integration", expanded=False):
-                            st.markdown(cicd_block.strip())
+                    st.session_state.studio_source_code  = source_code
+                    st.session_state.studio_gap_block    = gap_block
+                    st.session_state.studio_cicd_block   = cicd_block
+                    st.rerun()
                 except Exception as exc:
                     loading_slot.empty()
                     st.error(f"Conversion failed: {exc}")
@@ -1186,7 +1241,7 @@ def _render_code_studio_tab() -> None:
             "Upload test files",
             type=["py", "js", "ts", "java", "robot", "feature", "yml", "yaml"],
             accept_multiple_files=True,
-            key="multi_convert_files",
+            key=f"multi_convert_files_{v}",
         )
 
         if not uploaded_files and not st.session_state.get("multi_convert_result"):
@@ -1736,8 +1791,8 @@ def _render_coverage_results(display: dict) -> None:
         return ""
 
     fw_cols = [c for c in df.columns if c not in ("Test ID", "Description", "Capability")]
-    styled = df.style.applymap(_colour_cell, subset=fw_cols)
-    st.dataframe(styled, use_container_width=True, hide_index=True)
+    styled = df.style.map(_colour_cell, subset=fw_cols)
+    st.dataframe(styled, width='stretch', hide_index=True)
 
     # ── Per-framework detail expanders ────────────────────────────────
     st.markdown("### 🔍 Framework Detail — Which Tests Are Supported")
@@ -1821,10 +1876,10 @@ def _render_coverage_results(display: dict) -> None:
 
     styled_summary = (
         summary_df.style
-        .applymap(_colour_verdict, subset=["Verdict"])
-        .applymap(_colour_pct, subset=["Coverage %"])
+        .map(_colour_verdict, subset=["Verdict"])
+        .map(_colour_pct, subset=["Coverage %"])
     )
-    st.dataframe(styled_summary, use_container_width=True, hide_index=True)
+    st.dataframe(styled_summary, width='stretch', hide_index=True)
 
     # ── Recommendation callout ────────────────────────────────────────
     if fw_names:
@@ -1883,6 +1938,18 @@ def _normalise_coverage_records(records: list[dict]) -> list[dict]:
 
 
 def _render_coverage_tab() -> None:
+    # Handle deferred clear (must run before any widgets are instantiated)
+    if st.session_state.pop("_cov_clear_pending", False):
+        st.session_state.excel_test_cases  = []
+        st.session_state.excel_summary     = ""
+        st.session_state.coverage_result   = ""
+        st.session_state.coverage_best_fw  = ""
+        st.session_state.coverage_best_pct = ""
+        st.session_state.cicd_yaml         = ""
+        st.session_state.coverage_analysis = ""
+        st.session_state["cov_selected_frameworks"] = []
+        st.session_state.pop("_cov_upload_type", None)
+        st.rerun()
     st.markdown("""
     <div class="page-header">
         <div class="page-header-left">
@@ -1944,19 +2011,16 @@ def _render_coverage_tab() -> None:
 
         tab_xl, tab_json, tab_csv = st.tabs(["📊 Excel", "📋 JSON", "📄 CSV"])
 
-        upload_file = None
-        upload_type = None
-
         with tab_xl:
             upload_file_xl = st.file_uploader("Excel file (.xlsx)", type=["xlsx"], key="xl_upload")
             if upload_file_xl:
-                upload_file, upload_type = upload_file_xl, "xlsx"
+                st.session_state["_cov_upload_type"] = "xlsx"
 
         with tab_json:
             st.caption("JSON must be an array of objects with the expected fields.")
             upload_file_json = st.file_uploader("JSON file (.json)", type=["json"], key="cov_json_upload")
             if upload_file_json:
-                upload_file, upload_type = upload_file_json, "json"
+                st.session_state["_cov_upload_type"] = "json"
             with st.expander("📖 Expected JSON format", expanded=False):
                 st.code("""
 [
@@ -1974,9 +2038,17 @@ def _render_coverage_tab() -> None:
             st.caption("CSV must have a header row. Column names are matched case-insensitively.")
             upload_file_csv = st.file_uploader("CSV file (.csv)", type=["csv"], key="cov_csv_upload")
             if upload_file_csv:
-                upload_file, upload_type = upload_file_csv, "csv"
+                st.session_state["_cov_upload_type"] = "csv"
             with st.expander("📖 Expected CSV format", expanded=False):
                 st.code("id,description,required_capability,steps,expected_result\nTC001,Login test,ui automation,Navigate and login,Dashboard shown", language="text")
+
+        # Resolve active upload from session state (survives tab re-renders)
+        upload_type = st.session_state.get("_cov_upload_type")
+        upload_file = (
+            upload_file_xl   if upload_type == "xlsx" else
+            upload_file_json if upload_type == "json" else
+            upload_file_csv  if upload_type == "csv"  else None
+        )
 
         # cicd_platform = st.selectbox(
         #     "CI/CD platform for export",
@@ -1989,10 +2061,7 @@ def _render_coverage_tab() -> None:
                                       use_container_width=True, type="primary")
         with col_reset:
             if st.button("🗑 Clear", key="btn_clear_xl", use_container_width=True):
-                for k in ("excel_test_cases", "excel_summary", "coverage_result",
-                          "coverage_best_fw", "coverage_best_pct", "cicd_yaml",
-                          "cov_selected_frameworks"):
-                    st.session_state[k] = [] if k == "excel_test_cases" else ""
+                st.session_state["_cov_clear_pending"] = True
                 st.rerun()
 
         if parse_clicked:
@@ -2034,6 +2103,7 @@ def _render_coverage_tab() -> None:
                         loading_slot.empty()
                         st.error("Could not parse any test cases. Check the file format.")
                     else:
+                        logger.info("Coverage parse: %d test cases from %s", len(test_cases), upload_type)
                         for step_i in range(len(_COV_STEPS) - 1):
                             with loading_slot.container():
                                 _render_loading(_COV_STEPS, step_i, "Analysing coverage…")
