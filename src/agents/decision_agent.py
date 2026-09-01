@@ -118,13 +118,14 @@ class DecisionResult:
 
 
 class DecisionAgent:
-    """LLM-powered decision agent with hard guardrails and heuristic fallback.
+    """Intent classifier with heuristics-first strategy.
 
     Flow:
-      1. Hard guardrails (injection, length) → reject immediately if triggered
-      2. Ambiguity check → ask user to clarify if query is ambiguous
-      3. LLM classification → ask the model to decide (handles nuance)
-      4. Heuristic fallback → only used if LLM is unavailable/fails
+      1. Hard guardrails (injection, length) → reject immediately
+      2. Ambiguity check → clarify if query is ambiguous
+      3. Greeting/small-talk heuristic → direct (zero tokens)
+      4. Keyword heuristics → classify obvious queries (zero tokens)
+      5. LLM classification → only for ambiguous/uncertain cases
     """
 
     def __init__(self, llm_client=None) -> None:
@@ -132,7 +133,7 @@ class DecisionAgent:
         self._memory = AgentMemory(agent_name="decision_agent", max_entries=20)
 
     def decide(self, user_message: str, graph_context: str = "", conversation_history: list[dict[str, str]] | None = None) -> DecisionResult:
-        """Classify the user message — LLM-first with guardrail pre-check."""
+        """Classify the user message — heuristics-first, LLM only for edge cases."""
         msg_lower = user_message.lower().strip()
 
         # ── Hard guardrails (always enforced, no LLM needed) ──────────
@@ -173,24 +174,35 @@ class DecisionAgent:
             self._log_and_store(user_message, ambiguity_result)
             return ambiguity_result
 
-        # ── Build LLM input with conversation context for follow-ups ──
-        llm_input = user_message
-        if conversation_history and len(user_message.strip()) < 80:
-            recent = conversation_history[-4:]
-            context_lines = [f"{t['role']}: {t['content'][:200]}" for t in recent]
-            llm_input = "[Conversation context]\n" + "\n".join(context_lines) + f"\n\n[Current message] {user_message}"
+        # ── Fast heuristic for greetings/small-talk (no LLM needed) ───
+        if self._is_greeting_or_smalltalk(msg_lower):
+            result = DecisionResult(action="direct", reasoning="heuristic: greeting/small-talk")
+            self._log_and_store(user_message, result)
+            return result
 
-        # ── LLM-based classification (primary path) ───────────────────
+        # ── Keyword heuristics (handles 80%+ of queries, zero tokens) ─
+        heuristic_result = self._classify_heuristic(msg_lower, graph_context)
+        if "default" not in heuristic_result.reasoning:
+            # Heuristic matched a clear signal — use it, skip LLM
+            self._log_and_store(user_message, heuristic_result)
+            return heuristic_result
+
+        # ── LLM escalation (only for uncertain/ambiguous cases) ───────
         if self._client and hasattr(self._client, "is_available") and self._client.is_available:
+            llm_input = user_message
+            if conversation_history and len(user_message.strip()) < 80:
+                recent = conversation_history[-4:]
+                context_lines = [f"{t['role']}: {t['content'][:150]}" for t in recent]
+                llm_input = "[Conversation context]\n" + "\n".join(context_lines) + f"\n\n[Current message] {user_message}"
+
             llm_result = self._classify_with_llm(llm_input)
             if llm_result is not None:
                 self._log_and_store(user_message, llm_result)
                 return llm_result
 
-        # ── Heuristic fallback (only if LLM unavailable or fails) ─────
-        result = self._classify_heuristic(msg_lower, graph_context)
-        self._log_and_store(user_message, result)
-        return result
+        # ── Final fallback: heuristic default (tool_call) ─────────────
+        self._log_and_store(user_message, heuristic_result)
+        return heuristic_result
 
     def run_node(self, state: AgentState) -> dict[str, Any]:
         """LangGraph node entry point."""
@@ -231,16 +243,48 @@ class DecisionAgent:
             logger.warning("DecisionAgent: ambiguity check failed (%s)", exc)
             return None
 
+    @staticmethod
+    def _is_greeting_or_smalltalk(msg_lower: str) -> bool:
+        """Detect greetings and small-talk that need no LLM or tools.
+
+        Catches: hi, hello, hey, thanks, how are you, what's up, etc.
+        Only triggers for short messages (< 50 chars) to avoid false
+        positives on real queries that happen to start with 'hi'.
+        """
+        if len(msg_lower) > 50:
+            return False
+
+        _GREETING_PATTERNS = [
+            r"^h(i|ello|ey|owdy)[\s!.,?]*$",
+            r"^(good\s+)?(morning|afternoon|evening|night)[\s!.,?]*$",
+            r"^how\s+(are|r)\s+(you|u|ya)[\s!.,?]*$",
+            r"^(hi|hello|hey)\s+(how\s+(are|r)\s+(you|u|ya)|there|everyone)[\s!.,?]*$",
+            r"^what'?s?\s+up[\s!.,?]*$",
+            r"^sup[\s!.,?]*$",
+            r"^yo[\s!.,?]*$",
+            r"^thanks?(\s+you)?[\s!.,?]*$",
+            r"^thank\s+you[\s!.,?]*$",
+            r"^(ok|okay|cool|great|nice|awesome|got\s+it)[\s!.,?]*$",
+            r"^bye[\s!.,?]*$",
+            r"^(good)?bye[\s!.,?]*$",
+        ]
+
+        return any(re.match(p, msg_lower) for p in _GREETING_PATTERNS)
+
     # ──────────────────────────────────────────────────────────────────
     # LLM classification
     # ──────────────────────────────────────────────────────────────────
 
     @llm_retry(max_retries=2, initial_wait=0.5)
     def _call_llm(self, user_message: str) -> str:
-        """Make the LLM call with retry on transient errors."""
+        """Make the LLM call with retry on transient errors.
+        Uses response_format=json_object to force valid JSON output."""
         result = self._client.chat(
             messages=[{"role": "user", "content": user_message}],
             system=_DECISION_SYSTEM_PROMPT,
+            max_tokens=150,
+            caller="DecisionAgent",
+            response_format={"type": "json_object"},
         )
         return result.get("content", "").strip()
 

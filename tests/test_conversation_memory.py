@@ -21,7 +21,7 @@ from src.agents.memory import ConversationMemory, AgentMemory
 class MockLLM:
     is_available = True
 
-    def chat(self, messages, system="", tools=None):
+    def chat(self, messages, system="", tools=None, max_tokens=None, caller="", response_format=None):
         if "intent classifier" in system.lower():
             return {"content": '{"action": "tool_call", "reasoning": "needs data"}'}
         if "tool selection" in system.lower():

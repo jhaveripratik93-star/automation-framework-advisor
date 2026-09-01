@@ -86,12 +86,24 @@ class ToolExecutor:
     # ── Dispatch ──────────────────────────────────────────────────────
 
     def execute(self, tool_name: str, arguments: dict[str, Any]) -> str:
+        from src.agents.cache import tool_cache, make_tool_cache_key
+
         if tool_name not in self.tools:
             logger.error("ToolExecutor: unknown tool '%s'", tool_name)
             return f"Error: unknown tool '{tool_name}'"
+
+        # Check cache first
+        cache_key = make_tool_cache_key(tool_name, arguments)
+        cached = tool_cache.get(cache_key)
+        if cached is not None:
+            logger.info("ToolExecutor: CACHE HIT '%s' → %d chars", tool_name, len(cached))
+            return cached
+
         try:
             result = self.tools[tool_name](**arguments)
             logger.info("ToolExecutor: '%s' → %d chars", tool_name, len(str(result)))
+            # Store in cache
+            tool_cache.set(cache_key, result)
             return result
         except Exception as exc:
             logger.error("ToolExecutor: '%s' failed — %s: %s", tool_name, type(exc).__name__, exc)

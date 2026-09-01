@@ -93,7 +93,7 @@ def make_select_tools_node(tool_selection_agent, tool_executor):
             recent = conversation_history[-4:]  # last 2 exchanges
             context_lines = []
             for turn in recent:
-                context_lines.append(f"{turn['role']}: {turn['content'][:200]}")
+                context_lines.append(f"{turn['role']}: {turn['content'][:150]}")
             if context_lines:
                 msg = f"[Conversation context]\n" + "\n".join(context_lines) + f"\n\n[Current message] {msg}"
         selection = tool_selection_agent.select(msg, available)
@@ -197,6 +197,13 @@ def route_after_reflect(state: PipelineState) -> str:
     return "format"
 
 
+def route_after_evaluate(state: PipelineState) -> str:
+    """Skip reflection for direct/greeting queries — no point critiquing a simple reply."""
+    if state.get("action") == "direct":
+        return "format"
+    return "reflect"
+
+
 def route_after_decide(state: PipelineState) -> str:
     action = state.get("action")
     if action == "tool_call":
@@ -244,7 +251,10 @@ def build_pipeline(
         "select_tools": "select_tools",
         "evaluate": "evaluate",
     })
-    graph.add_edge("evaluate", "reflect")
+    graph.add_conditional_edges("evaluate", route_after_evaluate, {
+        "reflect": "reflect",
+        "format": "format",
+    })
     graph.add_conditional_edges("reflect", route_after_reflect, {
         "evaluate": "evaluate",
         "format": "format",
