@@ -76,6 +76,15 @@ def _advisor_sidebar() -> None:
         preset_names = list(PRESETS.keys())
         preset_options = preset_names + ["custom"]
 
+        # ── Handle pending auto-balance BEFORE any widget renders ─────
+        if "_auto_balance_pending" in st.session_state:
+            normalised = st.session_state.pop("_auto_balance_pending")
+            for cid in CRITERIA_IDS:
+                st.session_state[f"w_{cid}"] = normalised[cid]
+            st.session_state.weight_profile = WeightProfile(weights=normalised, profile_name="custom")
+            st.session_state["_weight_preset_value"] = "custom"
+            st.session_state["_w_feedback"] = "✓ Auto-balanced & applied"
+
         # Shadow key drives the selectbox index — never written after widget instantiation
         if "_weight_preset_value" not in st.session_state:
             current = st.session_state.weight_profile.profile_name.replace("_adjusted", "")
@@ -114,44 +123,47 @@ def _advisor_sidebar() -> None:
                 key=f"w_{cid}",
             )
 
-        # ── Live total ────────────────────────────────────────────────
-        raw = {cid: st.session_state[f"w_{cid}"] for cid in CRITERIA_IDS}
+        # ── Live running total ────────────────────────────────────────
+        raw   = {cid: st.session_state[f"w_{cid}"] for cid in CRITERIA_IDS}
         total = round(sum(raw.values()), 4)
         diff  = round(total - 1.0, 4)
 
         if abs(diff) < 0.001:
-            st.success(f"Total: {total:.2f} ✓")
+            st.success(f"Total: {total:.2f} ✓  — ready to apply")
         elif diff > 0:
-            st.error(f"Total: {total:.2f} — over by {diff:.2f}. Reduce weights or use Auto-balance.")
+            st.error(f"Total: {total:.2f}  (+{diff:.2f} over). Reduce or Auto-balance.")
         else:
-            st.warning(f"Total: {total:.2f} — under by {abs(diff):.2f}. Increase weights or use Auto-balance.")
+            st.warning(f"Total: {total:.2f}  ({diff:.2f} under). Increase or Auto-balance.")
 
         col_apply, col_auto = st.columns(2)
         with col_apply:
-            if st.button("Apply", key="apply_weights", use_container_width=True, type="primary"):
-                if abs(diff) > 0.001:
-                    st.error(f"Weights must sum to 1.00 (currently {total:.2f}). Use Auto-balance or adjust manually.")
-                else:
-                    st.session_state.weight_profile = WeightProfile(weights=dict(raw), profile_name="custom")
-                    st.session_state["_weight_preset_value"] = "custom"
-                    st.session_state["_weights_applied"] = True
-
+            apply_clicked = st.button(
+                "Apply", key="apply_weights",
+                use_container_width=True, type="primary",
+                disabled=(abs(diff) > 0.001),
+            )
         with col_auto:
-            if st.button("Auto-balance", key="auto_balance_weights", use_container_width=True):
-                if total > 0:
-                    normalised = {k: round(v / total, 4) for k, v in raw.items()}
-                    # Fix any floating-point remainder on the first key
-                    remainder = round(1.0 - sum(normalised.values()), 4)
-                    first = CRITERIA_IDS[0]
-                    normalised[first] = round(normalised[first] + remainder, 4)
-                    for cid in CRITERIA_IDS:
-                        st.session_state[f"w_{cid}"] = normalised[cid]
-                    st.session_state.weight_profile = WeightProfile(weights=normalised, profile_name="custom")
-                    st.session_state["_weight_preset_value"] = "custom"
-                    st.session_state["_weights_applied"] = True
+            auto_clicked = st.button(
+                "Auto-balance", key="auto_balance_weights",
+                use_container_width=True,
+            )
 
-        if st.session_state.pop("_weights_applied", False):
-            st.success("✓ Weights applied")
+        if apply_clicked:
+            st.session_state.weight_profile = WeightProfile(weights=dict(raw), profile_name="custom")
+            st.session_state["_weight_preset_value"] = "custom"
+            st.session_state["_w_feedback"] = "✓ Weights applied"
+
+        if auto_clicked and total > 0:
+            normalised = {k: round(v / total, 4) for k, v in raw.items()}
+            remainder  = round(1.0 - sum(normalised.values()), 4)
+            normalised[CRITERIA_IDS[0]] = round(normalised[CRITERIA_IDS[0]] + remainder, 4)
+            st.session_state["_auto_balance_pending"] = normalised
+            st.rerun()
+
+        if st.session_state.get("_w_feedback"):
+            st.success(st.session_state["_w_feedback"])
+            # Clear after one render so it doesn't persist forever
+            st.session_state["_w_feedback"] = ""
 
     st.markdown("---")
     st.markdown('<div class="sidebar-section">Context Files</div>', unsafe_allow_html=True)

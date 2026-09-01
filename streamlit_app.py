@@ -59,17 +59,17 @@ render_nav()
 page = st.session_state.page
 
 if page == "home":
-    from pages.home import render
+    from _pages.home import render
     render()
 elif page == "advisor":
-    from pages.advisor import render
+    from _pages.advisor import render
     render()
 elif page == "studio":
-    from pages.code_studio import render
+    from _pages.code_studio import render
     render()
 elif page == "codegen":
-    from pages.code_generator import render
+    from _pages.code_generator import render
     render()
 elif page == "coverage":
-    from pages.coverage import render
+    from _pages.coverage import render
     render()

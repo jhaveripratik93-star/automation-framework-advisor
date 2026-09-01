@@ -1,4 +1,4 @@
-"""Top navigation bar — single mechanism (Streamlit buttons only)."""
+"""Top navigation bar — rendered in the main area above page content."""
 from __future__ import annotations
 
 import streamlit as st
