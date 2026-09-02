@@ -105,6 +105,7 @@ def render() -> None:
         default=st.session_state.get("cov_selected_frameworks", []),
         key="cov_selected_frameworks",
         help="Select specific frameworks to compare. If none selected, all are evaluated.",
+        on_change=_on_framework_change,
     )
 
     # Metric cards
@@ -227,29 +228,50 @@ def _parse_and_analyse(upload_file, upload_type: str, kb) -> None:
                 st.error("Could not parse any test cases. Check the file format.")
                 return
 
-            _fw_filter = st.session_state.get("cov_selected_frameworks") or None
-            analysis   = analyze_coverage(test_cases, kb, frameworks=_fw_filter)
-            report     = render_coverage_report(analysis, len(test_cases))
-            display    = build_display_coverage(analysis)
-
-            if display["fw_scores"]:
-                best_pct = display["fw_scores"][display["fw_names"][0]]["pct"]
-                # Collect ALL frameworks tied at the top coverage percentage
-                tied = [
-                    name for name in display["fw_names"]
-                    if abs(display["fw_scores"][name]["pct"] - best_pct) < 0.01
-                ]
-                st.session_state.coverage_best_fw  = ", ".join(tied)
-                st.session_state.coverage_best_pct = f"{best_pct:.0f}%"
-
-            # Store final display model — rendering does zero computation
-            st.session_state.excel_test_cases  = test_cases
-            st.session_state.coverage_result   = report
-            st.session_state.coverage_analysis = display
+            # Store parsed test cases, then run analysis
+            st.session_state.excel_test_cases = test_cases
+            _run_analysis(test_cases, kb)
 
         except Exception as exc:
             st.error(f"Analysis failed: {exc}")
             logger.error("Coverage analysis error: %s", exc)
+
+
+def _run_analysis(test_cases: list[dict], kb) -> None:
+    """Run coverage analysis for the given test cases against the current
+    framework selection and store the results in session state."""
+    from src.tools.coverage_engine import (
+        analyze_coverage, render_coverage_report, build_display_coverage,
+    )
+
+    _fw_filter = st.session_state.get("cov_selected_frameworks") or None
+    analysis   = analyze_coverage(test_cases, kb, frameworks=_fw_filter)
+    report     = render_coverage_report(analysis, len(test_cases))
+    display    = build_display_coverage(analysis)
+
+    if display["fw_scores"]:
+        best_pct = display["fw_scores"][display["fw_names"][0]]["pct"]
+        # Collect ALL frameworks tied at the top coverage percentage
+        tied = [
+            name for name in display["fw_names"]
+            if abs(display["fw_scores"][name]["pct"] - best_pct) < 0.01
+        ]
+        st.session_state.coverage_best_fw  = ", ".join(tied)
+        st.session_state.coverage_best_pct = f"{best_pct:.0f}%"
+    else:
+        st.session_state.coverage_best_fw  = "—"
+        st.session_state.coverage_best_pct = "—"
+
+    st.session_state.coverage_result   = report
+    st.session_state.coverage_analysis = display
+
+
+def _on_framework_change() -> None:
+    """Re-run analysis when the framework selection changes (if test cases loaded)."""
+    from services.app_services import get_kb
+    tcs = st.session_state.get("excel_test_cases")
+    if tcs:
+        _run_analysis(tcs, get_kb())
 
 
 def _render_results(display: dict) -> None:
