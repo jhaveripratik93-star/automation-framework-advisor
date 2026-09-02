@@ -19,6 +19,15 @@ from src.agents.memory import AgentMemory, ConversationMemory
 from src.agents.retry import llm_retry, tool_retry
 from src.agents.state import AgentState
 from src.agents.callbacks import PipelineCallbackHandler, StreamEvent, logging_callback
+from src.agents.cache import (
+    TTLCache,
+    response_cache,
+    make_tool_call_cache_key,
+    make_query_cache_key,
+)
+from src.agents.langgraph_pipeline import build_pipeline, _tool_call_cache_key
+from src.tools.executor import ToolExecutor
+from src.scoring.weights import WeightProfile
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -518,6 +527,142 @@ def test_agent_state_typing():
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# Cache tests
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_ttl_cache_basic():
+    """Test TTLCache get/set/expiry/bounded-size."""
+    cache = TTLCache(ttl_seconds=100.0, max_entries=3)
+
+    assert_equal(cache.get("missing"), None, "miss on empty")
+    cache.set("k1", "v1")
+    assert_equal(cache.get("k1"), "v1", "hit after set")
+
+    # Bounded size: adding beyond max evicts oldest
+    cache.set("k2", "v2")
+    cache.set("k3", "v3")
+    cache.set("k4", "v4")  # exceeds max_entries=3
+    assert_true(len(cache) <= 3, "bounded at max_entries")
+
+    # Expiry
+    expiring = TTLCache(ttl_seconds=0.01, max_entries=10)
+    expiring.set("temp", "value")
+    import time as _t
+    _t.sleep(0.05)
+    assert_equal(expiring.get("temp"), None, "entry expired after TTL")
+
+    print("✓ TTLCache basic operations work correctly")
+
+
+def test_tool_call_cache_key_semantic():
+    """Two semantically-equivalent tool calls produce the SAME key;
+    a different weight profile produces a DIFFERENT key."""
+    # Order-independent + case-insensitive framework args
+    tc_a = [ToolCall(tool_name="run_framework_comparison",
+                     arguments={"frameworks": ["Playwright", "Cypress"]}, reasoning="")]
+    tc_b = [ToolCall(tool_name="run_framework_comparison",
+                     arguments={"frameworks": ["cypress", "playwright"]}, reasoning="")]
+
+    key_a = make_tool_call_cache_key(tc_a, weight_signature="balanced")
+    key_b = make_tool_call_cache_key(tc_b, weight_signature="balanced")
+    assert_equal(key_a, key_b, "reversed/case-different framework args → same key")
+
+    # Different weight signature → different key
+    key_c = make_tool_call_cache_key(tc_a, weight_signature="startup")
+    assert_true(key_a != key_c, "different weight profile → different key")
+
+    # Different tool → different key
+    tc_d = [ToolCall(tool_name="recommend_frameworks",
+                     arguments={"use_case": "api"}, reasoning="")]
+    key_d = make_tool_call_cache_key(tc_d, weight_signature="balanced")
+    assert_true(key_a != key_d, "different tool → different key")
+
+    print("✓ Tool-call cache key is semantic and weight-aware")
+
+
+def _make_pipeline(client):
+    """Build a full pipeline wired to the given mock LLM."""
+    executor = ToolExecutor()
+    executor._llm = client
+    return build_pipeline(
+        decision_agent=DecisionAgent(client),
+        tool_selection_agent=ToolSelectionAgent(client),
+        tool_executor=executor,
+        synthesis_agent=SynthesisAgent(client),
+        evaluation_agent=EvaluationAgent(client),
+        reflection_agent=ReflectionAgent(client),
+        format_agent=FormatAgent(client),
+    )
+
+
+def _run_pipeline(pipeline, message, weight_profile):
+    state = {
+        "user_message": message, "graph_context": "", "profile_context": "",
+        "uploaded_docs": "", "case_study": "", "action": "", "tool_results": [],
+        "synthesis_verdict": "", "needs_more": False, "round_num": 0,
+        "reflection_critique": "", "reflection_count": 0, "final_response": "",
+        "conversation_history": [], "weight_profile": weight_profile,
+        "user_profile": None, "executed_tool_calls": [],
+    }
+    return pipeline.invoke(state)
+
+
+def test_cache_hit_semantic_same_profile():
+    """Semantically-similar queries that resolve to the same tool call
+    hit the cache when the weight profile is unchanged."""
+    response_cache.clear()
+    client = MockLLMClient()
+    pipeline = _make_pipeline(client)
+    wp = WeightProfile.default()
+
+    # Q1 — different phrasing, same intent/tool
+    _run_pipeline(pipeline, "Compare Playwright and Cypress", wp)
+    stats_after_q1 = response_cache.stats
+    assert_equal(stats_after_q1["size"], 1, "one entry cached after Q1")
+
+    # Q2 — different wording, SAME resolved tool call → cache HIT
+    result = _run_pipeline(pipeline, "Cypress versus Playwright, which is better?", wp)
+    assert_true(result.get("_cache_hit"), "semantically-similar query hit cache")
+    assert_true(response_cache.stats["hits"] >= 1, "hit counter incremented")
+
+    print("✓ Cache HIT on semantically-similar query (same weight profile)")
+
+
+def test_cache_miss_changed_profile():
+    """The SAME query misses the cache when the weight profile changes,
+    because the ranking depends on the weights."""
+    response_cache.clear()
+    client = MockLLMClient()
+    pipeline = _make_pipeline(client)
+
+    # Q1 with 'balanced' preset
+    balanced = WeightProfile.from_preset("balanced")
+    _run_pipeline(pipeline, "Compare Playwright and Cypress", balanced)
+
+    # Same query, DIFFERENT preset → cache MISS (different key)
+    startup = WeightProfile.from_preset("startup")
+    result = _run_pipeline(pipeline, "Compare Playwright and Cypress", startup)
+    assert_true(not result.get("_cache_hit"), "changed weight profile → cache miss")
+    assert_equal(response_cache.stats["size"], 2, "two distinct entries (one per profile)")
+
+    print("✓ Cache MISS on changed weight profile (same query)")
+
+
+def test_cache_hit_same_query_same_profile():
+    """Identical query + identical profile → cache HIT on the second run."""
+    response_cache.clear()
+    client = MockLLMClient()
+    pipeline = _make_pipeline(client)
+    wp = WeightProfile.from_preset("balanced")
+
+    _run_pipeline(pipeline, "Compare Playwright and Cypress", wp)
+    result = _run_pipeline(pipeline, "Compare Playwright and Cypress", wp)
+    assert_true(result.get("_cache_hit"), "identical query + profile → cache hit")
+
+    print("✓ Cache HIT on identical query + same weight profile")
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # Run all tests
 # ══════════════════════════════════════════════════════════════════════════
 
@@ -545,6 +690,11 @@ if __name__ == "__main__":
         test_full_pipeline_flow,
         test_rejection_flow,
         test_agent_state_typing,
+        test_ttl_cache_basic,
+        test_tool_call_cache_key_semantic,
+        test_cache_hit_semantic_same_profile,
+        test_cache_miss_changed_profile,
+        test_cache_hit_same_query_same_profile,
     ]
 
     passed = 0

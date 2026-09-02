@@ -50,6 +50,12 @@ class PipelineState(TypedDict):
     reflection_critique: str
     reflection_count: int
 
+    # Internal hand-off keys between nodes (must be declared or LangGraph drops them)
+    _pending_tool_calls: list[Any]
+    _last_round_results: list[dict[str, Any]]
+    executed_tool_calls: list[dict[str, Any]]
+    _cache_hit: bool
+
     # Injected dependencies (set once, read-only in nodes)
     _llm_client: Any
     _kb: Any
@@ -112,9 +118,17 @@ def make_execute_tools_node(tool_executor):
             round_results.append({"tool_name": tc.tool_name, "result": result_str})
             logger.info("LangGraph[execute_tools]: tool='%s' result_len=%d", tc.tool_name, len(result_str))
         existing = state.get("tool_results") or []
+        # Persist the resolved tool calls (name + arguments) so the orchestrator
+        # can build a tool-call-based response cache key.
+        executed = state.get("executed_tool_calls") or []
+        executed = executed + [
+            {"tool_name": tc.tool_name, "arguments": dict(tc.arguments or {})}
+            for tc in pending
+        ]
         return {
             "tool_results": existing + round_results,
             "_last_round_results": round_results,
+            "executed_tool_calls": executed,
         }
     return execute_tools
 
@@ -171,15 +185,55 @@ def make_reflect_node(reflection_agent):
     return reflect
 
 
+def _tool_call_cache_key(state: PipelineState) -> str:
+    """Build the tool-call-based response cache key for the current state."""
+    from src.agents.cache import make_tool_call_cache_key
+    executed = state.get("executed_tool_calls") or []
+    if not executed:
+        return ""
+    wp = state.get("weight_profile")
+    weight_sig = getattr(wp, "profile_name", "") if wp else ""
+    if wp is not None and hasattr(wp, "weights"):
+        weight_sig += ":" + ",".join(f"{k}={v:.2f}" for k, v in sorted(wp.weights.items()))
+    return make_tool_call_cache_key(executed, weight_sig)
+
+
+def make_check_cache_node():
+    """Node after execute_tools: check the response cache keyed on the
+    resolved tool calls. On a hit, emit the cached response and skip the
+    rest of the pipeline (synthesise → evaluate → reflect → format)."""
+    def check_cache(state: PipelineState) -> dict:
+        from src.agents.cache import response_cache
+        key = _tool_call_cache_key(state)
+        if not key:
+            return {"_cache_hit": False}
+        cached = response_cache.get(key)
+        if cached is not None:
+            logger.info("LangGraph[check_cache]: TOOLCALL CACHE HIT response_len=%d", len(cached))
+            return {"final_response": cached, "_cache_hit": True}
+        return {"_cache_hit": False}
+    return check_cache
+
+
 def make_format_node(format_agent):
     def format_response(state: PipelineState) -> dict:
         result = format_agent.run_node(state)
+        # Store the fully-formatted response in the tool-call cache
+        from src.agents.cache import response_cache
+        key = _tool_call_cache_key(state)
+        if key and result.get("final_response"):
+            response_cache.set(key, result["final_response"])
         logger.info("LangGraph[format]: response_len=%d", len(result.get("final_response", "")))
         return result
     return format_response
 
 
 # ── Conditional routing ───────────────────────────────────────────────
+
+def route_after_check_cache(state: PipelineState) -> str:
+    """On a tool-call cache hit, skip straight to END; else continue."""
+    return "hit" if state.get("_cache_hit") else "miss"
+
 
 def route_after_synthesis(state: PipelineState) -> str:
     if state.get("needs_more") and state.get("round_num", 0) < _MAX_ROUNDS:
@@ -233,6 +287,7 @@ def build_pipeline(
     graph.add_node("decide", make_decide_node(decision_agent))
     graph.add_node("select_tools", make_select_tools_node(tool_selection_agent, tool_executor))
     graph.add_node("execute_tools", make_execute_tools_node(tool_executor))
+    graph.add_node("check_cache", make_check_cache_node())
     graph.add_node("synthesise", make_synthesise_node(synthesis_agent))
     graph.add_node("evaluate", make_evaluate_node(evaluation_agent))
     graph.add_node("reflect", make_reflect_node(reflection_agent))
@@ -246,7 +301,12 @@ def build_pipeline(
         "format": "format",
     })
     graph.add_edge("select_tools", "execute_tools")
-    graph.add_edge("execute_tools", "synthesise")
+    # After executing tools, check the tool-call cache before doing expensive work
+    graph.add_edge("execute_tools", "check_cache")
+    graph.add_conditional_edges("check_cache", route_after_check_cache, {
+        "hit": END,        # cached response already set — skip everything
+        "miss": "synthesise",
+    })
     graph.add_conditional_edges("synthesise", route_after_synthesis, {
         "select_tools": "select_tools",
         "evaluate": "evaluate",

@@ -111,25 +111,63 @@ class FormatAgent:
             marker in result.formatted
             for marker in ("Weighted Score", "Weight-Based", "Weighted score", "weighted score")
         )
+        # Only append a ranking when the pipeline actually ran a ranking-type tool.
+        # This reuses the intent decision already made upstream by the tool
+        # selection agent — no keyword matching on the raw query.
+        tools_used = {tr.get("tool_name", "") for tr in state.get("tool_results", [])}
+        wants_ranking = bool(tools_used & self._RANKING_TOOLS)
         logger.info(
-            "FormatAgent.run_node: weight_profile=%s already_has_scoring=%s response_len=%d",
+            "FormatAgent.run_node: weight_profile=%s already_has_scoring=%s wants_ranking=%s tools=%s response_len=%d",
             weight_profile.profile_name if weight_profile else None,
             already_has_scoring,
+            wants_ranking,
+            sorted(tools_used),
             len(result.formatted),
         )
-        summary = "" if already_has_scoring else self._build_weight_summary(
-            weight_profile,
-            llm_response=result.formatted,
-            user_profile=state.get("user_profile"),
-            profile_context=state.get("profile_context", ""),
-        )
+        summary = ""
+        if wants_ranking and not already_has_scoring:
+            summary = self._build_weight_summary(
+                weight_profile,
+                llm_response=result.formatted,
+                user_profile=state.get("user_profile"),
+                profile_context=state.get("profile_context", ""),
+                user_message=user_message,
+            )
         logger.info("FormatAgent.run_node: summary_len=%d", len(summary))
         final = result.formatted + ("\n\n" + summary if summary else "")
         return {"final_response": final}
 
+    # Tools whose output warrants a weight-based ranking. A ranking is only
+    # appended when one of these ran — derived from the tool selection agent's
+    # upstream intent decision, not from parsing the raw query.
+    _RANKING_TOOLS = frozenset({
+        "run_framework_comparison",
+        "recommend_frameworks",
+        "find_migration_paths",
+        "score_frameworks",
+    })
+
     # ------------------------------------------------------------------
     # Weight-based summary (appended after LLM response)
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _infer_architecture(user_message: str):
+        """Infer the architecture type from the query so the scoring engine's
+        architecture filter includes the relevant frameworks. Returns None if
+        no clear signal (engine then uses the profile default)."""
+        from src.models import ArchitectureType
+
+        msg = user_message.lower()
+        if any(k in msg for k in ["api", "rest", "graphql", "microservice", "endpoint", "http"]):
+            return ArchitectureType.API_ONLY
+        if any(k in msg for k in ["mobile", "android", "ios", "appium"]):
+            return ArchitectureType.NATIVE_MOBILE
+        if any(k in msg for k in ["performance", "load", "stress", "throughput"]):
+            return ArchitectureType.API_ONLY  # perf tools classified under API/services
+        if any(k in msg for k in ["web", "browser", "ui", "e2e", "end-to-end", "end to end"]):
+            return ArchitectureType.WEB_SPA
+        return None
 
     @staticmethod
     def _parse_profile_context(profile_context: str):
@@ -196,8 +234,15 @@ class FormatAgent:
         llm_response: str = "",
         user_profile=None,
         profile_context: str = "",
+        user_message: str = "",
     ) -> str:
-        """Score only the frameworks mentioned in the LLM response.
+        """Score the frameworks the query is actually about.
+
+        Priority for selecting which frameworks to rank:
+          1. Frameworks named in the user's query (the true subject)
+          2. Fall back to frameworks mentioned in the response (for
+             recommendation queries where the query names no frameworks)
+
         Returns empty string if weight_profile is None, no frameworks found, or scoring fails.
         """
         if weight_profile is None:
@@ -211,18 +256,44 @@ class FormatAgent:
             kb = KnowledgeBase(data_dir="data/frameworks")
             kb.load()
 
-            # Extract only framework names that appear in the LLM response
-            response_lower = llm_response.lower()
-            mentioned = [
-                fw for fw in kb.list_all()
-                if fw.framework_name.lower() in response_lower
+            all_frameworks = kb.list_all()
+
+            # 1. Frameworks explicitly named in the user's query (the subject)
+            query_lower = user_message.lower()
+            named_in_query = [
+                fw for fw in all_frameworks
+                if fw.framework_name.lower() in query_lower
             ]
+
+            if named_in_query:
+                # The query named specific frameworks — rank ONLY those
+                mentioned = named_in_query
+                logger.info(
+                    "FormatAgent._build_weight_summary: ranking frameworks named in query: %s",
+                    [fw.framework_name for fw in mentioned],
+                )
+            else:
+                # 2. No frameworks named in query (e.g. "recommend for API testing")
+                #    — fall back to frameworks mentioned in the response
+                response_lower = llm_response.lower()
+                mentioned = [
+                    fw for fw in all_frameworks
+                    if fw.framework_name.lower() in response_lower
+                ]
+
             if not mentioned:
-                logger.info("FormatAgent._build_weight_summary: no frameworks mentioned in response — skipping")
+                logger.info("FormatAgent._build_weight_summary: no relevant frameworks found — skipping")
                 return ""
 
             if user_profile is None:
                 user_profile = FormatAgent._parse_profile_context(profile_context)
+
+            # Infer architecture from the query so the scoring engine's
+            # architecture filter includes the relevant frameworks
+            # (e.g. an API query must include API-only frameworks like REST Assured).
+            inferred_arch = FormatAgent._infer_architecture(user_message)
+            if inferred_arch is not None:
+                user_profile = user_profile.model_copy(update={"architecture_types": [inferred_arch]})
 
             engine = ScoringEngine(knowledge_base=kb, weight_profile=weight_profile)
             matrix = engine.evaluate(user_profile)
@@ -233,8 +304,24 @@ class FormatAgent:
                 r for r in matrix.rankings
                 if r.framework.lower() in mentioned_names
             ]
+
+            # Safety net: if the architecture filter dropped some mentioned
+            # frameworks, score them directly against all frameworks
+            if len(rankings) < len(mentioned_names):
+                all_matrix = engine.evaluate(
+                    user_profile.model_copy(update={"architecture_types": []})
+                ) if hasattr(user_profile, "model_copy") else matrix
+                by_name = {r.framework.lower(): r for r in rankings}
+                for r in all_matrix.rankings:
+                    if r.framework.lower() in mentioned_names and r.framework.lower() not in by_name:
+                        rankings.append(r)
+                        by_name[r.framework.lower()] = r
+
             if not rankings:
                 return ""
+
+            # Sort by score descending
+            rankings.sort(key=lambda r: r.overall_score, reverse=True)
 
             # Re-rank from 1 within this subset
             for i, r in enumerate(rankings):

@@ -95,7 +95,39 @@ def make_tool_cache_key(tool_name: str, arguments: dict[str, Any]) -> str:
     return f"tool:{tool_name}:{sorted_args}"
 
 
-def make_query_cache_key(user_message: str, uploaded_docs: str = "", case_study: str = "") -> str:
+def make_tool_call_cache_key(tool_calls: list[Any], weight_signature: str = "") -> str:
+    """Build a response cache key from the resolved tool calls.
+
+    This keys the cache on WHAT the pipeline decided to do (the tool selection
+    agent's output) rather than the raw query text. Two differently-phrased
+    queries that resolve to the same tool call(s) share a cache entry — no
+    stop words, synonyms, or keyword lists needed.
+
+    Args:
+        tool_calls: list of objects with .tool_name and .arguments (ToolCall),
+                    or dicts with "tool_name"/"arguments" keys.
+        weight_signature: scoring-weight fingerprint (ranking depends on it).
+    """
+    parts = []
+    for tc in tool_calls:
+        if hasattr(tc, "tool_name"):
+            name, args = tc.tool_name, getattr(tc, "arguments", {})
+        else:
+            name, args = tc.get("tool_name", ""), tc.get("arguments", {})
+        normalized = _normalize_arguments(args or {})
+        parts.append(f"{name}:{json.dumps(normalized, sort_keys=True, default=str)}")
+    # Sort so tool order doesn't matter
+    parts.sort()
+    raw = "|".join(parts) + "|" + weight_signature
+    return f"toolcall:{hashlib.sha256(raw.encode()).hexdigest()[:16]}"
+
+
+def make_query_cache_key(
+    user_message: str,
+    uploaded_docs: str = "",
+    case_study: str = "",
+    weight_signature: str = "",
+) -> str:
     """Build a semantic cache key from the query and context inputs.
 
     Normalizes the query so that semantically equivalent questions hash
@@ -103,9 +135,15 @@ def make_query_cache_key(user_message: str, uploaded_docs: str = "", case_study:
       - "Compare Playwright and Cypress" == "compare cypress vs playwright"
       - "What is Selenium?" == "what is selenium"
       - "Recommend a framework for API testing" == "recommend framework for api testing"
+
+    The weight_signature is included so that changing scoring weights
+    invalidates the cache — the appended ranking table depends on it.
     """
     normalized = _normalize_query(user_message)
-    raw = f"{normalized}|{uploaded_docs[:100].strip().lower()}|{case_study[:100].strip().lower()}"
+    raw = (
+        f"{normalized}|{uploaded_docs[:100].strip().lower()}"
+        f"|{case_study[:100].strip().lower()}|{weight_signature}"
+    )
     return f"query:{hashlib.sha256(raw.encode()).hexdigest()[:16]}"
 
 
@@ -143,15 +181,21 @@ _SYNONYMS = {
     "switch": "migrate",
     "switching": "migrate",
     "transition": "migrate",
+    "suitable": "recommend",
     "capabilities": "capability",
     "limitations": "limitation",
     "details": "detail",
     "framework": "framework",
     "frameworks": "framework",
+    "framwork": "framework",       # common typo
+    "framworks": "framework",      # common typo
     "tool": "framework",
     "tools": "framework",
     "testing": "test",
     "tests": "test",
+    "apis": "api",
+    "microservices": "microservice",
+    "graphql": "graphql",
 }
 
 
@@ -176,9 +220,39 @@ def _normalize_query(query: str) -> str:
     tokens = [_SYNONYMS.get(t, t) for t in tokens]
     # Remove stop words
     tokens = [t for t in tokens if t not in _STOP_WORDS and len(t) > 1]
-    # Sort for order independence ("Playwright vs Cypress" == "Cypress vs Playwright")
-    tokens.sort()
-    return " ".join(tokens)
+
+    _ACTION_VERBS = {"compare", "recommend", "migrate", "detail", "capability", "limitation", "analyze"}
+    _KNOWN_FW_TOKENS = {
+        "playwright", "cypress", "selenium", "webdriverio", "robot", "testcafe",
+        "puppeteer", "appium", "karate", "k6", "locust", "terraform", "ansible",
+        "chef", "pulumi", "cloudformation",
+    }
+
+    # Collapse intent to a single canonical verb so different phrasings of the
+    # same request match. "which framework should I use for X" and "suitable
+    # framework for X" both become a "recommend" query about subject X.
+    present_actions = [t for t in tokens if t in _ACTION_VERBS]
+    fw_count = sum(1 for t in tokens if t in _KNOWN_FW_TOKENS)
+    if present_actions:
+        intent = present_actions[0]
+    elif fw_count >= 2:
+        intent = "compare"        # "Robot Framework vs Playwright"
+    else:
+        intent = "recommend"      # "framework for API testing"
+
+    # Drop all action verbs; represent intent with the single canonical token.
+    subject_tokens = [t for t in tokens if t not in _ACTION_VERBS]
+
+    # "graphql" already implies the API domain — drop the redundant "api" token
+    # so "GraphQL APIs" and "GraphQL" hash the same.
+    if "graphql" in subject_tokens:
+        subject_tokens = [t for t in subject_tokens if t != "api"]
+
+    subject_tokens.append(intent)
+
+    # Sort for order independence
+    subject_tokens.sort()
+    return " ".join(subject_tokens)
 
 
 def _normalize_arguments(arguments: dict[str, Any]) -> dict[str, Any]:

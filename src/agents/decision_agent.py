@@ -340,9 +340,10 @@ class DecisionAgent:
         """Keyword-based fallback — only used when LLM is unavailable."""
         _TOOL_SIGNALS = [
             "compare", "comparison", "vs", "versus", "recommend", "best",
-            "which framework", "migrate", "migration", "roadmap", "coverage",
+            "which framework", "which tool", "suitable", "should i use",
+            "migrate", "migration", "roadmap", "coverage",
             "analyze", "analyse", "details", "capabilities", "limitations",
-            "score", "evaluate", "search", "find",
+            "score", "evaluate", "search", "find", "suggest",
         ]
         _DIRECT_SIGNALS = [
             "hello", "hi", "hey", "thanks", "thank you",
@@ -352,11 +353,17 @@ class DecisionAgent:
         if any(t in msg_lower for t in _TOOL_SIGNALS):
             return DecisionResult(action="tool_call", reasoning="heuristic-fallback: tool-signal keyword")
 
+        # A query naming a framework/testing subject implies a data lookup
+        _SUBJECT_SIGNALS = [
+            "framework", "framwork", "automation", "testing", "test",
+            "api", "graphql", "microservice", "selenium", "playwright",
+            "cypress", "appium", "karate", "robot",
+        ]
+        if any(t in msg_lower for t in _SUBJECT_SIGNALS):
+            return DecisionResult(action="tool_call", reasoning="heuristic-fallback: framework/testing subject")
+
         if any(t in msg_lower for t in _DIRECT_SIGNALS) and len(msg_lower) < 80:
             return DecisionResult(action="direct", reasoning="heuristic-fallback: direct-signal keyword")
-
-        if graph_context and len(graph_context) > 200:
-            return DecisionResult(action="direct", reasoning="heuristic-fallback: graph context sufficient")
 
         return DecisionResult(action="tool_call", reasoning="heuristic-fallback: default to tool_call")
 
