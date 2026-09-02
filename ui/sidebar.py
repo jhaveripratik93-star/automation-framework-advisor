@@ -43,7 +43,7 @@ def render() -> None:
 # ── Per-page sidebar sections ─────────────────────────────────────────
 
 def _advisor_sidebar() -> None:
-    from src.scoring.weights import WeightProfile, PRESETS, CRITERIA_IDS
+    from src.scoring.weights import WeightProfile, PRESETS, CRITERIA_IDS, CLOUD_CRITERIA_IDS
 
     _CRITERIA_LABELS = {
         "C1_language_compatibility": "Language Compatibility",
@@ -53,6 +53,9 @@ def _advisor_sidebar() -> None:
         "C5_maintainability":        "Maintainability",
         "C6_cloud_readiness":        "Cloud Readiness",
         "C7_license_cost":           "License & Cost",
+        "C8_cloud_provider_support":  "Cloud Provider Support",
+        "C9_iac_capabilities":        "IaC Capabilities",
+        "C10_cloud_migration_readiness": "Cloud Migration Readiness",
     }
 
     # ── Advisor reset ─────────────────────────────────────────────────
@@ -63,7 +66,7 @@ def _advisor_sidebar() -> None:
         st.session_state.case_study_urls = []
         st.session_state.weight_profile = WeightProfile.default()
         st.session_state["_weight_preset_value"] = "balanced"
-        for _cid in CRITERIA_IDS:
+        for _cid in list(CRITERIA_IDS) + list(CLOUD_CRITERIA_IDS):
             st.session_state[f"w_{_cid}"] = float(round(PRESETS["balanced"].get(_cid, 0.0), 2))
         st.rerun()
 
@@ -79,7 +82,7 @@ def _advisor_sidebar() -> None:
         # ── Handle pending auto-balance BEFORE any widget renders ─────
         if "_auto_balance_pending" in st.session_state:
             normalised = st.session_state.pop("_auto_balance_pending")
-            for cid in CRITERIA_IDS:
+            for cid in normalised:
                 st.session_state[f"w_{cid}"] = normalised[cid]
             st.session_state.weight_profile = WeightProfile(weights=normalised, profile_name="custom")
             st.session_state["_weight_preset_value"] = "custom"
@@ -106,17 +109,25 @@ def _advisor_sidebar() -> None:
             st.session_state["_weight_preset_value"] = chosen
             if chosen != "custom":
                 st.session_state.weight_profile = WeightProfile.from_preset(chosen)
-                for cid in CRITERIA_IDS:
-                    st.session_state[f"w_{cid}"] = float(round(PRESETS[chosen].get(cid, 0.0), 2))
+                all_cids = list(CRITERIA_IDS) + list(CLOUD_CRITERIA_IDS)
+                for cid in all_cids:
+                    st.session_state[f"w_{cid}"] = float(
+                        round(PRESETS[chosen].get(cid, 0.0), 2)
+                    )
 
-        # Initialise slider keys on first render
-        for cid in CRITERIA_IDS:
+        # Active criteria = base + cloud if preset includes them
+        active_cids = list(CRITERIA_IDS)
+        if any(c in st.session_state.weight_profile.weights for c in CLOUD_CRITERIA_IDS):
+            active_cids += list(CLOUD_CRITERIA_IDS)
+
+        # Initialise widget keys on first render
+        for cid in active_cids:
             if f"w_{cid}" not in st.session_state:
                 st.session_state[f"w_{cid}"] = float(
                     round(st.session_state.weight_profile.weights.get(cid, 0.0), 2)
                 )
 
-        for cid in CRITERIA_IDS:
+        for cid in active_cids:
             st.number_input(
                 _CRITERIA_LABELS[cid],
                 min_value=0.0, max_value=1.0, step=0.05, format="%.2f",
@@ -124,7 +135,7 @@ def _advisor_sidebar() -> None:
             )
 
         # ── Live running total ────────────────────────────────────────
-        raw   = {cid: st.session_state[f"w_{cid}"] for cid in CRITERIA_IDS}
+        raw   = {cid: st.session_state[f"w_{cid}"] for cid in active_cids}
         total = round(sum(raw.values()), 4)
         diff  = round(total - 1.0, 4)
 
@@ -156,7 +167,7 @@ def _advisor_sidebar() -> None:
         if auto_clicked and total > 0:
             normalised = {k: round(v / total, 4) for k, v in raw.items()}
             remainder  = round(1.0 - sum(normalised.values()), 4)
-            normalised[CRITERIA_IDS[0]] = round(normalised[CRITERIA_IDS[0]] + remainder, 4)
+            normalised[active_cids[0]] = round(normalised[active_cids[0]] + remainder, 4)
             st.session_state["_auto_balance_pending"] = normalised
             st.rerun()
 
