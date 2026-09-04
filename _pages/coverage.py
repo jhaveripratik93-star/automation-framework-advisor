@@ -105,6 +105,7 @@ def render() -> None:
         default=st.session_state.get("cov_selected_frameworks", []),
         key="cov_selected_frameworks",
         help="Select specific frameworks to compare. If none selected, all are evaluated.",
+        on_change=_on_framework_change,
     )
 
     # Metric cards
@@ -126,8 +127,8 @@ def render() -> None:
             </div>
             <div class="metric-card">
                 <span class="metric-card-icon">🏆</span>
-                <div class="metric-card-value" style="font-size:1.1rem">{best_fw}</div>
-                <div class="metric-card-label">Best Framework</div>
+                <div class="metric-card-value" style="font-size:0.95rem;line-height:1.25;">{best_fw}</div>
+                <div class="metric-card-label">Best Framework{"s" if "," in best_fw else ""}</div>
             </div>
             <div class="metric-card">
                 <span class="metric-card-icon">📈</span>
@@ -227,25 +228,50 @@ def _parse_and_analyse(upload_file, upload_type: str, kb) -> None:
                 st.error("Could not parse any test cases. Check the file format.")
                 return
 
-            _fw_filter = st.session_state.get("cov_selected_frameworks") or None
-            analysis   = analyze_coverage(test_cases, kb, frameworks=_fw_filter)
-            report     = render_coverage_report(analysis, len(test_cases))
-            display    = build_display_coverage(analysis)
-
-            if display["fw_scores"]:
-                best_fw  = display["fw_names"][0]
-                best_pct = display["fw_scores"][best_fw]["pct"]
-                st.session_state.coverage_best_fw  = best_fw
-                st.session_state.coverage_best_pct = f"{best_pct:.0f}%"
-
-            # Store final display model — rendering does zero computation
-            st.session_state.excel_test_cases  = test_cases
-            st.session_state.coverage_result   = report
-            st.session_state.coverage_analysis = display
+            # Store parsed test cases, then run analysis
+            st.session_state.excel_test_cases = test_cases
+            _run_analysis(test_cases, kb)
 
         except Exception as exc:
             st.error(f"Analysis failed: {exc}")
             logger.error("Coverage analysis error: %s", exc)
+
+
+def _run_analysis(test_cases: list[dict], kb) -> None:
+    """Run coverage analysis for the given test cases against the current
+    framework selection and store the results in session state."""
+    from src.tools.coverage_engine import (
+        analyze_coverage, render_coverage_report, build_display_coverage,
+    )
+
+    _fw_filter = st.session_state.get("cov_selected_frameworks") or None
+    analysis   = analyze_coverage(test_cases, kb, frameworks=_fw_filter)
+    report     = render_coverage_report(analysis, len(test_cases))
+    display    = build_display_coverage(analysis)
+
+    if display["fw_scores"]:
+        best_pct = display["fw_scores"][display["fw_names"][0]]["pct"]
+        # Collect ALL frameworks tied at the top coverage percentage
+        tied = [
+            name for name in display["fw_names"]
+            if abs(display["fw_scores"][name]["pct"] - best_pct) < 0.01
+        ]
+        st.session_state.coverage_best_fw  = ", ".join(tied)
+        st.session_state.coverage_best_pct = f"{best_pct:.0f}%"
+    else:
+        st.session_state.coverage_best_fw  = "—"
+        st.session_state.coverage_best_pct = "—"
+
+    st.session_state.coverage_result   = report
+    st.session_state.coverage_analysis = display
+
+
+def _on_framework_change() -> None:
+    """Re-run analysis when the framework selection changes (if test cases loaded)."""
+    from services.app_services import get_kb
+    tcs = st.session_state.get("excel_test_cases")
+    if tcs:
+        _run_analysis(tcs, get_kb())
 
 
 def _render_results(display: dict) -> None:
@@ -270,11 +296,21 @@ def _render_results(display: dict) -> None:
         sup      = len(fw_scores[best]["supported"])
         unsup    = fw_scores[best]["unsupported"]
 
-        st.markdown("## 🏆 Recommended Framework")
+        # Collect all frameworks tied at the top percentage
+        tied = [n for n in fw_names if abs(fw_scores[n]["pct"] - best_pct) < 0.01]
+        best_label = ", ".join(tied)
+        heading = "Recommended Frameworks" if len(tied) > 1 else "Recommended Framework"
+
+        st.markdown(f"## 🏆 {heading}")
         pct_bar = int(best_pct)
+        tie_note = (
+            f'<div style="color:#777;font-size:0.8rem;margin-top:0.2rem;">'
+            f'{len(tied)} frameworks tied at this coverage level</div>'
+            if len(tied) > 1 else ""
+        )
         st.markdown(f"""
         <div style="background:#f0faf7;border:1px solid #b2dfdb;border-radius:10px;padding:1.2rem 1.5rem;margin-bottom:1rem;">
-            <div style="font-size:1.4rem;font-weight:800;color:#1e2d2b;">{best}</div>
+            <div style="font-size:1.4rem;font-weight:800;color:#1e2d2b;">{best_label}</div>
             <div style="margin:0.5rem 0 0.3rem;">
                 <div style="background:#e0f2ef;border-radius:6px;height:14px;width:100%;">
                     <div style="background:#2d7d6f;border-radius:6px;height:14px;width:{pct_bar}%;"></div>
@@ -282,6 +318,7 @@ def _render_results(display: dict) -> None:
             </div>
             <div style="color:#2d7d6f;font-weight:700;font-size:1.1rem;">{best_pct:.0f}% coverage</div>
             <div style="color:#555;font-size:0.85rem;">{sup} / {total} test cases supported</div>
+            {tie_note}
         </div>
         """, unsafe_allow_html=True)
 
