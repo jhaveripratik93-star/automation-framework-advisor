@@ -134,19 +134,14 @@ class AgentOrchestrator:
         weight_context: str = "",
         weight_profile=None,
     ) -> str:
-        """Execute the LangGraph pipeline and return the final response string."""
-        from src.agents.cache import response_cache, make_query_cache_key
+        """Execute the LangGraph pipeline and return the final response string.
 
+        Response caching is handled inside the pipeline (Option 2): the cache is
+        keyed on the resolved tool calls, so differently-phrased queries that
+        resolve to the same tools share a cached response — no query-text
+        keyword normalization needed.
+        """
         logger.info("AgentOrchestrator.run: START query='%.80s'", user_message)
-
-        # ── Response cache check ──────────────────────────────────────
-        cache_key = make_query_cache_key(user_message, uploaded_docs, case_study)
-        cached = response_cache.get(cache_key)
-        if cached is not None:
-            logger.info("AgentOrchestrator.run: CACHE HIT response_len=%d", len(cached))
-            self._conversation_memory.add_turn("user", user_message)
-            self._conversation_memory.add_turn("assistant", cached)
-            return cached
 
         self._callback_handler.on_node_start("orchestrator")
 
@@ -192,18 +187,17 @@ class AgentOrchestrator:
             "conversation_history": self._conversation_memory.get_history(last_n=10),
             "weight_profile": weight_profile,
             "user_profile": self._profile,
+            "executed_tool_calls": [],
         }
 
         result_state = pipeline.invoke(initial_state)
         response = result_state.get("final_response", "")
 
-        # Store in response cache
-        response_cache.set(cache_key, response)
-
         # Update conversation memory
         self._conversation_memory.add_turn("user", user_message)
         self._conversation_memory.add_turn("assistant", response)
 
+        from src.agents.cache import response_cache
         self._callback_handler.on_node_end("orchestrator", f"response_len={len(response)}")
         logger.info("AgentOrchestrator.run: DONE response_len=%d (cache stats: %s)",
                      len(response), response_cache.stats)
