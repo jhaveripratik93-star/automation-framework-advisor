@@ -113,7 +113,13 @@ def run_validator(state: CodeGenState, llm_client: Any) -> dict:
     }
 
 
-def should_retry_validation(state: CodeGenState) -> str:
+def should_retry_validation(state) -> str:
+    # NOTE: `state` is intentionally UNANNOTATED. LangGraph calls
+    # typing.get_type_hints() on routing functions; with
+    # `from __future__ import annotations` a CodeGenState hint would be a
+    # deferred string that fails to resolve at runtime (CodeGenState is only
+    # imported under TYPE_CHECKING), crashing build_codegen_pipeline and
+    # forcing the legacy fallback path. No annotation → nothing to resolve.
     """Conditional edge: retry generation if validation failed and retries remain."""
     max_retries = PIPELINE_SETTINGS.get("max_validation_retries", 2)
     attempts = state.get("validation_attempts", 0)

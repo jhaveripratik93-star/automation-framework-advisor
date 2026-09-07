@@ -11,7 +11,15 @@ Conditional edge after validate:
   is_valid=False AND attempts < max_retries → generate (retry)
   otherwise                                 → assemble
 """
-from __future__ import annotations
+# NOTE: intentionally NOT using `from __future__ import annotations`.
+# LangGraph resolves the CodeGenState TypedDict annotations via
+# typing.get_type_hints() at StateGraph construction time. On Python 3.14,
+# stringized (deferred) annotations fail forward-ref evaluation with
+# "NameError: name 'CodeGenState'/'Any' is not defined", which crashes
+# build_codegen_pipeline and silently drops generation into the LEGACY path
+# (where the one-test-case collapse and category grouping do NOT run — hence
+# "one test case per step" in the output). Eager evaluation keeps the
+# annotations as concrete type objects.
 
 import logging
 from typing import Any, TypedDict
@@ -63,29 +71,36 @@ class CodeGenState(TypedDict):
 
 # ── Node factories ────────────────────────────────────────────────────
 
+# NOTE: node/edge functions passed to LangGraph are intentionally left
+# UNANNOTATED for their `state` parameter. LangGraph calls
+# typing.get_type_hints() on these callables to infer a schema; any annotation
+# referencing CodeGenState can fail forward-ref resolution on Python 3.14 and
+# crash graph construction (dropping generation to the legacy path). Omitting
+# the annotation avoids that entirely.
+
 def _make_plan_node(llm_client: Any):
-    def plan(state: CodeGenState) -> dict:
+    def plan(state) -> dict:
         logger.info("CodeGenPipeline[plan]: analysing test case '%s'", state["test_case"].get("title", ""))
         return run_scenario_planner(state, llm_client)
     return plan
 
 
 def _make_architect_node(llm_client: Any):
-    def architect(state: CodeGenState) -> dict:
+    def architect(state) -> dict:
         logger.info("CodeGenPipeline[architect]: building suite architecture")
         return run_suite_architect(state, llm_client)
     return architect
 
 
 def _make_resolve_node(llm_client: Any):
-    def resolve(state: CodeGenState) -> dict:
+    def resolve(state) -> dict:
         logger.info("CodeGenPipeline[resolve]: resolving selectors")
         return run_selector_resolver(state, llm_client)
     return resolve
 
 
 def _make_generate_node(llm_client: Any):
-    def generate(state: CodeGenState) -> dict:
+    def generate(state) -> dict:
         logger.info("CodeGenPipeline[generate]: generating code (attempt %d)",
                     state.get("validation_attempts", 0) + 1)
         return run_step_generator(state, llm_client)
@@ -93,14 +108,14 @@ def _make_generate_node(llm_client: Any):
 
 
 def _make_validate_node(llm_client: Any):
-    def validate(state: CodeGenState) -> dict:
+    def validate(state) -> dict:
         logger.info("CodeGenPipeline[validate]: reviewing generated code")
         return run_validator(state, llm_client)
     return validate
 
 
 def _make_assemble_node(llm_client: Any):
-    def assemble(state: CodeGenState) -> dict:
+    def assemble(state) -> dict:
         logger.info("CodeGenPipeline[assemble]: assembling final file")
         return run_assembler(state, llm_client)
     return assemble

@@ -90,7 +90,9 @@ class ScoringEngine:
         # Step 6: Generate pros/cons and explanations
         for score in scores:
             score.pros, score.cons = self._derive_pros_cons(score)
-            score.explanation = self._generate_explanation(score, profile)
+            score.explanation = self._generate_explanation(
+                score, profile, weights=adjusted_weights
+            )
 
         # Step 7: Build decision matrix
         return DecisionMatrix(
@@ -312,8 +314,18 @@ class ScoringEngine:
             return c["mid"]
         return c["low"]
 
-    def _generate_explanation(self, score: FrameworkScore, profile: UserProfile | None = None) -> str:
-        """Generate per-criterion plain-English explanation with score bands."""
+    def _generate_explanation(
+        self,
+        score: FrameworkScore,
+        profile: UserProfile | None = None,
+        weights: "WeightProfile | None" = None,
+    ) -> str:
+        """Generate per-criterion plain-English explanation with score bands.
+
+        Criteria are listed in weight order (highest weight first) so the
+        breakdown reflects the user's priorities rather than the fixed C1→C7
+        definition order. Criteria with no weight fall to the end.
+        """
         scores_dict = score.criteria_scores.model_dump()
         if score.cloud_criteria_scores:
             scores_dict.update(score.cloud_criteria_scores)
@@ -331,8 +343,14 @@ class ScoringEngine:
             "C10_cloud_migration_readiness": "Migration Readiness",
         }
 
+        # Order criteria by weight (descending); ties keep definition order.
+        criteria_ids = list(scores_dict.keys())
+        if weights is not None:
+            criteria_ids.sort(key=lambda cid: -weights.get(cid))
+
         lines = [f"**{score.framework}** — {score.overall_score}/100 ({score.confidence} confidence)"]
-        for c_id, value in scores_dict.items():
+        for c_id in criteria_ids:
+            value = scores_dict[c_id]
             label = label_map.get(c_id, c_id)
             band  = self._score_band(value)
             meaning = self._criterion_meaning(c_id, value, profile) if profile else ""

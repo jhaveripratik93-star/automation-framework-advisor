@@ -84,15 +84,38 @@ class TTLCache:
         return len(self._store)
 
 
-def make_tool_cache_key(tool_name: str, arguments: dict[str, Any]) -> str:
+def weight_signature(weight_profile: Any) -> str:
+    """Build a deterministic fingerprint of a WeightProfile.
+
+    Used to make weight-sensitive caches invalidate when the user changes
+    scoring weights. Includes both the profile name and the actual weight
+    values (rounded) so that a "custom" profile with different numbers still
+    produces a different signature.
+    """
+    if weight_profile is None or not hasattr(weight_profile, "weights"):
+        return ""
+    name = getattr(weight_profile, "profile_name", "") or ""
+    weights = getattr(weight_profile, "weights", {}) or {}
+    body = ",".join(f"{k}={float(v):.3f}" for k, v in sorted(weights.items()))
+    return f"{name}:{body}"
+
+
+def make_tool_cache_key(
+    tool_name: str, arguments: dict[str, Any], weight_sig: str = ""
+) -> str:
     """Build a deterministic cache key from tool name and arguments.
 
     Normalizes framework names to lowercase and sorts lists so that
     ("Playwright", "Cypress") and ("Cypress", "Playwright") hit the same key.
+
+    ``weight_sig`` is appended for weight-sensitive tools (recommend/score)
+    so that changing the scoring weights produces a different key and does
+    not return a stale ranking computed with the old weights.
     """
     normalized = _normalize_arguments(arguments)
     sorted_args = json.dumps(normalized, sort_keys=True, default=str)
-    return f"tool:{tool_name}:{sorted_args}"
+    suffix = f":{weight_sig}" if weight_sig else ""
+    return f"tool:{tool_name}:{sorted_args}{suffix}"
 
 
 def make_tool_call_cache_key(tool_calls: list[Any], weight_signature: str = "") -> str:

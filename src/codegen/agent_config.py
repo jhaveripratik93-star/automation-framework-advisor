@@ -623,6 +623,26 @@ check. If a required symbol is missing, return GENERATION_ERROR instead of
 inventing it.
 
 Output complete code only. No markdown fencing. No explanation.
+
+EXAMPLE — match this structure, indentation and idioms exactly:
+
+from playwright.sync_api import Page, expect
+
+
+def test_login_valid_credentials(page: Page):
+    # Step 1: Navigate to login page
+    page.goto("https://example.com/login")
+
+    # Step 2: Enter credentials
+    page.fill("[data-testid='username']", "admin")
+    page.fill("[data-testid='password']", "password123")
+
+    # Step 3: Submit
+    page.click("[data-testid='login-btn']")
+
+    # Step 4: Assert dashboard
+    expect(page.locator("h1")).to_have_text("Dashboard")
+    expect(page).to_have_url("https://example.com/dashboard")
 """,
 
     "selenium_py": r"""\
@@ -641,6 +661,37 @@ Rules:
 
 Compile-check symbols, scopes, imports and dependencies before returning.
 Output complete code only. No markdown fencing. No explanation.
+
+EXAMPLE — match this structure, indentation and idioms exactly:
+
+import pytest
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+
+@pytest.fixture
+def driver():
+    d = webdriver.Chrome()
+    yield d
+    d.quit()
+
+
+def test_login_valid_credentials(driver):
+    # Step 1: Navigate to login page
+    driver.get("https://example.com/login")
+
+    # Step 2: Enter credentials
+    driver.find_element(By.CSS_SELECTOR, "[data-testid='username']").send_keys("admin")
+    driver.find_element(By.CSS_SELECTOR, "[data-testid='password']").send_keys("password123")
+
+    # Step 3: Submit
+    driver.find_element(By.CSS_SELECTOR, "[data-testid='login-btn']").click()
+
+    # Step 4: Assert dashboard
+    WebDriverWait(driver, 10).until(EC.url_contains("/dashboard"))
+    assert "Dashboard" in driver.find_element(By.TAG_NAME, "h1").text
 """,
 
     "selenium_java": r"""\
@@ -703,6 +754,16 @@ Output complete code only. No markdown fencing. No explanation.
 You are an expert Robot Framework test engineer.
 Generate a complete suite component integrated with the supplied architecture.
 
+CRITICAL — ONE MANUAL TEST CASE = EXACTLY ONE ROBOT TEST CASE:
+- The input is a SINGLE manual test case describing ONE end-to-end scenario.
+- The `*** Test Cases ***` section MUST contain EXACTLY ONE test case.
+- Do NOT split the scenario into multiple test cases. Every step of the manual
+  test case belongs to the SAME single test case, executed in sequence.
+- Do NOT create one test case per step, per assertion, or per page.
+- Reusable actions may become entries under `*** Keywords ***`, but those are
+  keywords, NOT test cases — they must never appear under `*** Test Cases ***`.
+- Name the single test case after the manual test case title.
+
 Rules:
 - Use SeleniumLibrary/RequestsLibrary only when declared.
 - Reusable keywords belong in the declared common resource file.
@@ -711,9 +772,41 @@ Rules:
 - Every referenced keyword and variable must resolve.
 - Never assume one test's local state is visible to another.
 - Respect the declared dependency/data transfer strategy.
+- Indent with 4 spaces. Use 2-space separation between columns.
 
 Compile-check keywords, variables, resources and dependencies before return.
 Output complete code only. No markdown fencing. No explanation.
+
+EXAMPLE — match this structure, sections, indentation and idioms exactly:
+
+*** Settings ***
+Library    SeleniumLibrary
+
+*** Variables ***
+${URL}         https://example.com/login
+${BROWSER}     chrome
+
+*** Test Cases ***
+Login With Valid Credentials
+    [Documentation]    Verify login with valid credentials redirects to dashboard
+    [Tags]    smoke    authentication
+    Open Browser    ${URL}    ${BROWSER}
+    Input Text      [data-testid='username']    admin
+    Input Password  [data-testid='password']    password123
+    Click Button    [data-testid='login-btn']
+    Location Should Contain    /dashboard
+    Element Text Should Be     h1    Dashboard
+    [Teardown]    Close Browser
+
+*** Keywords ***
+Open Login Page
+    Open Browser    ${URL}    ${BROWSER}
+
+Login As
+    [Arguments]    ${username}    ${password}
+    Input Text      [data-testid='username']    ${username}
+    Input Password  [data-testid='password']    ${password}
+    Click Button    [data-testid='login-btn']
 """,
 }
 
@@ -769,6 +862,12 @@ AVAILABLE COMMON CODE
 ==================================================
 STRICT RULES
 ==================================================
+0. ONE MANUAL TEST CASE = EXACTLY ONE AUTOMATED TEST CASE. This input is a
+   SINGLE end-to-end scenario. Emit EXACTLY ONE test (one Robot `*** Test Cases ***`
+   entry / one `def test_...` / one `it(...)` / one `@Test` method). Do NOT split
+   the scenario into multiple tests per step, assertion or page. All steps run in
+   sequence inside that single test. Reusable actions may become helper
+   keywords/functions, but those are NOT additional test cases.
 1. Do not invent functions, classes, fixtures, variables, commands or imports.
 2. Do not call a function unless it exists in the symbol contract.
 3. Do not reference a variable unless it is locally declared, framework
@@ -788,6 +887,7 @@ STRICT RULES
     GENERATION_ERROR.
 
 FINAL COMPILATION CHECK:
+- EXACTLY ONE test case is defined (not one-per-step)
 - all imports resolve
 - all functions/classes/fixtures are defined
 - all variables are in scope and initialized
@@ -946,6 +1046,15 @@ You are a senior test automation architect acting as a compiler/linker.
 
 Assemble a COMPLETE, RUNNABLE test automation project. Do not merely
 concatenate test snippets.
+
+TEST CASE COUNT RULE (CRITICAL):
+Preserve the number of test cases exactly as given. The input represents a
+SINGLE manual test case, so the output MUST contain EXACTLY ONE test case
+(one Robot `*** Test Cases ***` entry / one `def test_...` / one `it(...)` /
+one `@Test` method). NEVER split one scenario into several test cases, and
+NEVER turn individual steps or assertions into separate test cases. Shared
+steps may be extracted into helper keywords/functions — those are not test
+cases.
 
 For every referenced symbol the final relationship must be:
     reference -> definition -> file/module -> import
@@ -1164,6 +1273,11 @@ PIPELINE_SETTINGS: dict = {
 
     # Include planner notes in generation.
     "include_scenario_notes": True,
+
+    # Inject a canonical, correctly-formatted example file (from
+    # data/samples/framework_examples/) into the generation prompt so output
+    # matches the expected framework format. Set to False to disable.
+    "include_framework_example": True,
 
     # Require architecture/symbol validation even for template-generated code.
     "validate_template_code": True,

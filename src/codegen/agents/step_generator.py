@@ -31,6 +31,14 @@ def run_step_generator(state: CodeGenState, llm_client: Any) -> dict:
     if fw_context:
         system = f"{system}\n\nFramework reference:\n{fw_context}"
 
+    # Ground the model in a canonical, correctly-formatted example so the
+    # output matches the expected framework format.
+    if PIPELINE_SETTINGS.get("include_framework_example", True):
+        from src.codegen.example_loader import build_example_reference
+        example_block = build_example_reference(framework)
+        if example_block:
+            system = f"{system}\n\n{example_block}"
+
     steps_text = _format_steps(state.get("classified_steps") or tc.get("steps", []))
     selectors_text = _format_selectors(selectors)
 
@@ -79,6 +87,12 @@ def run_step_generator(state: CodeGenState, llm_client: Any) -> dict:
             system=system,
         )
         code = _clean(result.get("content", ""))
+        # Safety net: one manual test case must yield exactly one automated
+        # test case. Robot Framework output in particular tends to split a
+        # scenario into multiple *** Test Cases *** entries; collapse them.
+        if framework == "robot_framework":
+            from src.codegen.robot_postprocess import collapse_to_single_test_case
+            code = collapse_to_single_test_case(code, test_name=tc.get("title") or None)
         logger.info("StepGenerator: generated %d chars for '%s'", len(code), tc.get("title", ""))
         return {"generated_code": code, "generation_error": ""}
     except Exception as exc:

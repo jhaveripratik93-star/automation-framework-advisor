@@ -18,3 +18,4 @@ Login With Valid Credentials
     Location Should Contain    /dashboard
     Element Text Should Be     h1    Dashboard
     [Teardown]    Close Browser
+    

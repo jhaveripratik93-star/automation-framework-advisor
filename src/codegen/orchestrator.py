@@ -90,6 +90,44 @@ class CodeGenOrchestrator:
 
         return self._generate_legacy(request)
 
+    @staticmethod
+    def _group_by_category(test_cases: list[ManualTestCase]) -> "dict[str, list[ManualTestCase]]":
+        """Group manual test cases by feature/category.
+
+        Grouping key precedence: explicit ``category`` → first ``tag`` →
+        the test's own title (its own group). Cases sharing a category thus
+        land together while uncategorised cases each get their own file.
+        Insertion order is preserved for deterministic file naming.
+        """
+        groups: dict[str, list[ManualTestCase]] = {}
+        for tc in test_cases:
+            key = (tc.category or "").strip()
+            if not key and tc.tags:
+                key = (tc.tags[0] or "").strip()
+            if not key:
+                # No category/tag → keep this case in its own file (by title).
+                key = (tc.title or tc.id or "tests").strip()
+            groups.setdefault(key, []).append(tc)
+        return groups
+
+    def _bundle_group(self, codes: list[str], framework_value: str) -> str:
+        """Combine a category group's per-test code into one file's content.
+
+        For Robot Framework the files are merged into a single suite (shared
+        Settings/Variables/Keywords, all test cases under one *** Test Cases ***).
+        For other frameworks (no defined multi-test merge yet) the snippets are
+        concatenated with a blank line between them.
+        """
+        codes = [c for c in codes if c and c.strip()]
+        if not codes:
+            return ""
+        if len(codes) == 1:
+            return codes[0].strip() + "\n"
+        if framework_value == "robot_framework":
+            from src.codegen.robot_postprocess import merge_robot_files
+            return merge_robot_files(codes)
+        return ("\n\n".join(c.strip() for c in codes)) + "\n"
+
     def _generate_with_agents(self, request: CodeGenRequest) -> GeneratedTestSuite:
         """Generate using the LangGraph 5-agent pipeline."""
         from src.codegen.pipeline import run_codegen_pipeline
@@ -103,47 +141,60 @@ class CodeGenOrchestrator:
         last_state: dict = {}
         _per_tc_states: list[dict] = []
 
-        for tc in request.test_cases:
-            tc_dict = {
-                "id": tc.id,
-                "title": tc.title,
-                "description": tc.description,
-                "category": tc.category,
-                "priority": tc.priority,
-                "preconditions": tc.preconditions,
-                "steps": [
-                    {
-                        "step_number": s.step_number,
-                        "action": s.action,
-                        "test_data": s.test_data,
-                        "expected_result": s.expected_result,
-                    }
-                    for s in tc.steps
-                ],
-                "expected_results": tc.expected_results,
-                "tags": tc.tags,
-            }
+        # Group test cases by feature/category so cases in the same category
+        # end up in ONE file. Each manual test case still becomes exactly one
+        # test case; grouping only controls how they are bundled into files.
+        grouped = self._group_by_category(request.test_cases)
 
-            final_state = run_codegen_pipeline(
-                test_case=tc_dict,
-                framework=framework.value,
-                selector_map=dict(request.selector_map),
-                llm_client=self._llm_client,
-            )
-            last_state = final_state
-            _per_tc_states.append(final_state)
+        for group_key, group_tcs in grouped.items():
+            group_codes: list[str] = []
+            group_valid = True
 
-            code = final_state.get("assembled_code") or final_state.get("generated_code", "")
-            is_valid = final_state.get("validation_result", {}).get("is_valid", True)
-            stats.llm_handled += len(tc.steps)
+            for tc in group_tcs:
+                tc_dict = {
+                    "id": tc.id,
+                    "title": tc.title,
+                    "description": tc.description,
+                    "category": tc.category,
+                    "priority": tc.priority,
+                    "preconditions": tc.preconditions,
+                    "steps": [
+                        {
+                            "step_number": s.step_number,
+                            "action": s.action,
+                            "test_data": s.test_data,
+                            "expected_result": s.expected_result,
+                        }
+                        for s in tc.steps
+                    ],
+                    "expected_results": tc.expected_results,
+                    "tags": tc.tags,
+                }
 
-            slug = re.sub(r"[^a-z0-9]+", "_", tc.title.lower()).strip("_")[:50] or "test"
+                final_state = run_codegen_pipeline(
+                    test_case=tc_dict,
+                    framework=framework.value,
+                    selector_map=dict(request.selector_map),
+                    llm_client=self._llm_client,
+                )
+                last_state = final_state
+                _per_tc_states.append(final_state)
+
+                code = final_state.get("assembled_code") or final_state.get("generated_code", "")
+                group_codes.append(code)
+                if not final_state.get("validation_result", {}).get("is_valid", True):
+                    group_valid = False
+                stats.llm_handled += len(tc.steps)
+
+            # Bundle the group's test cases into a single file.
+            group_content = self._bundle_group(group_codes, framework.value)
+            group_slug = re.sub(r"[^a-z0-9]+", "_", group_key.lower()).strip("_")[:50] or "tests"
             files.append(GeneratedFile(
-                path=f"tests/{slug}{cfg['extension']}",
-                content=code,
+                path=f"tests/{group_slug}{cfg['extension']}",
+                content=group_content,
                 file_type=FileType.TEST,
                 source=GenerationSource.LLM,
-                confidence=0.9 if is_valid else 0.6,
+                confidence=0.9 if group_valid else 0.6,
             ))
 
         # --- Generate supporting files from suite architecture ---

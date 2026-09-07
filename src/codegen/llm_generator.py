@@ -124,6 +124,24 @@ class LLMGenerator:
         self._client = llm_client
 
     # ------------------------------------------------------------------
+    # System prompt assembly
+    # ------------------------------------------------------------------
+
+    def _system_with_context(self, base_system: str, framework: TargetFramework) -> str:
+        """Build a system prompt: base rules + framework context + canonical
+        example (when one exists on disk and the toggle is enabled)."""
+        framework_ctx = _FRAMEWORK_CONTEXT.get(framework.value, "")
+        system = f"{base_system}\n\n{framework_ctx}" if framework_ctx else base_system
+
+        from src.codegen.agent_config import PIPELINE_SETTINGS
+        if PIPELINE_SETTINGS.get("include_framework_example", True):
+            from src.codegen.example_loader import build_example_reference
+            example_block = build_example_reference(framework.value)
+            if example_block:
+                system = f"{system}\n\n{example_block}"
+        return system
+
+    # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
@@ -146,8 +164,7 @@ class LLMGenerator:
             StepGenerationResult with generated code and metadata.
         """
         prompt = self._build_step_prompt(step, framework, context, selector_map)
-        framework_ctx = _FRAMEWORK_CONTEXT.get(framework.value, "")
-        system = f"{_GENERATE_STEP_SYSTEM}\n\n{framework_ctx}"
+        system = self._system_with_context(_GENERATE_STEP_SYSTEM, framework)
 
         try:
             result = self._client.chat(
@@ -190,8 +207,7 @@ class LLMGenerator:
         the assembled, complete test with proper structure.
         """
         prompt = self._build_full_test_prompt(test_case, framework, selector_map)
-        framework_ctx = _FRAMEWORK_CONTEXT.get(framework.value, "")
-        system = f"{_GENERATE_FULL_TEST_SYSTEM}\n\n{framework_ctx}"
+        system = self._system_with_context(_GENERATE_FULL_TEST_SYSTEM, framework)
 
         try:
             result = self._client.chat(
@@ -305,9 +321,8 @@ class LLMGenerator:
 
         # Batch prompt for larger step sets
         prompt = self._build_batch_prompt(steps, framework, test_case_context, selector_map)
-        framework_ctx = _FRAMEWORK_CONTEXT.get(framework.value, "")
         system = (
-            f"{_GENERATE_STEP_SYSTEM}\n\n{framework_ctx}\n\n"
+            f"{self._system_with_context(_GENERATE_STEP_SYSTEM, framework)}\n\n"
             "IMPORTANT: For each step, output the code prefixed with '// STEP N:' "
             "(or '# STEP N:' for Python/Robot) on its own line, where N is the step number."
         )

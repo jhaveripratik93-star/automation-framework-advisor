@@ -1,0 +1,1059 @@
+[
+  {
+    "test_case_title": "Login with valid GitHub credentials",
+    "category": "Happy Path",
+    "pre_condition": [
+      "A valid GitHub account exists",
+      "User is logged out",
+      "GitHub login page is accessible"
+    ],
+    "steps": [
+      {
+        "action": "Open the GitHub login page",
+        "test_data": "https://github.com/login",
+        "expected_result": "GitHub login page is displayed"
+      },
+      {
+        "action": "Enter a valid username or email address",
+        "test_data": "valid_user@example.com",
+        "expected_result": "Username/email is accepted"
+      },
+      {
+        "action": "Enter the valid password",
+        "test_data": "ValidPassword123!",
+        "expected_result": "Password is accepted and masked"
+      },
+      {
+        "action": "Submit the login form",
+        "test_data": null,
+        "expected_result": "User is successfully authenticated and redirected to the appropriate GitHub page"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Login with invalid password",
+    "category": "Negative",
+    "pre_condition": [
+      "A valid GitHub account exists",
+      "User is logged out"
+    ],
+    "steps": [
+      {
+        "action": "Open the GitHub login page",
+        "test_data": "https://github.com/login",
+        "expected_result": "Login page is displayed"
+      },
+      {
+        "action": "Enter a valid username or email address",
+        "test_data": "valid_user@example.com",
+        "expected_result": "Username/email is accepted"
+      },
+      {
+        "action": "Enter an incorrect password",
+        "test_data": "IncorrectPassword123!",
+        "expected_result": "Password is accepted as input"
+      },
+      {
+        "action": "Submit the login form",
+        "test_data": null,
+        "expected_result": "Authentication fails and an appropriate error message is displayed"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Login with empty credentials",
+    "category": "Negative",
+    "pre_condition": [
+      "User is logged out",
+      "GitHub login page is displayed"
+    ],
+    "steps": [
+      {
+        "action": "Leave username/email empty",
+        "test_data": "",
+        "expected_result": "Username/email remains empty"
+      },
+      {
+        "action": "Leave password empty",
+        "test_data": "",
+        "expected_result": "Password remains empty"
+      },
+      {
+        "action": "Submit the login form",
+        "test_data": null,
+        "expected_result": "Login is rejected and validation or authentication feedback is displayed"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Login with two-factor authentication enabled",
+    "category": "Integration",
+    "pre_condition": [
+      "A GitHub account with 2FA enabled exists",
+      "Valid first-factor credentials are available",
+      "User has access to the configured second-factor mechanism"
+    ],
+    "steps": [
+      {
+        "action": "Enter valid GitHub credentials",
+        "test_data": "Valid username and password",
+        "expected_result": "First authentication factor is accepted"
+      },
+      {
+        "action": "Submit the credentials",
+        "test_data": null,
+        "expected_result": "GitHub requests the configured second authentication factor"
+      },
+      {
+        "action": "Enter a valid second-factor code",
+        "test_data": "Valid current 2FA code",
+        "expected_result": "Second factor is accepted"
+      },
+      {
+        "action": "Complete authentication",
+        "test_data": null,
+        "expected_result": "User is successfully logged in"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Create a new repository",
+    "category": "Happy Path",
+    "pre_condition": [
+      "User is authenticated",
+      "User has permission to create repositories"
+    ],
+    "steps": [
+      {
+        "action": "Navigate to repository creation",
+        "test_data": "Repository name = test-repository",
+        "expected_result": "Repository creation form is displayed"
+      },
+      {
+        "action": "Enter a unique repository name",
+        "test_data": "test-repository-001",
+        "expected_result": "Repository name is accepted"
+      },
+      {
+        "action": "Select repository visibility",
+        "test_data": "Private",
+        "expected_result": "Private visibility is selected"
+      },
+      {
+        "action": "Create the repository",
+        "test_data": null,
+        "expected_result": "Repository is created successfully and repository page is displayed"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Create repository with duplicate name",
+    "category": "Negative",
+    "pre_condition": [
+      "User is authenticated",
+      "A repository with the target name already exists in the user's namespace"
+    ],
+    "steps": [
+      {
+        "action": "Open repository creation",
+        "test_data": null,
+        "expected_result": "Repository creation form is displayed"
+      },
+      {
+        "action": "Enter an existing repository name",
+        "test_data": "existing-repository",
+        "expected_result": "GitHub identifies that the repository name is unavailable or conflicts with an existing repository"
+      },
+      {
+        "action": "Submit repository creation",
+        "test_data": null,
+        "expected_result": "Repository is not incorrectly duplicated and an appropriate message is displayed"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Create a public repository",
+    "category": "Happy Path",
+    "pre_condition": [
+      "User is authenticated",
+      "User can create repositories"
+    ],
+    "steps": [
+      {
+        "action": "Start repository creation",
+        "test_data": "Repository name = public-test-repository",
+        "expected_result": "Repository creation form is displayed"
+      },
+      {
+        "action": "Select Public visibility",
+        "test_data": "Public",
+        "expected_result": "Public visibility is selected"
+      },
+      {
+        "action": "Create the repository",
+        "test_data": null,
+        "expected_result": "Repository is created and is accessible according to public visibility rules"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Create a private repository",
+    "category": "Happy Path",
+    "pre_condition": [
+      "User is authenticated",
+      "User can create repositories"
+    ],
+    "steps": [
+      {
+        "action": "Start repository creation",
+        "test_data": "Repository name = private-test-repository",
+        "expected_result": "Repository creation form is displayed"
+      },
+      {
+        "action": "Select Private visibility",
+        "test_data": "Private",
+        "expected_result": "Private visibility is selected"
+      },
+      {
+        "action": "Create the repository",
+        "test_data": null,
+        "expected_result": "Private repository is created successfully"
+      },
+      {
+        "action": "Open the repository while logged out or using an unauthorized account",
+        "test_data": "Unauthorized user",
+        "expected_result": "Repository contents are not accessible"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Clone a public repository using HTTPS",
+    "category": "Integration",
+    "pre_condition": [
+      "Git is installed on the local machine",
+      "A public GitHub repository exists",
+      "User has network access to GitHub"
+    ],
+    "steps": [
+      {
+        "action": "Open the target GitHub repository",
+        "test_data": "https://github.com/test-owner/test-repository",
+        "expected_result": "Repository page is displayed"
+      },
+      {
+        "action": "Copy the HTTPS clone URL",
+        "test_data": "https://github.com/test-owner/test-repository.git",
+        "expected_result": "HTTPS clone URL is copied"
+      },
+      {
+        "action": "Run git clone",
+        "test_data": "git clone https://github.com/test-owner/test-repository.git",
+        "expected_result": "Repository is cloned to the local machine"
+      },
+      {
+        "action": "Inspect the cloned directory",
+        "test_data": "Local repository directory",
+        "expected_result": "Repository files and Git metadata are present"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Clone a private repository with valid authentication",
+    "category": "Integration",
+    "pre_condition": [
+      "User has access to a private repository",
+      "Git is installed",
+      "Valid GitHub authentication is configured"
+    ],
+    "steps": [
+      {
+        "action": "Copy the private repository HTTPS or SSH clone URL",
+        "test_data": "Private repository clone URL",
+        "expected_result": "Clone URL is available"
+      },
+      {
+        "action": "Run git clone",
+        "test_data": "git clone <private-repository-url>",
+        "expected_result": "Git authenticates successfully"
+      },
+      {
+        "action": "Verify the local repository",
+        "test_data": "Local clone directory",
+        "expected_result": "Private repository contents are downloaded successfully"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Clone a private repository without permission",
+    "category": "Negative",
+    "pre_condition": [
+      "Target repository is private",
+      "Test user does not have access",
+      "Git is installed"
+    ],
+    "steps": [
+      {
+        "action": "Attempt to clone the private repository",
+        "test_data": "git clone <private-repository-url>",
+        "expected_result": "Clone operation fails"
+      },
+      {
+        "action": "Inspect the Git error",
+        "test_data": null,
+        "expected_result": "An authentication or authorization error is returned and repository contents are not downloaded"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Push a new file to a GitHub repository",
+    "category": "Happy Path",
+    "pre_condition": [
+      "User has write access to the repository",
+      "Repository is cloned locally",
+      "Git authentication is configured"
+    ],
+    "steps": [
+      {
+        "action": "Create a new file in the local repository",
+        "test_data": "hello.txt containing 'Hello GitHub'",
+        "expected_result": "New file exists locally"
+      },
+      {
+        "action": "Check Git status",
+        "test_data": "git status",
+        "expected_result": "The new file is shown as an untracked file"
+      },
+      {
+        "action": "Stage the file",
+        "test_data": "git add hello.txt",
+        "expected_result": "File is staged"
+      },
+      {
+        "action": "Create a commit",
+        "test_data": "git commit -m \"Add hello file\"",
+        "expected_result": "A new local commit is created"
+      },
+      {
+        "action": "Push the commit",
+        "test_data": "git push origin main",
+        "expected_result": "Commit is uploaded successfully to the remote repository"
+      },
+      {
+        "action": "Refresh the GitHub repository page",
+        "test_data": null,
+        "expected_result": "The new file and commit are visible on GitHub"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Push without write permission",
+    "category": "Negative",
+    "pre_condition": [
+      "User can clone the repository",
+      "User does not have write permission",
+      "Repository is cloned locally"
+    ],
+    "steps": [
+      {
+        "action": "Modify or create a file",
+        "test_data": "unauthorized-change.txt",
+        "expected_result": "File is changed locally"
+      },
+      {
+        "action": "Commit the change",
+        "test_data": "git commit -m \"Unauthorized change\"",
+        "expected_result": "Local commit is created"
+      },
+      {
+        "action": "Push the commit",
+        "test_data": "git push origin main",
+        "expected_result": "Push is rejected because the user does not have required write permission"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Pull latest changes from GitHub",
+    "category": "Integration",
+    "pre_condition": [
+      "Repository exists on GitHub",
+      "Repository is cloned locally",
+      "Remote repository contains a commit not present locally"
+    ],
+    "steps": [
+      {
+        "action": "Run git status",
+        "test_data": "git status",
+        "expected_result": "Local repository status is displayed"
+      },
+      {
+        "action": "Pull changes from the remote repository",
+        "test_data": "git pull origin main",
+        "expected_result": "Remote changes are fetched and merged into the local branch"
+      },
+      {
+        "action": "Inspect the changed files",
+        "test_data": "Files changed by the remote commit",
+        "expected_result": "Latest remote changes are present locally"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Pull with local uncommitted changes causing conflict",
+    "category": "Negative",
+    "pre_condition": [
+      "Repository is cloned locally",
+      "Local uncommitted changes exist",
+      "Remote repository contains conflicting changes"
+    ],
+    "steps": [
+      {
+        "action": "Modify a tracked file locally",
+        "test_data": "Change line 10 in application.txt",
+        "expected_result": "Local file contains an uncommitted change"
+      },
+      {
+        "action": "Attempt to pull remote changes",
+        "test_data": "git pull origin main",
+        "expected_result": "Git prevents or reports the pull when local changes would be overwritten or a merge conflict occurs"
+      },
+      {
+        "action": "Inspect Git status",
+        "test_data": "git status",
+        "expected_result": "Git clearly identifies the affected files and repository state"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Create a feature branch",
+    "category": "Happy Path",
+    "pre_condition": [
+      "User has a cloned repository",
+      "Local repository is synchronized with remote"
+    ],
+    "steps": [
+      {
+        "action": "Create a new branch",
+        "test_data": "git checkout -b feature/login",
+        "expected_result": "New branch feature/login is created and checked out"
+      },
+      {
+        "action": "Verify the current branch",
+        "test_data": "git branch --show-current",
+        "expected_result": "feature/login is displayed as the current branch"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Push feature branch to GitHub",
+    "category": "Integration",
+    "pre_condition": [
+      "Feature branch exists locally",
+      "User has write permission"
+    ],
+    "steps": [
+      {
+        "action": "Create a change on the feature branch",
+        "test_data": "Add feature.txt",
+        "expected_result": "Feature change exists locally"
+      },
+      {
+        "action": "Commit the change",
+        "test_data": "git commit -m \"Add feature\"",
+        "expected_result": "Commit is created"
+      },
+      {
+        "action": "Push the branch",
+        "test_data": "git push -u origin feature/login",
+        "expected_result": "Feature branch is created on GitHub and local branch tracks the remote branch"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Create pull request from feature branch",
+    "category": "Happy Path",
+    "pre_condition": [
+      "Feature branch has been pushed to GitHub",
+      "User has permission to create pull requests",
+      "Target branch exists"
+    ],
+    "steps": [
+      {
+        "action": "Open the repository Pull Requests section",
+        "test_data": null,
+        "expected_result": "Pull request page is displayed"
+      },
+      {
+        "action": "Start a new pull request",
+        "test_data": "Source = feature/login; Target = main",
+        "expected_result": "Pull request creation form is displayed"
+      },
+      {
+        "action": "Enter pull request title and description",
+        "test_data": "Title = Add login feature",
+        "expected_result": "Pull request details are accepted"
+      },
+      {
+        "action": "Create the pull request",
+        "test_data": null,
+        "expected_result": "Pull request is created successfully"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Merge a pull request with no conflicts",
+    "category": "Happy Path",
+    "pre_condition": [
+      "Open pull request exists",
+      "Required checks and reviews have passed according to repository rules",
+      "No merge conflicts exist"
+    ],
+    "steps": [
+      {
+        "action": "Open the pull request",
+        "test_data": "Existing pull request",
+        "expected_result": "Pull request details and merge status are displayed"
+      },
+      {
+        "action": "Verify mergeability",
+        "test_data": null,
+        "expected_result": "Pull request is shown as mergeable"
+      },
+      {
+        "action": "Merge the pull request",
+        "test_data": "Configured merge method",
+        "expected_result": "Pull request is merged and target branch contains the changes"
+      },
+      {
+        "action": "Verify repository history",
+        "test_data": null,
+        "expected_result": "Merged changes are present in the target branch"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Handle pull request merge conflict",
+    "category": "Negative",
+    "pre_condition": [
+      "Source and target branches contain conflicting changes"
+    ],
+    "steps": [
+      {
+        "action": "Open the pull request",
+        "test_data": "Conflicting pull request",
+        "expected_result": "Pull request is displayed"
+      },
+      {
+        "action": "Check merge status",
+        "test_data": null,
+        "expected_result": "GitHub indicates that the pull request cannot be automatically merged"
+      },
+      {
+        "action": "Attempt to merge the pull request",
+        "test_data": null,
+        "expected_result": "Automatic merge is prevented until the conflict is resolved"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Verify commit appears in repository history",
+    "category": "Data Persistence",
+    "pre_condition": [
+      "User has successfully pushed a commit"
+    ],
+    "steps": [
+      {
+        "action": "Open the repository commit history",
+        "test_data": null,
+        "expected_result": "Commit history is displayed"
+      },
+      {
+        "action": "Search for the newly pushed commit",
+        "test_data": "Commit message = Add hello file",
+        "expected_result": "The commit is present with the expected author, message, timestamp, and changes"
+      },
+      {
+        "action": "Refresh the page",
+        "test_data": null,
+        "expected_result": "The commit remains present after refresh"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Verify repository data persists after logout and login",
+    "category": "Data Persistence",
+    "pre_condition": [
+      "User has a repository containing committed files",
+      "User is authenticated"
+    ],
+    "steps": [
+      {
+        "action": "Open the repository",
+        "test_data": "Existing repository",
+        "expected_result": "Repository contents are displayed"
+      },
+      {
+        "action": "Log out",
+        "test_data": null,
+        "expected_result": "User is logged out"
+      },
+      {
+        "action": "Log back in",
+        "test_data": "Valid credentials",
+        "expected_result": "User is authenticated"
+      },
+      {
+        "action": "Open the same repository",
+        "test_data": "Existing repository",
+        "expected_result": "Repository and previously committed data remain available"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Delete a repository and verify it is no longer accessible",
+    "category": "Data Persistence",
+    "pre_condition": [
+      "User owns a test repository",
+      "Repository contains test data",
+      "Repository deletion is permitted"
+    ],
+    "steps": [
+      {
+        "action": "Open repository settings",
+        "test_data": "Test repository",
+        "expected_result": "Repository settings are displayed"
+      },
+      {
+        "action": "Initiate repository deletion",
+        "test_data": "Repository name confirmation",
+        "expected_result": "GitHub requests the required deletion confirmation"
+      },
+      {
+        "action": "Confirm repository deletion",
+        "test_data": "Exact repository name",
+        "expected_result": "Repository is deleted"
+      },
+      {
+        "action": "Attempt to open the deleted repository URL",
+        "test_data": "Deleted repository URL",
+        "expected_result": "Repository is no longer accessible as an existing repository"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Verify branch data persists after page refresh",
+    "category": "Data Persistence",
+    "pre_condition": [
+      "A repository contains multiple branches",
+      "User has repository access"
+    ],
+    "steps": [
+      {
+        "action": "Open the branch list",
+        "test_data": null,
+        "expected_result": "Available branches are displayed"
+      },
+      {
+        "action": "Create a test branch",
+        "test_data": "persistence-test-branch",
+        "expected_result": "Branch is created successfully"
+      },
+      {
+        "action": "Refresh the repository page",
+        "test_data": null,
+        "expected_result": "Repository page reloads successfully"
+      },
+      {
+        "action": "Open the branch list again",
+        "test_data": null,
+        "expected_result": "persistence-test-branch is still present"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Verify GitHub handles a large repository clone",
+    "category": "Performance",
+    "pre_condition": [
+      "Git is installed",
+      "A test repository containing a large but controlled dataset exists",
+      "Network connection is available"
+    ],
+    "steps": [
+      {
+        "action": "Start cloning the large repository",
+        "test_data": "Large repository clone URL",
+        "expected_result": "Clone operation starts successfully"
+      },
+      {
+        "action": "Measure clone completion time",
+        "test_data": "Performance SLA defined by the test environment",
+        "expected_result": "Clone completes within the agreed performance threshold"
+      },
+      {
+        "action": "Validate the cloned repository",
+        "test_data": "Expected file and commit counts",
+        "expected_result": "Repository is complete and consistent with the remote repository"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Measure GitHub repository page response with large repository",
+    "category": "Performance",
+    "pre_condition": [
+      "Large test repository exists",
+      "User has access to the repository"
+    ],
+    "steps": [
+      {
+        "action": "Open the large repository page",
+        "test_data": "Large test repository URL",
+        "expected_result": "Repository page begins loading"
+      },
+      {
+        "action": "Measure page load time",
+        "test_data": "Defined performance threshold",
+        "expected_result": "Repository page loads within the agreed performance threshold"
+      },
+      {
+        "action": "Navigate through repository file listings",
+        "test_data": "Large directories",
+        "expected_result": "File listings remain responsive and usable"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Verify concurrent repository access",
+    "category": "Performance",
+    "pre_condition": [
+      "Test repository exists",
+      "Multiple test accounts are available"
+    ],
+    "steps": [
+      {
+        "action": "Have multiple test users access the same repository concurrently",
+        "test_data": "100 concurrent repository page requests",
+        "expected_result": "Requests are handled without unexpected application errors"
+      },
+      {
+        "action": "Have users browse repository files concurrently",
+        "test_data": "Multiple repository file URLs",
+        "expected_result": "Repository content is returned correctly"
+      },
+      {
+        "action": "Monitor error rate and response time",
+        "test_data": "Performance SLA",
+        "expected_result": "Error rate and response time remain within agreed limits"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Verify concurrent Git pushes to different branches",
+    "category": "Performance",
+    "pre_condition": [
+      "Multiple authorized test users are available",
+      "Each user has a separate branch",
+      "All users have repository write access"
+    ],
+    "steps": [
+      {
+        "action": "Prepare independent changes on multiple branches",
+        "test_data": "Unique file/change per branch",
+        "expected_result": "Each local branch contains its intended change"
+      },
+      {
+        "action": "Push the branches concurrently",
+        "test_data": "Concurrent git push operations",
+        "expected_result": "Push operations complete without cross-branch corruption"
+      },
+      {
+        "action": "Verify each branch on GitHub",
+        "test_data": "All test branches",
+        "expected_result": "Each branch contains only its intended changes"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Verify existing repository functionality after a GitHub UI change",
+    "category": "Regression",
+    "pre_condition": [
+      "Existing repository is available",
+      "User has repository access"
+    ],
+    "steps": [
+      {
+        "action": "Open the repository",
+        "test_data": "Regression test repository",
+        "expected_result": "Repository loads successfully"
+      },
+      {
+        "action": "Open an existing file",
+        "test_data": "README.md",
+        "expected_result": "File contents are displayed correctly"
+      },
+      {
+        "action": "Open commit history",
+        "test_data": null,
+        "expected_result": "Existing commits are displayed"
+      },
+      {
+        "action": "Switch between available branches",
+        "test_data": "main and test branch",
+        "expected_result": "Branch switching works correctly"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Verify existing Git clone and push workflow after release",
+    "category": "Regression",
+    "pre_condition": [
+      "Git is installed",
+      "Test repository exists",
+      "User has write access"
+    ],
+    "steps": [
+      {
+        "action": "Clone the repository",
+        "test_data": "Repository HTTPS or SSH URL",
+        "expected_result": "Repository is cloned successfully"
+      },
+      {
+        "action": "Create a test change",
+        "test_data": "regression-test.txt",
+        "expected_result": "Test file is created"
+      },
+      {
+        "action": "Commit the change",
+        "test_data": "git commit -m \"Regression test\"",
+        "expected_result": "Commit is created locally"
+      },
+      {
+        "action": "Push the change",
+        "test_data": "git push origin <test-branch>",
+        "expected_result": "Commit is pushed successfully"
+      },
+      {
+        "action": "Verify the commit on GitHub",
+        "test_data": "Regression test commit",
+        "expected_result": "Commit and file are visible on GitHub"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Verify existing pull request workflow after release",
+    "category": "Regression",
+    "pre_condition": [
+      "Repository has a source branch and target branch",
+      "User has permission to create pull requests"
+    ],
+    "steps": [
+      {
+        "action": "Create a change on a feature branch",
+        "test_data": "Regression feature change",
+        "expected_result": "Change is committed to the feature branch"
+      },
+      {
+        "action": "Push the feature branch",
+        "test_data": "git push origin regression-feature",
+        "expected_result": "Branch is available remotely"
+      },
+      {
+        "action": "Create a pull request",
+        "test_data": "Source = regression-feature; Target = main",
+        "expected_result": "Pull request is created successfully"
+      },
+      {
+        "action": "Review pull request status",
+        "test_data": null,
+        "expected_result": "Checks, review state, changed files, commits, and merge state are displayed correctly"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Verify repository contents remain consistent between Git and GitHub",
+    "category": "Integration",
+    "pre_condition": [
+      "Repository is cloned locally",
+      "User has repository access"
+    ],
+    "steps": [
+      {
+        "action": "Compare the current local branch with the remote branch",
+        "test_data": "git status",
+        "expected_result": "Repository status indicates whether local and remote branches are synchronized"
+      },
+      {
+        "action": "Fetch remote changes",
+        "test_data": "git fetch origin",
+        "expected_result": "Remote tracking information is updated"
+      },
+      {
+        "action": "Compare commit history",
+        "test_data": "git log",
+        "expected_result": "Local and remote commit history can be compared"
+      },
+      {
+        "action": "Verify files on GitHub",
+        "test_data": "Repository file listing",
+        "expected_result": "GitHub contains the expected committed files"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Verify SSH authentication for Git operations",
+    "category": "Integration",
+    "pre_condition": [
+      "User has configured an SSH key with GitHub",
+      "Git is installed",
+      "SSH access is available"
+    ],
+    "steps": [
+      {
+        "action": "Test SSH authentication",
+        "test_data": "ssh -T git@github.com",
+        "expected_result": "GitHub recognizes the configured SSH identity"
+      },
+      {
+        "action": "Clone a repository using SSH",
+        "test_data": "git clone git@github.com:test-owner/test-repository.git",
+        "expected_result": "Repository is cloned successfully"
+      },
+      {
+        "action": "Make a test change",
+        "test_data": "ssh-test.txt",
+        "expected_result": "Local change is created"
+      },
+      {
+        "action": "Commit and push the change",
+        "test_data": "git add . && git commit -m \"SSH test\" && git push",
+        "expected_result": "Change is pushed successfully through SSH"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Verify invalid SSH key cannot access private repository",
+    "category": "Negative",
+    "pre_condition": [
+      "Private repository exists",
+      "SSH key does not have permission to access the repository"
+    ],
+    "steps": [
+      {
+        "action": "Attempt to clone the private repository using an unauthorized SSH identity",
+        "test_data": "git clone git@github.com:test-owner/private-repository.git",
+        "expected_result": "Authentication or authorization fails"
+      },
+      {
+        "action": "Verify repository contents are not downloaded",
+        "test_data": "Local clone directory",
+        "expected_result": "Private repository data is not exposed"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Verify repository search",
+    "category": "Happy Path",
+    "pre_condition": [
+      "GitHub is accessible"
+    ],
+    "steps": [
+      {
+        "action": "Open GitHub search",
+        "test_data": "Repository search",
+        "expected_result": "Search functionality is available"
+      },
+      {
+        "action": "Search for a known repository",
+        "test_data": "known repository name",
+        "expected_result": "Relevant repository results are displayed"
+      },
+      {
+        "action": "Open the expected repository from results",
+        "test_data": "Target repository",
+        "expected_result": "Correct repository page is opened"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Search for a repository that does not exist",
+    "category": "Negative",
+    "pre_condition": [
+      "GitHub is accessible"
+    ],
+    "steps": [
+      {
+        "action": "Search for a unique nonexistent repository name",
+        "test_data": "repository-name-that-does-not-exist-987654",
+        "expected_result": "Search completes successfully"
+      },
+      {
+        "action": "Review search results",
+        "test_data": null,
+        "expected_result": "No matching repository is shown or GitHub clearly indicates that no matching results were found"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Verify repository README persistence",
+    "category": "Data Persistence",
+    "pre_condition": [
+      "User owns a test repository",
+      "User has write permission"
+    ],
+    "steps": [
+      {
+        "action": "Create or update README.md",
+        "test_data": "# Test Repository\nThis is a persistence test.",
+        "expected_result": "README content is saved successfully"
+      },
+      {
+        "action": "Navigate away from the repository",
+        "test_data": "Another GitHub page",
+        "expected_result": "Navigation succeeds"
+      },
+      {
+        "action": "Return to the repository",
+        "test_data": "Test repository URL",
+        "expected_result": "Repository is displayed"
+      },
+      {
+        "action": "Open README.md",
+        "test_data": null,
+        "expected_result": "Previously saved README content is still present"
+      }
+    ]
+  },
+  {
+    "test_case_title": "Verify file deletion persists",
+    "category": "Data Persistence",
+    "pre_condition": [
+      "Repository contains a disposable test file",
+      "User has write permission"
+    ],
+    "steps": [
+      {
+        "action": "Delete the test file locally",
+        "test_data": "test-delete.txt",
+        "expected_result": "File is removed locally"
+      },
+      {
+        "action": "Commit the deletion",
+        "test_data": "git commit -m \"Delete test file\"",
+        "expected_result": "Deletion commit is created"
+      },
+      {
+        "action": "Push the deletion",
+        "test_data": "git push",
+        "expected_result": "Deletion is pushed successfully"
+      },
+      {
+        "action": "Refresh the GitHub repository",
+        "test_data": null,
+        "expected_result": "Deleted file is no longer displayed in the repository's current file listing"
+      },
+      {
+        "action": "Inspect commit history",
+        "test_data": "Delete test file commit",
+        "expected_result": "Deletion commit is retained in repository history"
+      }
+    ]
+  }
+]

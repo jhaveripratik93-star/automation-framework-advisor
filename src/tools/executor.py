@@ -85,15 +85,25 @@ class ToolExecutor:
 
     # ── Dispatch ──────────────────────────────────────────────────────
 
+    # Tools whose output depends on the active scoring weights. Their cache
+    # entries must be keyed on the weight signature, otherwise changing the
+    # weights and re-asking the same query returns a stale ranking.
+    _WEIGHT_SENSITIVE_TOOLS = frozenset({"recommend_frameworks", "score_frameworks"})
+
     def execute(self, tool_name: str, arguments: dict[str, Any]) -> str:
-        from src.agents.cache import tool_cache, make_tool_cache_key
+        from src.agents.cache import tool_cache, make_tool_cache_key, weight_signature
 
         if tool_name not in self.tools:
             logger.error("ToolExecutor: unknown tool '%s'", tool_name)
             return f"Error: unknown tool '{tool_name}'"
 
-        # Check cache first
-        cache_key = make_tool_cache_key(tool_name, arguments)
+        # Check cache first — fold the weight signature in for weight-sensitive
+        # tools so a weight change invalidates their cached ranking.
+        weight_sig = (
+            weight_signature(self.weight_profile)
+            if tool_name in self._WEIGHT_SENSITIVE_TOOLS else ""
+        )
+        cache_key = make_tool_cache_key(tool_name, arguments, weight_sig)
         cached = tool_cache.get(cache_key)
         if cached is not None:
             logger.info("ToolExecutor: CACHE HIT '%s' → %d chars", tool_name, len(cached))
@@ -434,12 +444,20 @@ class ToolExecutor:
             ("C7_license_cost",            "Cost"),
         ]
         active = [(cid, lbl) for cid, lbl in _criteria if self.weight_profile.get(cid) > 0]
+        # Fallback: a degenerate all-zero profile would leave `active` empty,
+        # producing a malformed table with no criterion columns. Show all
+        # criteria in that case so the ranking is still readable.
+        if not active:
+            active = _criteria
+
+        # Order criteria by weight (descending) so the highest-priority
+        # criterion appears first everywhere it is shown — the column order,
+        # the "You prioritized" header and the per-criterion cells all follow
+        # the user's weighting rather than the fixed C1→C7 definition order.
+        active = sorted(active, key=lambda pair: -self.weight_profile.get(pair[0]))
 
         # ── Weight priority header ────────────────────────────────────
-        sorted_weights = sorted(
-            [(lbl, self.weight_profile.get(cid)) for cid, lbl in active],
-            key=lambda x: -x[1],
-        )
+        sorted_weights = [(lbl, self.weight_profile.get(cid)) for cid, lbl in active]
         priority_str = " > ".join(f"{lbl}({w:.0%})" for lbl, w in sorted_weights)
         lines = [
             f"## Recommended Frameworks for: {use_case}\n",
@@ -1156,7 +1174,10 @@ class ToolExecutor:
             )
 
         lines.append("\n### Criteria Weights Applied")
-        for cid, w in self.weight_profile.weights.items():
+        # Highest-weighted criterion first, so the priority order is explicit.
+        for cid, w in sorted(
+            self.weight_profile.weights.items(), key=lambda kv: -kv[1]
+        ):
             if w > 0:
                 lines.append(f"- {_labels.get(cid, cid)}: **{w:.0%}**")
 

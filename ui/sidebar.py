@@ -65,7 +65,7 @@ def _advisor_sidebar() -> None:
         st.session_state.case_study_context = ""
         st.session_state.case_study_urls = []
         st.session_state.weight_profile = WeightProfile.default()
-        st.session_state["_weight_preset_value"] = "balanced"
+        st.session_state["_preset_box_pending"] = "balanced"
         for _cid in list(CRITERIA_IDS) + list(CLOUD_CRITERIA_IDS):
             st.session_state[f"w_{_cid}"] = float(round(PRESETS["balanced"].get(_cid, 0.0), 2))
         st.rerun()
@@ -85,47 +85,68 @@ def _advisor_sidebar() -> None:
             for cid in normalised:
                 st.session_state[f"w_{cid}"] = normalised[cid]
             st.session_state.weight_profile = WeightProfile(weights=normalised, profile_name="custom")
-            st.session_state["_weight_preset_value"] = "custom"
+            st.session_state["weight_preset_box"] = "custom"
             st.session_state["_w_feedback"] = "✓ Auto-balanced & applied"
 
-        # Shadow key drives the selectbox index — never written after widget instantiation
-        if "_weight_preset_value" not in st.session_state:
+        # ── Preset selector ───────────────────────────────────────────
+        # The selectbox is driven entirely by its OWN widget key
+        # ("weight_preset_box") — no shadow key. This avoids the reset bug:
+        # previously a separate "_weight_preset_value" tracked intent while the
+        # widget kept a stale value (e.g. "balanced"). When Apply set the intent
+        # to "custom", the widget still read "balanced", so on the NEXT rerun the
+        # code saw them differ and re-applied the "balanced" PRESET — wiping the
+        # user's applied custom weights right before the advisor read them.
+        #
+        # Preset changes are handled in an on_change CALLBACK so they only fire
+        # on genuine user interaction, never as a side effect of Apply/Auto-balance.
+        #
+        # A pending override lets Apply/Auto-balance force the box to "custom"
+        # on the next run, before the widget is instantiated (the only time a
+        # widget-keyed value may be written).
+        if "_preset_box_pending" in st.session_state:
+            st.session_state["weight_preset_box"] = st.session_state.pop("_preset_box_pending")
+
+        if "weight_preset_box" not in st.session_state:
             current = st.session_state.weight_profile.profile_name.replace("_adjusted", "")
-            st.session_state["_weight_preset_value"] = current if current in preset_options else "balanced"
+            st.session_state["weight_preset_box"] = current if current in preset_options else "balanced"
 
-        current_index = preset_options.index(
-            st.session_state["_weight_preset_value"]
-            if st.session_state["_weight_preset_value"] in preset_options else "balanced"
-        )
+        def _on_preset_change() -> None:
+            picked = st.session_state["weight_preset_box"]
+            if picked == "custom":
+                return  # "custom" is a status, not a preset to apply
+            st.session_state.weight_profile = WeightProfile.from_preset(picked)
+            for _cid in list(CRITERIA_IDS) + list(CLOUD_CRITERIA_IDS):
+                st.session_state[f"w_{_cid}"] = float(round(PRESETS[picked].get(_cid, 0.0), 2))
 
-        chosen = st.selectbox(
+        st.selectbox(
             "Preset", preset_options,
-            index=current_index,
             label_visibility="collapsed",
             key="weight_preset_box",
+            on_change=_on_preset_change,
         )
-        # Sync shadow key and apply preset when user picks one
-        if chosen != st.session_state["_weight_preset_value"]:
-            st.session_state["_weight_preset_value"] = chosen
-            if chosen != "custom":
-                st.session_state.weight_profile = WeightProfile.from_preset(chosen)
-                all_cids = list(CRITERIA_IDS) + list(CLOUD_CRITERIA_IDS)
-                for cid in all_cids:
-                    st.session_state[f"w_{cid}"] = float(
-                        round(PRESETS[chosen].get(cid, 0.0), 2)
-                    )
 
         # Active criteria = base + cloud if preset includes them
         active_cids = list(CRITERIA_IDS)
         if any(c in st.session_state.weight_profile.weights for c in CLOUD_CRITERIA_IDS):
             active_cids += list(CLOUD_CRITERIA_IDS)
 
-        # Initialise widget keys on first render
+        # Re-seed widget keys from the canonical weight_profile whenever the
+        # number-input widgets are (re)instantiated.
+        #
+        # The number_input widgets below live inside a collapsed expander. On a
+        # rerun where the expander is collapsed (e.g. after submitting a new
+        # advisor query) Streamlit does not render them and garbage-collects
+        # their `w_{cid}` session-state entries. A one-time init guard would
+        # then leave the widgets showing 0.00 the next time the expander opens,
+        # making the applied weights look "reset". The weight_profile is the
+        # single source of truth, so mirror it into the widget keys every run.
+        # We only write when the value is missing or actually differs, which
+        # avoids clobbering an in-progress edit within the same open session.
         for cid in active_cids:
-            if f"w_{cid}" not in st.session_state:
-                st.session_state[f"w_{cid}"] = float(
-                    round(st.session_state.weight_profile.weights.get(cid, 0.0), 2)
-                )
+            desired = float(round(st.session_state.weight_profile.weights.get(cid, 0.0), 2))
+            key = f"w_{cid}"
+            if key not in st.session_state:
+                st.session_state[key] = desired
 
         for cid in active_cids:
             st.number_input(
@@ -161,8 +182,11 @@ def _advisor_sidebar() -> None:
 
         if apply_clicked:
             st.session_state.weight_profile = WeightProfile(weights=dict(raw), profile_name="custom")
-            st.session_state["_weight_preset_value"] = "custom"
             st.session_state["_w_feedback"] = "✓ Weights applied"
+            # Force the preset box to "custom" on the next run (before the
+            # widget is instantiated) so it reflects the applied custom weights.
+            st.session_state["_preset_box_pending"] = "custom"
+            st.rerun()
 
         if auto_clicked and total > 0:
             normalised = {k: round(v / total, 4) for k, v in raw.items()}

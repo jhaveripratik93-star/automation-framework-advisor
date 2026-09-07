@@ -1,0 +1,74 @@
+framework_name: Pact Js
+vendor: Community
+license: NOASSERTION
+website: https://pact.io
+first_release: ''
+latest_version: 1.0.0
+category: test_automation
+languages_supported:
+- TypeScript
+architecture_fit:
+  web_spa: false
+  web_mpa: false
+  native_mobile: false
+  hybrid_mobile: false
+  desktop: false
+  api_testing: true
+  microservices: true
+capabilities:
+  shadow_dom: false
+  iframe_cross_origin: false
+  multi_tab: false
+  multi_domain: false
+  file_upload_download: false
+  network_interception: false
+  parallel_execution: via test runner
+  auto_wait: false
+  test_recorder: false
+  code_generation: false
+cloud_providers: {}
+testing_capabilities: {}
+cicd_integration:
+  docker_support: true
+  github_actions: true
+  jenkins: true
+  gitlab_ci: true
+  azure_devops: false
+  pre_built_docker_images: community
+cloud_grids:
+  standalone: true
+performance:
+  avg_test_execution_speed: fast
+  resource_footprint: medium
+  startup_time_ms: 1000
+  parallel_overhead: medium
+maintainability:
+  page_object_support: false
+  fixture_support: via test framework (Jest/Mocha)
+  reusable_components: true
+  built_in_reporting: basic (console + plugins)
+  trace_viewer: false
+  debugging_tools: basic
+cloud_migration_metrics: {}
+pip_packages: {}
+install_commands: []
+test_command: npx @pact-foundation/pact-js-prettier-config run
+report_paths:
+- test-results/
+limitations:
+- TypeScript only — no support for other languages
+- No web browser testing support
+- Cannot test native mobile applications
+- Smaller community — fewer plugins and community resources
+versions:
+- version: 1.0.0
+  release_date: unknown
+  min_runtime: Node 16+
+  notable_features:
+  - Latest stable release
+  - See official changelog for details
+  capabilities_added: []
+  capabilities_deprecated: []
+  breaking_changes: []
+  known_limitations:
+  - Version details auto-generated — verify against official docs

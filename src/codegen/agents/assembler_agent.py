@@ -73,13 +73,27 @@ def run_assembler(state: CodeGenState, llm_client: Any) -> dict:
         )
         assembled = _clean(result.get("content", ""))
         if assembled and len(assembled) > len(code) * 0.5:
+            assembled = _enforce_single_robot_test(assembled, framework, tc)
             logger.info("Assembler: assembled %d chars for '%s'", len(assembled), tc.get("title", ""))
             return {"assembled_code": assembled}
         # LLM returned something too short — use original
-        return {"assembled_code": code}
+        return {"assembled_code": _enforce_single_robot_test(code, framework, tc)}
     except Exception as exc:
         logger.warning("Assembler: LLM call failed (%s) — using raw generated code", exc)
-        return {"assembled_code": code}
+        return {"assembled_code": _enforce_single_robot_test(code, framework, tc)}
+
+
+def _enforce_single_robot_test(code: str, framework: str, tc: dict) -> str:
+    """Collapse multiple Robot *** Test Cases *** entries into one.
+
+    One manual test case must produce exactly one automated test case. This is
+    a deterministic guard in case the LLM re-splits the scenario during
+    assembly. No-op for non-Robot frameworks and for already-single tests.
+    """
+    if framework != "robot_framework":
+        return code
+    from src.codegen.robot_postprocess import collapse_to_single_test_case
+    return collapse_to_single_test_case(code, test_name=tc.get("title") or None)
 
 
 def _looks_complete(code: str, framework: str) -> bool:

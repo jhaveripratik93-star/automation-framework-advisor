@@ -1,7 +1,7 @@
 {
   "nav_goto": {
-    "uses": 57,
-    "successes": 57,
+    "uses": 92,
+    "successes": 92,
     "history": [
       {
         "timestamp": "2026-08-28T10:03:47.311571",
@@ -230,12 +230,152 @@
       {
         "timestamp": "2026-09-01T14:43:38.481458",
         "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:03.247769",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:04.909263",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:06.708385",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:08.319640",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:09.803547",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:29.949411",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:31.981917",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:33.989199",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:36.000863",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:37.680397",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.965396",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:10.718133",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:12.277994",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:13.851882",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:15.532136",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:17.135844",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:23.003068",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:24.685830",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:26.642320",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:28.344191",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:30.064998",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:31.394057",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:33.093587",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:35.035567",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:36.442701",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:38.110987",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.368510",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.965880",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.111966",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:23.667240",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:25.620593",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:27.430950",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:28.945050",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:30.492250",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.365693",
+        "success": true
       }
     ]
   },
   "fill_field": {
-    "uses": 148,
-    "successes": 148,
+    "uses": 233,
+    "successes": 233,
     "history": [
       {
         "timestamp": "2026-08-28T10:03:47.316421",
@@ -828,12 +968,352 @@
       {
         "timestamp": "2026-09-01T14:43:38.509589",
         "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:03.254991",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:03.260862",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:04.915398",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:04.920926",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:06.713938",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:09.810765",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:09.817312",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:09.825145",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:09.831920",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:09.837690",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:29.974933",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:29.986279",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:31.988066",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:31.994581",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:33.998512",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:37.696565",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:37.708248",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:37.717993",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:37.726303",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:37.734443",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.862829",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.940947",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:02.000532",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:02.008180",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:02.029148",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:10.724261",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:10.730985",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:12.285418",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:12.292115",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:13.859461",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:17.147472",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:17.155175",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:17.163374",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:17.170714",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:17.212757",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:23.012898",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:23.020527",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:24.692447",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:24.699741",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:26.648124",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:30.071218",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:30.079881",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:30.089755",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:30.097058",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:30.104222",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:31.401497",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:31.420487",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:33.102387",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:33.110496",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:35.044880",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:38.116957",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:38.125581",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:38.132860",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:38.141005",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:38.148859",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.236490",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.329982",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.428951",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.461604",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.486655",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.843021",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.939348",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:48.002866",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:48.010359",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:48.031845",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:20.981423",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.086810",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.151193",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.158270",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.178287",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:23.694145",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:23.701365",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:25.626178",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:25.632295",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:27.437798",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:30.500180",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:30.506855",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:30.517071",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:30.534944",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:30.541643",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.227399",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.331934",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.413768",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.419987",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.437308",
+        "success": true
       }
     ]
   },
   "click_element": {
-    "uses": 81,
-    "successes": 81,
+    "uses": 126,
+    "successes": 126,
     "history": [
       {
         "timestamp": "2026-08-28T10:03:47.321873",
@@ -1158,12 +1638,192 @@
       {
         "timestamp": "2026-09-01T14:43:38.515334",
         "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:03.266144",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:04.928134",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:06.719019",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:08.334653",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:09.843405",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:29.994480",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:32.002536",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:34.004503",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:36.015384",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:37.741882",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.947007",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.976954",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:02.036127",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:10.738195",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:12.300977",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:13.874588",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:15.545228",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:17.219928",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:23.027450",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:24.708089",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:26.653717",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:28.355726",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:30.114623",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:31.428433",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:33.118715",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:35.052237",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:36.456676",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:38.155695",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.343424",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.395075",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.499954",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.948427",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.979107",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:48.037424",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.092955",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.124484",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.184918",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:23.724208",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:25.642862",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:27.448462",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:28.957278",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:30.548317",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.338049",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.379241",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.443171",
+        "success": true
       }
     ]
   },
   "assert_element_text": {
-    "uses": 60,
-    "successes": 60,
+    "uses": 94,
+    "successes": 94,
     "history": [
       {
         "timestamp": "2026-08-28T10:03:47.326860",
@@ -1404,12 +2064,148 @@
       {
         "timestamp": "2026-09-01T14:43:38.526655",
         "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:03.273737",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:06.731312",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:08.348276",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:09.855213",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:30.003431",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:34.016966",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:36.034655",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:37.784116",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.958716",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.987472",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:10.758711",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:13.898676",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:15.563252",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:17.234117",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:23.033339",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:26.674389",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:28.370134",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:30.127651",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:31.435823",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:35.070451",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:36.470928",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:38.170372",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.360093",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.411808",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.960379",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.991124",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.106080",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.137842",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:23.734635",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:27.463824",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:28.973856",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:30.561472",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.355283",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.392740",
+        "success": true
       }
     ]
   },
   "assert_visible": {
-    "uses": 23,
-    "successes": 23,
+    "uses": 34,
+    "successes": 34,
     "history": [
       {
         "timestamp": "2026-08-28T10:03:47.329712",
@@ -1502,12 +2298,56 @@
       {
         "timestamp": "2026-09-01T14:43:29.806525",
         "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:04.933848",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:32.009874",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.923127",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:12.308356",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:24.727268",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:33.125849",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.304162",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.920269",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.063782",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:25.649957",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.306651",
+        "success": true
       }
     ]
   },
   "assert_text_contains": {
-    "uses": 42,
-    "successes": 42,
+    "uses": 64,
+    "successes": 64,
     "history": [
       {
         "timestamp": "2026-08-28T10:03:47.351114",
@@ -1676,12 +2516,100 @@
       {
         "timestamp": "2026-09-01T14:43:38.520835",
         "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:04.938972",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:09.849228",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:32.015486",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:37.757575",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.928594",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:02.043368",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:12.315401",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:17.226924",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:24.734976",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:30.121345",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:33.131853",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:38.163183",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.313713",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.508176",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.927064",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:48.044345",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.071652",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.191074",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:25.660258",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:30.555012",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.316765",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.449547",
+        "success": true
       }
     ]
   },
   "wait_element": {
-    "uses": 42,
-    "successes": 42,
+    "uses": 64,
+    "successes": 64,
     "history": [
       {
         "timestamp": "2026-08-28T10:03:47.366350",
@@ -1850,12 +2778,100 @@
       {
         "timestamp": "2026-09-01T14:43:33.440533",
         "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:06.726097",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:08.342029",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:34.010227",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:36.026591",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.953051",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.982340",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:13.891551",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:15.555825",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:26.659483",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:28.361690",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:35.061286",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:36.463899",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.351485",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.403696",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.954102",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.985289",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.099666",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.130926",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:27.456716",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:28.966013",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.347533",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.385555",
+        "success": true
       }
     ]
   },
   "select_option": {
-    "uses": 21,
-    "successes": 21,
+    "uses": 32,
+    "successes": 32,
     "history": [
       {
         "timestamp": "2026-08-28T10:03:47.376652",
@@ -1940,12 +2956,56 @@
       {
         "timestamp": "2026-09-01T14:43:33.426113",
         "success": true
+      },
+      {
+        "timestamp": "2026-09-04T14:53:08.328022",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-04T15:00:36.007941",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.970923",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:46:15.538449",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:49:28.350190",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:51:36.449440",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.384121",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.971577",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.118614",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:36:28.951887",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.372604",
+        "success": true
       }
     ]
   },
   "learned_3024bbde": {
-    "uses": 27,
-    "successes": 27,
+    "uses": 37,
+    "successes": 37,
     "history": [
       {
         "timestamp": "2026-08-28T10:12:28.968529",
@@ -2054,12 +3114,52 @@
       {
         "timestamp": "2026-09-01T14:39:05.474850",
         "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.847163",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.897812",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.226563",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.270986",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.828274",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.889996",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:20.967974",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.031929",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.214310",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.279695",
+        "success": true
       }
     ]
   },
   "learned_441e5d4b": {
-    "uses": 31,
-    "successes": 31,
+    "uses": 41,
+    "successes": 41,
     "history": [
       {
         "timestamp": "2026-08-28T10:12:28.972381",
@@ -2184,12 +3284,52 @@
       {
         "timestamp": "2026-09-01T14:39:05.691510",
         "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.903127",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:02.014710",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.280896",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.469176",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.896724",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:48.018198",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.042377",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.164683",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.287886",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.425409",
+        "success": true
       }
     ]
   },
   "learned_468e5f4e": {
-    "uses": 39,
-    "successes": 39,
+    "uses": 54,
+    "successes": 54,
     "history": [
       {
         "timestamp": "2026-08-28T10:18:18.240467",
@@ -2346,12 +3486,72 @@
       {
         "timestamp": "2026-09-01T14:39:05.698591",
         "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.868521",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.910976",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:02.021167",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.246670",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.288646",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.477690",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.864338",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.903009",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:48.025381",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:20.989259",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.049203",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.171705",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.237933",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.294817",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.431376",
+        "success": true
       }
     ]
   },
   "learned_b027af33": {
-    "uses": 25,
-    "successes": 25,
+    "uses": 35,
+    "successes": 35,
     "history": [
       {
         "timestamp": "2026-08-28T10:18:26.075676",
@@ -2452,12 +3652,52 @@
       {
         "timestamp": "2026-09-01T14:39:05.496013",
         "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.886485",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.916827",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.254749",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.296255",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.870842",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.912962",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:20.996767",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.056117",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.263681",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.300539",
+        "success": true
       }
     ]
   },
   "learned_3a95b4d0": {
-    "uses": 13,
-    "successes": 13,
+    "uses": 18,
+    "successes": 18,
     "history": [
       {
         "timestamp": "2026-08-28T10:18:29.593357",
@@ -2510,12 +3750,32 @@
       {
         "timestamp": "2026-09-01T14:39:05.537354",
         "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.934486",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.321804",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.933805",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.079244",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.323016",
+        "success": true
       }
     ]
   },
   "learned_33650c37": {
-    "uses": 13,
-    "successes": 13,
+    "uses": 18,
+    "successes": 18,
     "history": [
       {
         "timestamp": "2026-08-28T10:18:40.346809",
@@ -2568,12 +3828,32 @@
       {
         "timestamp": "2026-09-01T14:39:05.648325",
         "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.993671",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.420568",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.997300",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.144288",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.406600",
+        "success": true
       }
     ]
   },
   "learned_012280ca": {
-    "uses": 25,
-    "successes": 25,
+    "uses": 35,
+    "successes": 35,
     "history": [
       {
         "timestamp": "2026-08-28T10:18:46.506780",
@@ -2673,6 +3953,46 @@
       },
       {
         "timestamp": "2026-09-01T14:39:05.755414",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:01.892035",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T15:43:02.049765",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.263141",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:00:25.516388",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:47.883872",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:02:48.049891",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.003751",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:34:21.197880",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.270156",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-07T16:37:08.455808",
         "success": true
       }
     ]

@@ -17,7 +17,13 @@ Conditional edge after `reflect`:
   approved=False AND reflection_count < MAX → back to evaluate (with critique)
   otherwise                                 → format
 """
-from __future__ import annotations
+# NOTE: intentionally NOT using `from __future__ import annotations`.
+# LangGraph resolves the PipelineState TypedDict annotations via
+# typing.get_type_hints() at StateGraph construction time. On Python 3.14,
+# stringized (deferred) annotations can fail forward-ref evaluation with
+# "NameError: name 'Any' is not defined", which crashes build_pipeline and
+# silently drops the whole app into the no-LLM fallback path. Evaluating the
+# annotations eagerly here keeps them as concrete type objects.
 
 import logging
 from typing import Any, TypedDict
