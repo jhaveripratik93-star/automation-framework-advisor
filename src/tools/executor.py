@@ -866,7 +866,38 @@ class ToolExecutor:
         "device_farm_support": "Use `BrowserStack` or `Sauce Labs` REST API",
     }
 
-    def _build_gap_notes(self, from_fw: Any, to_fw: Any, to_name: str) -> tuple[str, list[str]]:
+    # Language → ecosystem details (extension, test runner, package manifest)
+    _LANG_ECOSYSTEM: dict[str, dict[str, str]] = {
+        "python":     {"ext": ".py",   "runner": "pytest",      "manifest": "requirements.txt", "fence": "python"},
+        "javascript": {"ext": ".js",   "runner": "the framework CLI (e.g. k6 run, npx cypress run)", "manifest": "package.json", "fence": "javascript"},
+        "typescript": {"ext": ".ts",   "runner": "the framework CLI",  "manifest": "package.json", "fence": "typescript"},
+        "java":       {"ext": ".java", "runner": "Maven/Gradle (JUnit/TestNG)", "manifest": "pom.xml", "fence": "java"},
+        "c#":         {"ext": ".cs",   "runner": "dotnet test", "manifest": "packages.config", "fence": "csharp"},
+        "ruby":       {"ext": ".rb",   "runner": "rspec",       "manifest": "Gemfile", "fence": "ruby"},
+        "go":         {"ext": ".go",   "runner": "go test",     "manifest": "go.mod", "fence": "go"},
+    }
+
+    def _resolve_target_language(self, to_fw: Any, to_name: str) -> tuple[str, dict[str, str]]:
+        """Determine the target language + ecosystem from the framework's YAML.
+
+        Returns (language_lower, ecosystem_dict). Falls back to Python if unknown.
+        """
+        default = self._LANG_ECOSYSTEM["python"]
+        if not to_fw or not getattr(to_fw, "languages_supported", None):
+            return "python", default
+
+        langs = [str(l).lower() for l in to_fw.languages_supported]
+
+        # Pick the first language that has a known ecosystem mapping
+        for lang in langs:
+            for key in self._LANG_ECOSYSTEM:
+                if key in lang:  # handles "TypeScript (via bundler)" etc.
+                    return key, self._LANG_ECOSYSTEM[key]
+
+        return "python", default
+
+    def _build_gap_notes(self, from_fw: Any, to_fw: Any, to_name: str,
+                         target_lang: str = "python") -> tuple[str, list[str]]:
         """Return (gap_notes_for_prompt, sorted_gap_list)."""
         if not (from_fw and to_fw):
             return "", []
@@ -878,28 +909,79 @@ class ToolExecutor:
         note = (
             f"\n\nNote: {to_name} does NOT natively support: "
             + ", ".join(g.replace("_", " ") for g in gaps)
-            + ". For those capabilities, generate a standalone Python helper "
-            "script using `requests`/`httpx`/`subprocess` and show how to "
-            "call it from a pytest fixture."
+            + f". For those capabilities, generate a standalone helper "
+            f"in {target_lang} and show how to call it from the test setup."
         )
         return note, gaps
 
+    def _build_api_notes(self, to_fw: Any, to_name: str) -> str:
+        """Build notes about the target framework's current API and known
+        deprecations, derived from its YAML versions section, so the LLM
+        generates up-to-date syntax (not deprecated imports/APIs)."""
+        if not to_fw:
+            return ""
+
+        notes: list[str] = []
+        latest = getattr(to_fw, "latest_version", "")
+        if latest:
+            notes.append(f"Target the latest stable {to_name} version ({latest}) API.")
+
+        # Collect deprecated/removed APIs and their replacements from versions
+        versions = getattr(to_fw, "versions", []) or []
+        for ver in versions:
+            for dep in ver.get("capabilities_deprecated", []) or []:
+                name = dep.get("name", "")
+                repl = dep.get("replacement", "")
+                desc = dep.get("description", "")
+                if repl:
+                    notes.append(f"Do NOT use '{name}' ({desc}) — use '{repl}' instead.")
+            for bc in ver.get("breaking_changes", []) or []:
+                workaround = bc.get("workaround", "")
+                affected = bc.get("affected_apis", []) or []
+                if workaround and affected:
+                    notes.append(
+                        f"Avoid {', '.join(affected)} — {workaround}."
+                    )
+
+        if not notes:
+            return ""
+        # Cap to keep the prompt focused
+        return "\n\nIMPORTANT — use current, non-deprecated APIs:\n" + "\n".join(
+            f"- {n}" for n in notes[:8]
+        )
+
     def _build_system_prompt(self, from_name: str, to_name: str, gap_notes: str,
-                              shared_context: str = "") -> str:
+                              shared_context: str = "", target_lang: str = "python",
+                              to_fw: Any = None) -> str:
+        eco = self._LANG_ECOSYSTEM.get(target_lang, self._LANG_ECOSYSTEM["python"])
+        lang_title = target_lang.title() if target_lang != "c#" else "C#"
         ctx = f"\n\nShared project context (page objects / base classes):\n{shared_context[:2000]}" if shared_context else ""
+        api_notes = self._build_api_notes(to_fw, to_name)
+
+        # Framework-specific conversion guidance from YAML
+        conv_notes = ""
+        raw_conv = getattr(to_fw, "conversion_notes", "") if to_fw else ""
+        if raw_conv:
+            conv_notes = f"\n\n{to_name}-specific conversion guidance:\n{raw_conv.strip()}"
+
         return (
             f"You are an expert test automation engineer.{ctx}\n"
-            f"Convert the following test code from {from_name} to {to_name} using Python.\n"
+            f"Convert the following test code from {from_name} to {to_name}. "
+            f"{to_name} uses {lang_title}, so output {lang_title} code.\n"
             f"Rules:\n"
-            f"1. Output ONLY valid, runnable Python code using {to_name}'s Python API.\n"
+            f"1. Output ONLY valid, runnable {lang_title} code using {to_name}'s native API.\n"
             f"2. Preserve all test intent and assertions.\n"
-            f"3. Use pytest as the test runner.\n"
+            f"3. Use {eco['runner']} as the test runner/entry point.\n"
             f"4. Resolve any imports that reference other files in the shared context above.\n"
             f"5. For any capability {to_name} cannot handle natively, generate a "
-            f"   helper script in a `# === HELPER SCRIPT: <name> ===` section and show a "
-            f"   pytest fixture that calls it.\n"
-            f"6. End with a `# === CI/CD INTEGRATION ===` comment block showing "
-            f"   the GitHub Actions step to run the converted tests."
+            f"   helper in {lang_title} in a `// === HELPER: <name> ===` section (or "
+            f"   language-appropriate comment) and show how the test calls it.\n"
+            f"6. Use the CURRENT stable API — do NOT use deprecated or experimental "
+            f"   import paths that have since been renamed or graduated.\n"
+            f"7. End with a CI/CD INTEGRATION comment block showing the GitHub "
+            f"   Actions step to run the converted tests with {to_name}."
+            + conv_notes
+            + api_notes
             + gap_notes
         )
 
@@ -931,28 +1013,36 @@ class ToolExecutor:
             rows.append(f"| {label} | Not in {to_name} | {hint} |")
         return rows
 
-    def _generate_helper_scripts(self, gaps: list[str], to_name: str) -> dict[str, str]:
-        """Generate standalone helper .py files for each capability gap."""
+    def _generate_helper_scripts(self, gaps: list[str], to_name: str,
+                                 target_lang: str = "python") -> dict[str, str]:
+        """Generate standalone helper files for each capability gap in the target language."""
         if not getattr(self, "_llm", None) or not gaps:
             return {}
+        eco = self._LANG_ECOSYSTEM.get(target_lang, self._LANG_ECOSYSTEM["python"])
+        ext = eco["ext"]
+        fence = eco["fence"]
+        lang_title = target_lang.title() if target_lang != "c#" else "C#"
+
         helpers: dict[str, str] = {}
+        import re
         for gap in gaps:
             label = gap.replace("_", " ").title()
-            hint = self._HELPER_MAP.get(gap, "Custom Python script via subprocess")
+            hint = self._HELPER_MAP.get(gap, f"Custom {lang_title} helper")
             prompt = (
-                f"Generate a complete, runnable Python helper script that implements "
+                f"Generate a complete, runnable {lang_title} helper that implements "
                 f"'{label}' support for a {to_name} test suite.\n"
-                f"Approach: {hint}\n"
+                f"Approach (adapt to {lang_title}): {hint}\n"
                 f"Requirements:\n"
-                f"1. Provide a pytest fixture in conftest.py style.\n"
+                f"1. Provide it in a form the {to_name} tests can import/call.\n"
                 f"2. Include all imports and a usage example.\n"
-                f"3. Output ONLY the Python code block."
+                f"3. Output ONLY the {lang_title} code block."
             )
-            system = "You are an expert Python test automation engineer. Output only valid Python code."
+            system = f"You are an expert {lang_title} test automation engineer. Output only valid {lang_title} code."
             code = self._llm_convert(prompt, system)
-            import re
-            blocks = re.findall(r"```(?:python)?\n(.*?)```", code, re.DOTALL)
-            helpers[f"helpers/{gap}_helper.py"] = blocks[0].strip() if blocks else code
+            blocks = re.findall(rf"```(?:{fence})?\n(.*?)```", code, re.DOTALL)
+            if not blocks:
+                blocks = re.findall(r"```[a-zA-Z]*\n(.*?)```", code, re.DOTALL)
+            helpers[f"helpers/{gap}_helper{ext}"] = blocks[0].strip() if blocks else code
         return helpers
 
     def _convert_test_cases(
@@ -968,14 +1058,18 @@ class ToolExecutor:
         from_name = from_fw.framework_name if from_fw else from_framework
         to_name = to_fw.framework_name if to_fw else to_framework
 
-        gap_notes, gaps = self._build_gap_notes(from_fw, to_fw, to_name)
-        system = self._build_system_prompt(from_name, to_name, gap_notes)
+        target_lang, eco = self._resolve_target_language(to_fw, to_name)
+        lang_title = target_lang.title() if target_lang != "c#" else "C#"
+
+        gap_notes, gaps = self._build_gap_notes(from_fw, to_fw, to_name, target_lang)
+        system = self._build_system_prompt(from_name, to_name, gap_notes,
+                                           target_lang=target_lang, to_fw=to_fw)
         prompt = (
-            f"Convert this {from_name} test code to {to_name} (Python):\n\n"
+            f"Convert this {from_name} test code to {to_name} ({lang_title}):\n\n"
             f"```\n{source_code[:4000]}\n```"
         )
         converted = self._llm_convert(prompt, system)
-        lines = [f"## 🔄 Converted: {from_name} → {to_name} (Python)\n", converted]
+        lines = [f"## 🔄 Converted: {from_name} → {to_name} ({lang_title})\n", converted]
         lines += self._gap_table_lines(gaps, to_name)
         return "\n".join(lines)
 
@@ -1002,7 +1096,12 @@ class ToolExecutor:
         from_name = from_fw.framework_name if from_fw else from_framework
         to_name = to_fw.framework_name if to_fw else to_framework
 
-        gap_notes, gaps = self._build_gap_notes(from_fw, to_fw, to_name)
+        target_lang, eco = self._resolve_target_language(to_fw, to_name)
+        lang_title = target_lang.title() if target_lang != "c#" else "C#"
+        ext = eco["ext"]
+        fence = eco["fence"]
+
+        gap_notes, gaps = self._build_gap_notes(from_fw, to_fw, to_name, target_lang)
 
         # Build shared context: first 100 lines of each file (for cross-file imports)
         shared_context = "\n\n".join(
@@ -1010,7 +1109,8 @@ class ToolExecutor:
             for f in files
         )
 
-        system = self._build_system_prompt(from_name, to_name, gap_notes, shared_context)
+        system = self._build_system_prompt(from_name, to_name, gap_notes,
+                                           shared_context, target_lang, to_fw=to_fw)
 
         converted: dict[str, str] = {}
         import re
@@ -1025,38 +1125,54 @@ class ToolExecutor:
             for idx, chunk in enumerate(chunks):
                 chunk_note = f" (part {idx+1}/{len(chunks)})" if len(chunks) > 1 else ""
                 prompt = (
-                    f"Convert this {from_name} file '{fname}'{chunk_note} to {to_name} (Python):\n\n"
+                    f"Convert this {from_name} file '{fname}'{chunk_note} to {to_name} ({lang_title}):\n\n"
                     f"```\n{chunk}\n```\n"
-                    f"Output ONLY the Python code block, no explanation."
+                    f"Output ONLY the {lang_title} code block, no explanation."
                 )
                 raw = self._llm_convert(prompt, system)
-                blocks = re.findall(r"```(?:python)?\n(.*?)```", raw, re.DOTALL)
+                # Try language-specific fence first, then any fenced block
+                blocks = re.findall(rf"```(?:{fence})?\n(.*?)```", raw, re.DOTALL)
+                if not blocks:
+                    blocks = re.findall(r"```[a-zA-Z]*\n(.*?)```", raw, re.DOTALL)
                 file_parts.append(blocks[0].strip() if blocks else raw)
 
-            # Derive output filename: keep stem, force .py, put under tests/
-            stem = Path(fname).stem
-            out_name = f"tests/{stem}.py" if not stem.startswith("conftest") else "conftest.py"
+            # Derive output filename: preserve the source directory structure,
+            # use the target language's extension.
+            src_path = Path(fname)
+            stem = src_path.stem
+            if stem.startswith("conftest") and target_lang == "python":
+                out_name = "conftest.py"
+            else:
+                parent = src_path.parent.as_posix()
+                if parent in (".", "", "/"):
+                    out_name = f"tests/{stem}{ext}"
+                else:
+                    # Keep the relative folder path (e.g. e2e/login.spec.js -> e2e/login.js)
+                    out_name = f"{parent}/{stem}{ext}"
             converted[out_name] = "\n\n".join(file_parts)
 
-        # Generate helper scripts for every capability gap
-        helpers = self._generate_helper_scripts(gaps, to_name)
+        # Generate helper scripts for every capability gap (in the target language)
+        helpers = self._generate_helper_scripts(gaps, to_name, target_lang)
 
-        # Generate conftest.py that imports all helpers
-        conftest = self._generate_conftest(to_name, gaps, list(helpers.keys()))
+        # Generate conftest/setup + manifest (only meaningful for Python;
+        # for other langs these become language-appropriate stubs)
+        conftest = self._generate_conftest(to_name, gaps, list(helpers.keys())) if target_lang == "python" else ""
 
-        # Generate requirements.txt
-        requirements = self._generate_requirements(to_name, gaps)
+        # Generate dependency manifest
+        requirements = self._generate_requirements(to_name, gaps) if target_lang == "python" else ""
 
         # Markdown summary
         summary_lines = [
-            f"## 🔄 Multi-File Conversion: {from_name} → {to_name}",
+            f"## 🔄 Multi-File Conversion: {from_name} → {to_name} ({lang_title})",
             f"**{len(files)} source file(s) converted · {len(helpers)} helper script(s) generated**\n",
             "### 📁 Output Structure",
             "```",
             f"converted_{to_name.lower().replace(' ', '_')}/",
-            "├── conftest.py",
-            "├── requirements.txt",
         ]
+        if conftest:
+            summary_lines.append("├── conftest.py")
+        if requirements:
+            summary_lines.append("├── requirements.txt")
         for path in sorted(converted):
             summary_lines.append(f"├── {path}")
         for path in sorted(helpers):
