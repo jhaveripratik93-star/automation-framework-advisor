@@ -206,6 +206,7 @@ class FrameworkData(BaseModel):
     test_command: str = ""                  # default CLI test command
     report_paths: list[str] = []            # artifact paths for CI upload
     versions: list[dict[str, Any]] = []     # version history with breaking changes
+    conversion_notes: str = ""              # framework-specific guidance for code conversion
 
     @model_validator(mode="after")
     def warn_incomplete_fields(self) -> "FrameworkData":

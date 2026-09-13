@@ -123,6 +123,7 @@ def _single_file_mode(from_fw, to_fw, v, get_stack) -> None:
             st.session_state.studio_source_code  = source_code
             st.session_state.studio_gap_block    = gap_block
             st.session_state.studio_cicd_block   = cicd_block
+            st.session_state.studio_to_fw        = to_fw
             # Render immediately — no rerun needed
             _show_single_result()
 
@@ -136,14 +137,17 @@ def _show_single_result() -> None:
     runnable   = st.session_state.last_converted_code
     gap_block  = st.session_state.get("studio_gap_block", "")
     cicd_block = st.session_state.get("studio_cicd_block", "")
+    to_fw      = st.session_state.get("studio_to_fw", "")
 
-    with st.expander("🐍 Converted Test Code", expanded=True):
-        st.code(runnable, language="python")
+    code_lang, ext, mime = _target_lang_display(to_fw)
+
+    with st.expander("📄 Converted Test Code", expanded=True):
+        st.code(runnable, language=code_lang)
         st.download_button(
             label="⬇ Download converted file",
             data=runnable,
-            file_name="test_converted.py",
-            mime="text/x-python",
+            file_name=f"test_converted{ext}",
+            mime=mime,
             key="btn_dl_single",
         )
     if gap_block.strip():
@@ -154,10 +158,101 @@ def _show_single_result() -> None:
             st.markdown(cicd_block.strip())
 
 
+# Display metadata per language: (streamlit code lang, file extension, mime type)
+_LANG_DISPLAY = {
+    "python":     ("python",     ".py",   "text/x-python"),
+    "javascript": ("javascript", ".js",   "text/javascript"),
+    "typescript": ("typescript", ".ts",   "text/typescript"),
+    "java":       ("java",       ".java", "text/x-java"),
+    "c#":         ("csharp",     ".cs",   "text/plain"),
+    "ruby":       ("ruby",       ".rb",   "text/x-ruby"),
+    "go":         ("go",         ".go",   "text/x-go"),
+}
+
+
+def _target_lang_display(to_fw_name: str):
+    """Return (streamlit_lang, ext, mime) for the target framework's language."""
+    try:
+        from services.app_services import get_kb
+        from src.tools.executor import ToolExecutor
+        kb = get_kb()
+        ex = ToolExecutor(knowledge_base=kb)
+        fw = ex._resolve_framework(to_fw_name)
+        lang, _eco = ex._resolve_target_language(fw, to_fw_name)
+        return _LANG_DISPLAY.get(lang, _LANG_DISPLAY["python"])
+    except Exception:
+        return _LANG_DISPLAY["python"]
+
+
+# Source file extensions we convert (everything else in a ZIP is ignored)
+_SOURCE_EXTS = {".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".robot",
+                ".feature", ".yml", ".yaml", ".rb", ".cs"}
+# Directories to skip when extracting a ZIP repo
+_SKIP_DIRS = {"node_modules", ".git", "__pycache__", ".venv", "venv",
+              "dist", "build", ".idea", ".vscode", "target", "bin", "obj"}
+_MAX_ZIP_FILES = 60  # safety cap to avoid huge repos overwhelming the LLM
+
+
+def _extract_source_files(uploaded_files) -> list[dict]:
+    """Turn uploaded files (including ZIPs) into a flat list of
+    {"filename": relative_path, "content": text} dicts.
+
+    - ZIP archives are expanded, preserving relative paths.
+    - Non-source files, skip-dirs, and binary files are ignored.
+    - Capped at _MAX_ZIP_FILES to keep conversions manageable.
+    """
+    import io
+    import zipfile
+    from pathlib import PurePosixPath
+
+    payload: list[dict] = []
+
+    for uf in uploaded_files:
+        name = uf.name
+        if name.lower().endswith(".zip"):
+            try:
+                data = uf.read()
+                with zipfile.ZipFile(io.BytesIO(data)) as zf:
+                    for info in zf.infolist():
+                        if info.is_dir():
+                            continue
+                        path = info.filename
+                        parts = PurePosixPath(path).parts
+                        # Skip unwanted directories
+                        if any(seg in _SKIP_DIRS for seg in parts):
+                            continue
+                        ext = PurePosixPath(path).suffix.lower()
+                        if ext not in _SOURCE_EXTS:
+                            continue
+                        try:
+                            content = zf.read(info).decode("utf-8", errors="replace")
+                        except Exception:
+                            continue
+                        payload.append({"filename": path, "content": content})
+                        if len(payload) >= _MAX_ZIP_FILES:
+                            st.warning(
+                                f"Reached the {_MAX_ZIP_FILES}-file limit; "
+                                "remaining files in the ZIP were skipped."
+                            )
+                            return payload
+            except zipfile.BadZipFile:
+                st.warning(f"Could not read {name}: not a valid ZIP archive")
+        else:
+            try:
+                payload.append({
+                    "filename": name,
+                    "content": uf.read().decode("utf-8", errors="replace"),
+                })
+            except Exception as exc:
+                st.warning(f"Could not read {name}: {exc}")
+
+    return payload
+
+
 def _multi_file_mode(from_fw, to_fw, v, get_stack) -> None:
     uploaded_files = st.file_uploader(
-        "Upload test files",
-        type=["py", "js", "ts", "java", "robot", "feature", "yml", "yaml"],
+        "Upload test files, or a .zip of your whole framework/repo",
+        type=["py", "js", "ts", "java", "robot", "feature", "yml", "yaml", "zip"],
         accept_multiple_files=True,
         key=f"multi_convert_files_{v}",
     )
@@ -168,65 +263,61 @@ def _multi_file_mode(from_fw, to_fw, v, get_stack) -> None:
             <span class="empty-state-icon">📂</span>
             <div class="empty-state-title">Upload your test repository</div>
             <div class="empty-state-desc">
-                Upload multiple test files. Each is converted with shared cross-file context.
-                Helper scripts are auto-generated for capability gaps.
+                Upload individual test files, or a <b>.zip of your entire framework</b> to
+                preserve the folder structure. Each file is converted with shared cross-file
+                context, and helper scripts are auto-generated for capability gaps.
             </div>
             <span class="empty-state-hint">⬆ Use the file uploader above</span>
         </div>
         """, unsafe_allow_html=True)
 
+    # Expand any uploaded ZIPs into individual source files (preserving paths)
+    files_payload: list[dict] = []
     if uploaded_files:
-        st.caption(f"{len(uploaded_files)} file(s) selected: " +
-                   ", ".join(f.name for f in uploaded_files))
+        files_payload = _extract_source_files(uploaded_files)
+        st.caption(
+            f"{len(files_payload)} source file(s) ready: "
+            + ", ".join(f["filename"] for f in files_payload[:8])
+            + (" …" if len(files_payload) > 8 else "")
+        )
 
     do_multi = st.button(
-        f"🔄 Convert {len(uploaded_files) if uploaded_files else 0} file(s)",
+        f"🔄 Convert {len(files_payload)} file(s)",
         key="btn_multi_convert",
-        disabled=not uploaded_files,
+        disabled=not files_payload,
         type="primary",
     )
 
-    if do_multi and uploaded_files:
-        files_payload = []
-        for uf in uploaded_files:
-            try:
-                files_payload.append({
-                    "filename": uf.name,
-                    "content": uf.read().decode("utf-8", errors="replace"),
-                })
-            except Exception as exc:
-                st.warning(f"Could not read {uf.name}: {exc}")
+    if do_multi and files_payload:
+        loading_slot = st.empty()
+        with loading_slot.container():
+            render_thinking(f"Converting {len(files_payload)} file(s): {from_fw} → {to_fw}…")
 
-        if files_payload:
-            loading_slot = st.empty()
-            with loading_slot.container():
-                render_thinking(f"Converting {len(files_payload)} file(s): {from_fw} → {to_fw}…")
+        try:
+            from src.tools.executor import ToolExecutor
+            from services.app_services import get_kb, get_advisor_stack
+            kb = get_kb()
+            _client, _graph, _graphrag, _ = get_stack()
+            executor = ToolExecutor(knowledge_base=kb, knowledge_graph=_graph, graphrag_engine=_graphrag)
+            executor._llm = _client
 
-            try:
-                from src.tools.executor import ToolExecutor
-                from services.app_services import get_kb, get_advisor_stack
-                kb = get_kb()
-                _client, _graph, _graphrag, _ = get_stack()
-                executor = ToolExecutor(knowledge_base=kb, knowledge_graph=_graph, graphrag_engine=_graphrag)
-                executor._llm = _client
+            result = executor.convert_multi_file(
+                files=files_payload,
+                from_framework=from_fw,
+                to_framework=to_fw,
+            )
 
-                result = executor.convert_multi_file(
-                    files=files_payload,
-                    from_framework=from_fw,
-                    to_framework=to_fw,
-                )
+            loading_slot.empty()
+            st.session_state["multi_convert_result"] = result
+            st.session_state["multi_convert_from"] = from_fw
+            st.session_state["multi_convert_to"] = to_fw
+            # Render immediately
+            _show_multi_result(result, to_fw)
 
-                loading_slot.empty()
-                st.session_state["multi_convert_result"] = result
-                st.session_state["multi_convert_from"] = from_fw
-                st.session_state["multi_convert_to"] = to_fw
-                # Render immediately
-                _show_multi_result(result, to_fw)
-
-            except Exception as exc:
-                loading_slot.empty()
-                st.error(f"Multi-file conversion failed: {exc}")
-                logger.error("Multi-file conversion error: %s", exc)
+        except Exception as exc:
+            loading_slot.empty()
+            st.error(f"Multi-file conversion failed: {exc}")
+            logger.error("Multi-file conversion error: %s", exc)
         return
 
     result = st.session_state.get("multi_convert_result")
@@ -236,30 +327,35 @@ def _multi_file_mode(from_fw, to_fw, v, get_stack) -> None:
 
 
 def _show_multi_result(result: dict, to_label: str) -> None:
+    code_lang, ext, mime = _target_lang_display(to_label)
+
     st.markdown("---")
     st.markdown(result["summary"])
     st.markdown("### 📂 Converted Project Files")
     all_files: dict[str, str] = {}
 
-    with st.expander("📄 `conftest.py`", expanded=False):
-        st.code(result["conftest"], language="python")
-        st.download_button("⬇ conftest.py", result["conftest"],
-                           file_name="conftest.py", mime="text/x-python", key="dl_conftest")
-    all_files["conftest.py"] = result["conftest"]
+    # conftest.py / requirements.txt only exist for Python targets
+    if result.get("conftest"):
+        with st.expander("📄 `conftest.py`", expanded=False):
+            st.code(result["conftest"], language="python")
+            st.download_button("⬇ conftest.py", result["conftest"],
+                               file_name="conftest.py", mime="text/x-python", key="dl_conftest")
+        all_files["conftest.py"] = result["conftest"]
 
-    with st.expander("📄 `requirements.txt`", expanded=False):
-        st.code(result["requirements"], language="text")
-        st.download_button("⬇ requirements.txt", result["requirements"],
-                           file_name="requirements.txt", mime="text/plain", key="dl_requirements")
-    all_files["requirements.txt"] = result["requirements"]
+    if result.get("requirements"):
+        with st.expander("📄 `requirements.txt`", expanded=False):
+            st.code(result["requirements"], language="text")
+            st.download_button("⬇ requirements.txt", result["requirements"],
+                               file_name="requirements.txt", mime="text/plain", key="dl_requirements")
+        all_files["requirements.txt"] = result["requirements"]
 
     if result["converted"]:
         st.markdown("#### 🧪 Converted Test Files")
         for path, code in sorted(result["converted"].items()):
             with st.expander(f"📄 `{path}`", expanded=False):
-                st.code(code, language="python")
+                st.code(code, language=code_lang)
                 st.download_button(f"⬇ {Path(path).name}", code,
-                                   file_name=Path(path).name, mime="text/x-python",
+                                   file_name=Path(path).name, mime=mime,
                                    key=f"dl_{path.replace('/', '_')}")
             all_files[path] = code
 
@@ -268,9 +364,9 @@ def _show_multi_result(result: dict, to_label: str) -> None:
         st.caption(f"Auto-generated to cover capabilities {to_label} cannot handle natively.")
         for path, code in sorted(result["helpers"].items()):
             with st.expander(f"📄 `{path}`", expanded=False):
-                st.code(code, language="python")
+                st.code(code, language=code_lang)
                 st.download_button(f"⬇ {Path(path).name}", code,
-                                   file_name=Path(path).name, mime="text/x-python",
+                                   file_name=Path(path).name, mime=mime,
                                    key=f"dl_{path.replace('/', '_')}")
             all_files[path] = code
 
