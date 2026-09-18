@@ -17,6 +17,46 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Domain-specific context injected into the system prompt when the scenario
+# planner detects a non-UI test type. Prevents the LLM from generating
+# browser/Selenium/Playwright code for Kafka, DB, API, etc. tests.
+_DOMAIN_CONTEXT: dict[str, str] = {
+    "messaging": (
+        "This test involves a messaging/event-streaming system (e.g. Kafka, RabbitMQ, SQS, SNS).\n"
+        "Do NOT use browser automation APIs (page, driver, cy, etc.).\n"
+        "Use the appropriate messaging client library for the target language:\n"
+        "  Python: confluent-kafka or kafka-python (KafkaProducer / KafkaConsumer)\n"
+        "  Java:   org.apache.kafka.clients.producer.KafkaProducer / KafkaConsumer\n"
+        "  Robot:  use the Process library or a custom Kafka keyword library\n"
+        "Typical steps: create producer/consumer, connect to broker, produce message,\n"
+        "consume message, assert message content/offset/topic."
+    ),
+    "database": (
+        "This test involves a database (SQL or NoSQL).\n"
+        "Do NOT use browser automation APIs.\n"
+        "Use the appropriate DB client for the target language:\n"
+        "  Python: psycopg2 / pymysql / pymongo / sqlalchemy\n"
+        "  Java:   JDBC / Hibernate\n"
+        "  Robot:  DatabaseLibrary\n"
+        "Typical steps: connect to DB, execute query/insert/update/delete, assert result."
+    ),
+    "api": (
+        "This test involves HTTP API calls (REST, GraphQL, gRPC).\n"
+        "Do NOT use browser automation APIs.\n"
+        "Use the appropriate HTTP client for the target language:\n"
+        "  Python: requests or httpx\n"
+        "  Java:   REST Assured or OkHttp\n"
+        "  Robot:  RequestsLibrary\n"
+        "Typical steps: build request, send, assert status code and response body."
+    ),
+    "performance": (
+        "This test involves performance/load testing.\n"
+        "Do NOT use browser automation APIs.\n"
+        "Use the appropriate load testing library (k6 JS, Locust Python, JMeter).\n"
+        "Typical steps: define virtual users, ramp-up, send requests, assert SLAs."
+    ),
+}
+
 
 def run_step_generator(state: CodeGenState, llm_client: Any) -> dict:
     """LangGraph node: generate complete test code for the test case."""
@@ -30,6 +70,14 @@ def run_step_generator(state: CodeGenState, llm_client: Any) -> dict:
     fw_context = FRAMEWORK_CONTEXT.get(framework, "")
     if fw_context:
         system = f"{system}\n\nFramework reference:\n{fw_context}"
+
+    # Inject domain context so the LLM does not hallucinate UI/web code for
+    # non-UI test types (e.g. Kafka, database, messaging, performance).
+    domain = scenario.get("domain") or scenario.get("test_type", "e2e")
+    if domain not in ("e2e", "ui", ""):
+        domain_ctx = _DOMAIN_CONTEXT.get(domain)
+        if domain_ctx:
+            system = f"{system}\n\nDOMAIN CONTEXT — this is a {domain.upper()} test, NOT a UI/browser test:\n{domain_ctx}"
 
     # Ground the model in a canonical, correctly-formatted example so the
     # output matches the expected framework format.
@@ -67,6 +115,7 @@ def run_step_generator(state: CodeGenState, llm_client: Any) -> dict:
         test_id=test_id,
         category=tc.get("category", ""),
         test_type=scenario.get("test_type", "e2e"),
+        domain=scenario.get("domain") or scenario.get("test_type", "e2e"),
         auth_required=scenario.get("auth_required", False),
         pages_visited=", ".join(scenario.get("pages_visited", [])) or "not specified",
         complexity=scenario.get("complexity", "medium"),
@@ -97,10 +146,7 @@ def run_step_generator(state: CodeGenState, llm_client: Any) -> dict:
         return {"generated_code": code, "generation_error": ""}
     except Exception as exc:
         logger.error("StepGenerator: failed — %s", exc)
-        return {
-            "generated_code": f"// TODO: Generation failed — {exc}\n// Test: {tc.get('title', '')}",
-            "generation_error": str(exc),
-        }
+        raise  # let _tracked handle retry/fallback
 
 
 def _build_symbol_contract(arch: dict, test_id: str) -> str:

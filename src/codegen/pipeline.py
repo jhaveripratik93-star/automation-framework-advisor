@@ -159,8 +159,14 @@ def run_codegen_pipeline(
     framework: str,
     selector_map: dict[str, str],
     llm_client: Any,
+    suite_architecture: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Run the full pipeline for one test case. Returns the final state."""
+    """Run the full pipeline for one test case. Returns the final state.
+
+    If ``suite_architecture`` is provided it is injected into the initial
+    state so the SuiteArchitect node is effectively skipped (it will see a
+    non-empty architecture and return it unchanged).
+    """
     pipeline = build_codegen_pipeline(llm_client)
 
     initial_state: CodeGenState = {
@@ -169,7 +175,7 @@ def run_codegen_pipeline(
         "selector_map": selector_map,
         "scenario": {},
         "classified_steps": [],
-        "suite_architecture": {},
+        "suite_architecture": suite_architecture or {},
         "resolved_selectors": {},
         "generated_code": "",
         "generation_error": "",

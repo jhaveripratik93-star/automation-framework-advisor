@@ -33,6 +33,38 @@ _FILE_ICONS = {
 }
 
 
+def _normalise_tc(raw: dict, index: int) -> dict:
+    """Normalise alternate field names to the internal test case format.
+
+    Handles:
+      - test_case_title / title
+      - pre_condition / preconditions
+      - steps with missing step_number
+    """
+    steps_raw = raw.get("steps", [])
+    steps = []
+    for i, s in enumerate(steps_raw):
+        steps.append({
+            "step_number": s.get("step_number", i + 1),
+            "action": s.get("action", ""),
+            "test_data": s.get("test_data") or "",
+            "expected_result": s.get("expected_result") or "",
+        })
+    title = raw.get("title") or raw.get("test_case_title") or f"TC{index + 1:03d}"
+    preconditions = raw.get("preconditions") or raw.get("pre_condition") or []
+    return {
+        "id": raw.get("id") or f"TC{index + 1:03d}",
+        "title": title,
+        "description": raw.get("description", ""),
+        "category": raw.get("category", ""),
+        "priority": raw.get("priority", "medium"),
+        "preconditions": preconditions if isinstance(preconditions, list) else [preconditions],
+        "steps": steps,
+        "expected_results": raw.get("expected_results", []),
+        "tags": raw.get("tags", []),
+    }
+
+
 def render() -> None:
     st.markdown("""
     <div class="page-header">
@@ -164,12 +196,31 @@ def _upload_mode() -> None:
         if uploaded.name.endswith(".json"):
             try:
                 data = _json.loads(uploaded.read().decode("utf-8"))
-                if "test_cases" in data:
-                    st.session_state.codegen_test_cases = data["test_cases"]
-                    st.session_state.codegen_selector_map = data.get("selector_map", {})
-                    st.success(f"Loaded {len(data['test_cases'])} test cases from JSON")
+                # Accept three formats:
+                # 1. {"test_cases": [...]}  — standard format
+                # 2. [...]                  — raw array of test case objects
+                # 3. [{"test_case_title": ..., "steps": [...]}]  — alternate field names
+                if isinstance(data, dict) and "test_cases" in data:
+                    raw_tcs = data["test_cases"]
+                    selector_map = data.get("selector_map", {})
+                elif isinstance(data, list):
+                    raw_tcs = data
+                    selector_map = {}
                 else:
-                    st.error("JSON must contain a 'test_cases' array.")
+                    st.error("JSON must be an array or an object with a 'test_cases' array.")
+                    raw_tcs = None
+                if raw_tcs is not None:
+                    tcs = [
+                        _normalise_tc(tc, i) for i, tc in enumerate(raw_tcs)
+                        if tc.get("enabled", True)
+                    ]
+                    st.session_state.codegen_test_cases = tcs
+                    st.session_state.codegen_selector_map = selector_map
+                    skipped = len(raw_tcs) - len(tcs)
+                    msg = f"Loaded {len(tcs)} test cases from JSON"
+                    if skipped:
+                        msg += f" ({skipped} disabled skipped)"
+                    st.success(msg)
             except Exception as e:
                 st.error(f"Failed to parse JSON: {e}")
         elif uploaded.name.endswith((".xlsx", ".xls")):
@@ -288,21 +339,132 @@ def _generate(fw_label: str) -> None:
         include_comments=st.session_state.get("cg_comments", True),
     )
 
-    with st.spinner("🤖 Generating automated test code…"):
-        try:
-            client = get_groq_client()
-            selector_map = st.session_state.get("codegen_selector_map", {})
-            request = CodeGenRequest(
-                test_cases=manual_tests,
-                target_framework=framework,
-                options=options,
-                selector_map=selector_map,
+    progress = st.progress(0, text="Starting generation…")
+    status   = st.empty()
+    try:
+        client = get_groq_client()
+        selector_map = st.session_state.get("codegen_selector_map", {})
+        request = CodeGenRequest(
+            test_cases=manual_tests,
+            target_framework=framework,
+            options=options,
+            selector_map=selector_map,
+        )
+        total = len(manual_tests)
+
+        # Patch orchestrator to emit progress after each test case
+        orchestrator = CodeGenOrchestrator(llm_client=client)
+
+        completed = [0]
+        def _tracked(req):
+            from src.codegen.renderer import _FRAMEWORK_CONFIG
+            from src.codegen.agent_config import PIPELINE_SETTINGS
+            import time, re
+            from src.codegen.models import (
+                FileType, GeneratedFile, GenerationSource, GenerationStats,
+                GeneratedTestSuite, ValidationResult,
             )
-            orchestrator = CodeGenOrchestrator(llm_client=client)
-            st.session_state.codegen_result = orchestrator.generate(request)
-        except Exception as e:
-            st.error(f"Generation failed: {e}")
-            import traceback; st.code(traceback.format_exc())
+            fw   = req.target_framework
+            cfg  = _FRAMEWORK_CONFIG.get(fw.value, _FRAMEWORK_CONFIG["playwright_ts"])
+            files, _per_tc_states = [], []
+            stats = GenerationStats(total_steps=sum(len(tc.steps) for tc in req.test_cases))
+            start = time.time()
+
+            grouped = orchestrator._group_by_category(req.test_cases)
+            max_per_file = PIPELINE_SETTINGS.get("max_tests_per_file", 3)
+            grouped = orchestrator._split_groups(grouped, max_per_file)
+
+            for group_key, group_tcs in grouped.items():
+                # Convert ManualTestCase objects to dicts for batch generator
+                tc_dicts = [
+                    {
+                        "id": tc.id, "title": tc.title, "description": tc.description,
+                        "category": tc.category, "priority": tc.priority,
+                        "preconditions": tc.preconditions,
+                        "steps": [{"step_number": s.step_number, "action": s.action,
+                                   "test_data": s.test_data, "expected_result": s.expected_result}
+                                  for s in tc.steps],
+                        "expected_results": tc.expected_results, "tags": tc.tags,
+                    }
+                    for tc in group_tcs
+                ]
+
+                n = len(group_tcs)
+                status.markdown(f"⚙️ Generating **{group_key}** ({n} test case{'s' if n > 1 else ''})…")
+                pct = int(len(files) / max(len(grouped), 1) * 90) + 5
+                progress.progress(pct, text=f"Generating group: {group_key}")
+
+                try:
+                    codes = orchestrator._batch_generate(
+                        test_cases=tc_dicts,
+                        framework_value=fw.value,
+                        selector_map=dict(req.selector_map),
+                    )
+                    group_valid = all(bool(c.strip()) for c in codes)
+                except Exception as exc:
+                    logger.warning("Batch generate failed for group '%s': %s", group_key, exc)
+                    codes = [
+                        f"# Generation failed for: {tc.title}\n# Error: {exc}"
+                        for tc in group_tcs
+                    ]
+                    group_valid = False
+
+                for tc, code in zip(group_tcs, codes):
+                    completed[0] += 1
+                    _per_tc_states.append({
+                        "assembled_code": code, "generated_code": code,
+                        "validation_result": {"is_valid": group_valid, "undefined_symbols": []},
+                        "suite_architecture": {},
+                    })
+                    stats.llm_handled += len(tc.steps)
+
+                group_content = orchestrator._bundle_group(codes, fw.value)
+                group_slug = re.sub(r"[^a-z0-9]+", "_", group_key.lower()).strip("_")[:50] or "tests"
+                files.append(GeneratedFile(
+                    path=f"tests/{group_slug}{cfg['extension']}",
+                    content=group_content, file_type=FileType.TEST,
+                    source=GenerationSource.LLM, confidence=0.9 if group_valid else 0.6,
+                ))
+
+            # Generate common/resources file deterministically (no LLM)
+            common_file = orchestrator._generate_common_resource(
+                _per_tc_states, fw.value, cfg, req.test_cases
+            )
+            if common_file:
+                files.append(common_file)
+            config_content = orchestrator._renderer._render_config(fw)
+            if config_content:
+                files.append(GeneratedFile(path=cfg["config_file"], content=config_content,
+                    file_type=FileType.CONFIG, source=GenerationSource.TEMPLATE))
+            pkg_content = orchestrator._renderer._render_package_file(fw)
+            if pkg_content:
+                files.append(GeneratedFile(path=cfg["package_file"], content=pkg_content,
+                    file_type=FileType.PACKAGE, source=GenerationSource.TEMPLATE))
+            stats.time_elapsed_ms = int((time.time() - start) * 1000)
+            all_undefined = list(dict.fromkeys(
+                sym for s in _per_tc_states
+                for sym in s.get("validation_result", {}).get("undefined_symbols", [])
+            ))
+            return GeneratedTestSuite(
+                framework=fw.value, language=cfg["language"], files=files,
+                install_instructions=cfg["install_command"], run_command=cfg["run_command"],
+                selector_map=req.selector_map,
+                confidence_score=sum(f.confidence for f in files) / max(len(files), 1),
+                validation=ValidationResult(is_valid=len(all_undefined) == 0,
+                                            undefined_symbols=all_undefined),
+                stats=stats,
+            )
+
+        orchestrator._generate_with_agents = _tracked
+        progress.progress(5, text="Initialising pipeline…")
+        st.session_state.codegen_result = _tracked(request)
+        progress.progress(100, text="Done!")
+        status.empty()
+    except Exception as e:
+        st.error(f"Generation failed: {e}")
+        import traceback; st.code(traceback.format_exc())
+    finally:
+        progress.empty()
 
 
 def _show_result() -> None:

@@ -1,7 +1,7 @@
 {
   "nav_goto": {
-    "uses": 92,
-    "successes": 92,
+    "uses": 114,
+    "successes": 114,
     "history": [
       {
         "timestamp": "2026-08-28T10:03:47.311571",
@@ -369,6 +369,94 @@
       },
       {
         "timestamp": "2026-09-07T16:37:08.365693",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T15:39:53.433014",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T15:41:27.053604",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T15:45:15.838809",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T15:46:50.127309",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T15:51:20.687692",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T16:02:14.333441",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T16:04:31.904174",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T16:06:09.121908",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T16:07:19.652168",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T16:09:14.254230",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T16:10:52.347955",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T16:11:15.819916",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T16:12:02.095274",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T16:12:26.344530",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T16:13:09.885551",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T16:15:39.356797",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T16:16:02.300265",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T16:17:42.822803",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T16:21:58.570436",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T16:22:58.785675",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T16:24:55.302285",
+        "success": true
+      },
+      {
+        "timestamp": "2026-09-10T16:25:18.352313",
         "success": true
       }
     ]

@@ -59,26 +59,20 @@ def run_scenario_planner(state: CodeGenState, llm_client: Any) -> dict:
         project_context="none",
     )
 
-    scenario: dict = {}
-    try:
-        result = llm_client.chat(
-            messages=[{"role": "user", "content": prompt}],
-            system=SCENARIO_PLANNER_SYSTEM,
-        )
-        raw = result.get("content", "{}")
-        match = re.search(r"\{.*\}", raw, re.DOTALL)
-        if match:
-            scenario = json.loads(match.group())
-        logger.info(
-            "ScenarioPlanner: type=%s complexity=%s auth=%s pages=%s",
-            scenario.get("test_type", "?"),
-            scenario.get("complexity", "?"),
-            scenario.get("auth_required", "?"),
-            scenario.get("pages_visited", []),
-        )
-    except Exception as exc:
-        logger.warning("ScenarioPlanner: LLM call failed (%s) — using heuristics", exc)
-        scenario = _heuristic_scenario(tc)
+    # Pre-detect domain from step text so we can inject it into the prompt
+    # and also use it as a fallback if the LLM misidentifies the test type.
+    steps_text_lower = " ".join(s.get("action", "").lower() for s in tc.get("steps", []))
+    detected_domain = _detect_domain(steps_text_lower)
+
+    # Always use heuristics — saves one LLM call per TC and is accurate
+    # enough for well-structured manual test cases.
+    scenario = _heuristic_scenario(tc)
+    logger.info(
+        "ScenarioPlanner: heuristic — type=%s domain=%s complexity=%s",
+        scenario.get("test_type", "?"),
+        scenario.get("domain", "?"),
+        scenario.get("complexity", "?"),
+    )
 
     return {
         "scenario": scenario,
@@ -95,9 +89,43 @@ def _classify_all_steps(state: CodeGenState) -> list[dict]:
     ]
 
 
+# Domain keyword sets for non-UI test type detection
+_DOMAIN_KEYWORDS: dict[str, list[str]] = {
+    "messaging": [
+        "kafka", "rabbitmq", "activemq", "sqs", "sns", "pubsub", "nats", "pulsar",
+        "topic", "queue", "broker", "producer", "consumer", "publish", "subscribe",
+        "message", "event", "offset", "partition", "consume", "produce",
+    ],
+    "database": [
+        "database", "db", "sql", "mysql", "postgres", "postgresql", "oracle",
+        "mongodb", "redis", "cassandra", "dynamodb", "query", "insert", "update",
+        "delete", "select", "table", "record", "row", "schema",
+    ],
+    "api": [
+        "request", "api", "endpoint", "rest", "graphql", "grpc", "http",
+        "post", "get", "put", "patch", "response", "status code", "payload",
+        "header", "token", "oauth", "curl",
+    ],
+    "performance": [
+        "load", "stress", "performance", "throughput", "latency", "concurrent",
+        "virtual user", "ramp", "spike", "k6", "locust", "jmeter",
+    ],
+}
+
+
+def _detect_domain(steps_text: str) -> str:
+    """Detect the test domain from step text. Returns 'e2e' for UI tests."""
+    for domain, keywords in _DOMAIN_KEYWORDS.items():
+        if any(kw in steps_text for kw in keywords):
+            return domain
+    return "e2e"
+
+
 def _heuristic_scenario(tc: dict) -> dict:
     """Build a basic scenario without LLM when the call fails."""
     steps_text = " ".join(s.get("action", "").lower() for s in tc.get("steps", []))
+    domain = _detect_domain(steps_text)
+    test_type = "e2e" if domain == "e2e" else domain
     return {
         "auth_required": any(kw in steps_text for kw in ("login", "auth", "sign in", "token")),
         "pages_visited": [],
@@ -105,7 +133,8 @@ def _heuristic_scenario(tc: dict) -> dict:
         "api_calls": [],
         "fixture_hints": ["authenticated_user"] if "login" in steps_text else [],
         "page_object_hints": [],
-        "test_type": "api" if any(kw in steps_text for kw in ("request", "api", "endpoint")) else "e2e",
+        "test_type": test_type,
+        "domain": domain,
         "complexity": "complex" if len(tc.get("steps", [])) > 7 else "medium",
-        "notes": "",
+        "notes": f"Detected domain: {domain}",
     }

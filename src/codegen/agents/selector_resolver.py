@@ -33,6 +33,14 @@ def run_selector_resolver(state: CodeGenState, llm_client: Any) -> dict:
         logger.info("SelectorResolver: skipped (disabled in PIPELINE_SETTINGS)")
         return {"resolved_selectors": state.get("selector_map", {})}
 
+    # Skip selector resolution entirely for non-UI domains — git/CLI/API/DB
+    # tests have no HTML elements to resolve.
+    scenario = state.get("scenario", {})
+    domain = scenario.get("domain") or scenario.get("test_type", "e2e")
+    if domain not in ("e2e", "ui", ""):
+        logger.info("SelectorResolver: skipped (non-UI domain: %s)", domain)
+        return {"resolved_selectors": state.get("selector_map", {})}
+
     # User-provided selectors always take priority
     known = {k.lower(): v for k, v in state.get("selector_map", {}).items()}
     elements = _extract_element_names(state)
