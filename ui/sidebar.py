@@ -410,27 +410,128 @@ def _coverage_sidebar() -> None:
 
 
 def _codegen_sidebar() -> None:
-    st.markdown('<div class="sidebar-section">🤖 Test Generator</div>', unsafe_allow_html=True)
+    from _pages.code_generator import _extract_elements_from_steps
+
     tcs = st.session_state.get("codegen_test_cases", [])
+
+    # ── Test case summary ─────────────────────────────────────────────
+    st.markdown('<div class="sidebar-section">🤖 Test Cases</div>', unsafe_allow_html=True)
     if tcs:
         cats = list({tc.get("category", "") for tc in tcs if tc.get("category")})
-        st.markdown(f"**Test cases:** {len(tcs)}")
+        st.markdown(f"**{len(tcs)} test case(s) loaded**")
         if cats:
-            st.markdown(f"**Categories:** {', '.join(cats[:5])}")
-        priorities = {tc.get("priority", "") for tc in tcs}
-        st.markdown(f"**Priorities:** {', '.join(sorted(priorities))}")
-        st.markdown("---")
-        if st.button("🗑 Clear test cases", key="sb_clear_codegen"):
+            st.caption("Categories: " + ", ".join(cats[:5]))
+        if st.button("🗑 Clear test cases", key="sb_clear_codegen", use_container_width=True):
             st.session_state.codegen_test_cases = []
             st.session_state.pop("codegen_result", None)
+            st.session_state.codegen_selector_map = {}
             st.rerun()
     else:
         st.caption("No test cases added yet.")
+
     st.markdown("---")
-    st.markdown('<div class="sidebar-section">Quick Tips</div>', unsafe_allow_html=True)
-    st.caption("• Add steps as: `action | test_data | expected`")
-    st.caption("• Add a Selector Map to improve accuracy")
-    st.caption("• Enable Page Objects for maintainable code")
+
+    # ── Selector Map ──────────────────────────────────────────────────
+    if "codegen_selector_map" not in st.session_state:
+        st.session_state.codegen_selector_map = {}
+
+    elements = _extract_elements_from_steps(tcs)
+    st.markdown(
+        f'<div class="sidebar-section">🎯 Selector Map '
+        f'<span style="font-weight:400;font-size:0.7rem;">({len(elements)} detected)</span></div>',
+        unsafe_allow_html=True,
+    )
+
+    if not tcs:
+        st.caption("Add test cases first — elements from steps will appear here.")
+    else:
+        saved = st.session_state.codegen_selector_map
+        updated: dict[str, str] = {}
+
+        if elements:
+            st.caption("Map elements to CSS/XPath selectors. Leave blank to let the LLM infer.")
+            for elem in elements:
+                key = elem.lower()
+                val = st.text_input(
+                    label=elem,
+                    value=saved.get(key, ""),
+                    placeholder="#id or [data-testid='x']",
+                    key=f"sel_{key.replace(' ', '_')}",
+                )
+                if val.strip():
+                    updated[key] = val.strip()
+        else:
+            st.caption("No elements could be extracted from the current steps.")
+
+        extra_raw = st.text_area(
+            "Extra selectors (element = selector)",
+            height=70,
+            placeholder="submit button = button[type='submit']",
+            key="codegen_selectors_extra",
+        )
+        for line in extra_raw.strip().split("\n"):
+            if "=" in line:
+                k, _, v = line.partition("=")
+                k, v = k.strip().lower(), v.strip()
+                if k and v:
+                    updated[k] = v
+
+        if st.button("💾 Save Selectors", key="btn_apply_selectors", use_container_width=True):
+            st.session_state.codegen_selector_map = updated
+            filled = sum(1 for v in updated.values() if v)
+            st.success(f"✓ {filled} selector(s) saved" if filled else "⚠️ No selectors filled in")
+
+        if saved:
+            st.caption(
+                f"🎯 {len(saved)} active: "
+                + ", ".join(f"`{k}`" for k in list(saved)[:3])
+                + (f" +{len(saved)-3} more" if len(saved) > 3 else "")
+            )
+
+    st.markdown("---")
+
+    # ── Project Repository Context ────────────────────────────────────
+    if "codegen_project_context" not in st.session_state:
+        st.session_state.codegen_project_context = None
+
+    st.markdown('<div class="sidebar-section">🔍 Project Context</div>', unsafe_allow_html=True)
+    st.caption("Scan your repo so the generator uses real fixtures, base URLs and env vars.")
+
+    repo_source = st.text_input(
+        "Folder path or GitHub URL",
+        placeholder="C:/projects/my-app",
+        key="codegen_repo_source",
+    )
+    col_scan, col_clear = st.columns([2, 1])
+    with col_scan:
+        if st.button("🔎 Scan", key="btn_scan_repo", use_container_width=True):
+            if not repo_source.strip():
+                st.warning("Enter a path or URL first.")
+            else:
+                with st.spinner("Scanning…"):
+                    try:
+                        from src.codegen.repo_scanner import scan
+                        ctx = scan(repo_source.strip())
+                        st.session_state.codegen_project_context = ctx
+                        st.success(
+                            f"✅ **{ctx['project_name']}** — "
+                            f"{len(ctx['dependencies'])} deps, "
+                            f"{len(ctx['existing_fixtures'])} fixtures"
+                        )
+                    except Exception as e:
+                        st.error(f"Scan failed: {e}")
+    with col_clear:
+        if st.button("🗑", key="btn_clear_repo", use_container_width=True, help="Clear context"):
+            st.session_state.codegen_project_context = None
+            st.rerun()
+
+    ctx = st.session_state.codegen_project_context
+    if ctx:
+        c1, c2 = st.columns(2)
+        c1.metric("Deps", len(ctx["dependencies"]))
+        c2.metric("Fixtures", len(ctx["existing_fixtures"]))
+        with st.expander("📋 Context summary", expanded=False):
+            st.code(ctx["summary"], language="text")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────

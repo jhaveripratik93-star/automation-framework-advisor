@@ -93,10 +93,6 @@ def render() -> None:
     else:
         _upload_mode()
 
-    _selector_map_section()
-    _repo_context_section()
-    _options_section()
-
     # ── Step 2: Generate ──────────────────────────────────────────────
     st.markdown("---")
     test_cases = st.session_state.get("codegen_test_cases", [])
@@ -256,95 +252,27 @@ def _upload_mode() -> None:
         ''', language="json")
 
 
-def _selector_map_section() -> None:
-    st.markdown("---")
-    if "codegen_selector_map" not in st.session_state:
-        st.session_state.codegen_selector_map = {}
 
-    with st.expander("🎯 Selector Map (optional — improves accuracy)", expanded=False):
-        st.caption("Map element descriptions to CSS selectors. One per line: `element name = selector`")
-        selector_raw = st.text_area(
-            "Selectors", height=120,
-            placeholder="username field = [data-testid='username']\nlogin button = #login-btn",
-            key="codegen_selectors_raw",
-        )
-        if st.button("💾 Apply Selectors", key="btn_apply_selectors"):
-            parsed: dict[str, str] = {}
-            for line in selector_raw.strip().split("\n"):
-                if "=" in line:
-                    k, _, v = line.partition("=")
-                    k, v = k.strip().lower(), v.strip()
-                    if k and v:
-                        parsed[k] = v
-            st.session_state.codegen_selector_map = parsed
-            st.success(f"✓ {len(parsed)} selector(s) saved" if parsed else "⚠️ No valid selectors found")
-
-    saved = st.session_state.codegen_selector_map
-    if saved:
-        st.caption(
-            f"🎯 **{len(saved)} selector(s) active:** "
-            + ", ".join(f"`{k}`" for k in list(saved.keys())[:5])
-            + (f" +{len(saved)-5} more" if len(saved) > 5 else "")
-        )
-
-
-def _repo_context_section() -> None:
-    st.markdown("---")
-    if "codegen_project_context" not in st.session_state:
-        st.session_state.codegen_project_context = None
-
-    with st.expander("🔍 Project Repository Context (optional — improves code accuracy)", expanded=False):
-        st.caption(
-            "Provide your project's repo so the generator uses your real classes, "
-            "fixtures, base URLs and env vars instead of invented placeholders."
-        )
-        repo_source = st.text_input(
-            "Local folder path or GitHub URL",
-            placeholder="e.g. C:/projects/my-app  or  https://github.com/owner/repo",
-            key="codegen_repo_source",
-        )
-        col_scan, col_clear = st.columns([2, 1])
-        with col_scan:
-            if st.button("🔎 Scan Repository", key="btn_scan_repo"):
-                if not repo_source.strip():
-                    st.warning("Enter a folder path or GitHub URL first.")
-                else:
-                    with st.spinner("Scanning repository…"):
-                        try:
-                            from src.codegen.repo_scanner import scan
-                            ctx = scan(repo_source.strip())
-                            st.session_state.codegen_project_context = ctx
-                            st.success(f"✅ Scanned **{ctx['project_name']}** — "
-                                       f"{len(ctx['dependencies'])} deps, "
-                                       f"{len(ctx['existing_fixtures'])} fixtures, "
-                                       f"{len(ctx['existing_helpers'])} helpers, "
-                                       f"{len(ctx['base_urls'])} URLs found")
-                        except Exception as e:
-                            st.error(f"Scan failed: {e}")
-        with col_clear:
-            if st.button("🗑️ Clear", key="btn_clear_repo"):
-                st.session_state.codegen_project_context = None
-                st.rerun()
-
-    ctx = st.session_state.codegen_project_context
-    if ctx:
-        with st.expander("📋 Scanned Project Context", expanded=False):
-            st.code(ctx["summary"], language="text")
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Dependencies", len(ctx["dependencies"]))
-            c2.metric("Fixtures", len(ctx["existing_fixtures"]))
-            c3.metric("Helpers", len(ctx["existing_helpers"]))
-
-
-def _options_section() -> None:
-    with st.expander("⚙️ Generation Options"):
-        c1, c2 = st.columns(2)
-        with c1:
-            st.checkbox("Generate Page Objects",       value=True, key="cg_po")
-            st.checkbox("Generate Fixtures",           value=True, key="cg_fix")
-        with c2:
-            st.checkbox("Parameterize Similar Tests",  value=True, key="cg_param")
-            st.checkbox("Include Comments",            value=True, key="cg_comments")
+def _extract_elements_from_steps(test_cases: list) -> list[str]:
+    """Extract unique element phrases from test case steps for selector mapping."""
+    import re
+    _VERBS = re.compile(
+        r"^(navigate to|click on|click|enter|type|fill|select|verify|check|assert|"
+        r"wait for|hover over|hover|scroll to|upload|clear|submit|open|go to|press)\s+",
+        re.IGNORECASE,
+    )
+    seen, elements = set(), []
+    for tc in test_cases:
+        for step in tc.get("steps", []):
+            action = step.get("action", "").strip()
+            if not action:
+                continue
+            element = _VERBS.sub("", action).strip().rstrip(".")
+            key = element.lower()
+            if key and key not in seen and len(key) > 3:
+                seen.add(key)
+                elements.append(element)
+    return elements
 
 
 def _generate(fw_label: str) -> None:
@@ -382,10 +310,10 @@ def _generate(fw_label: str) -> None:
         ))
 
     options = CodeGenOptions(
-        generate_page_objects=st.session_state.get("cg_po", True),
-        generate_fixtures=st.session_state.get("cg_fix", True),
-        parameterize_similar=st.session_state.get("cg_param", True),
-        include_comments=st.session_state.get("cg_comments", True),
+        generate_page_objects=True,
+        generate_fixtures=True,
+        parameterize_similar=True,
+        include_comments=True,
     )
 
     progress = st.progress(0, text="Starting generation…")
