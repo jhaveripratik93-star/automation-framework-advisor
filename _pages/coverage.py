@@ -1,4 +1,4 @@
-"""Coverage Analyser page — progressive disclosure UI."""
+"""Framework Fit page — progressive disclosure UI."""
 from __future__ import annotations
 
 import logging
@@ -36,7 +36,7 @@ def _normalise(records: list[dict]) -> list[dict]:
         for r in records
     ]
 
-# ── Tab: Coverage Analyser ────────────────────────────────────────────
+# ── Tab: Framework Fit ────────────────────────────────────────────
 def _unwrap_test_cases(data) -> list[dict]:
     """Extract the flat list of test-case dicts from various JSON envelope shapes.
 
@@ -86,8 +86,8 @@ def render() -> None:
     st.markdown("""
     <div class="page-header">
         <div class="page-header-left">
-            <div class="breadcrumb"><span>Home</span><span class="breadcrumb-sep">›</span><span>Coverage Analyser</span></div>
-            <div class="page-title">📊 Coverage Analyser</div>
+            <div class="breadcrumb"><span>Home</span><span class="breadcrumb-sep">›</span><span>Framework Fit</span></div>
+            <div class="page-title">🎯 Framework Fit</div>
             <div class="page-subtitle">Map test cases to framework capabilities and find the best fit</div>
         </div>
     </div>

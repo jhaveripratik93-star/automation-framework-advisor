@@ -6,9 +6,9 @@ import streamlit as st
 _NAV_ITEMS = [
     ("home",     "🏠", "Home"),
     ("advisor",  "🧭", "Advisor"),
-    ("studio",   "🐍", "Code Studio"),
+    ("studio",   "🔄", "Framework Migration"),
     ("codegen",  "🤖", "Test Generator"),
-    ("coverage", "📊", "Coverage"),
+    ("coverage", "🎯", "Framework Fit"),
 ]
 
 

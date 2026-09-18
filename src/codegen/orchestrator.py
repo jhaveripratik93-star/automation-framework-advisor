@@ -142,11 +142,12 @@ class CodeGenOrchestrator:
         test_cases: list,
         framework_value: str,
         selector_map: dict,
+        project_context: dict | None = None,
     ) -> list[str]:
         """Generate ALL test cases in a SINGLE LLM call.
 
         Returns a list of code strings, one per test case, in the same order.
-        Falls back to empty strings on failure (caller handles error display).
+        project_context is an optional ProjectContext dict from RepoScanner.
         """
         from src.codegen.agent_config import (
             STEP_GENERATOR_SYSTEM, FRAMEWORK_CONTEXT, PIPELINE_SETTINGS,
@@ -157,6 +158,14 @@ class CodeGenOrchestrator:
         fw_ctx = FRAMEWORK_CONTEXT.get(framework_value, "")
         if fw_ctx:
             system = f"{system}\n\nFramework reference:\n{fw_ctx}"
+
+        # Inject real project context so LLM uses actual symbols, not invented ones
+        if project_context and project_context.get("summary"):
+            system = (
+                f"{system}\n\n"
+                f"PROJECT CONTEXT (use these real symbols — do NOT invent alternatives):\n"
+                f"{project_context['summary']}"
+            )
 
         # Build one prompt block per TC
         tc_blocks = []

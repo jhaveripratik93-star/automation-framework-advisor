@@ -94,6 +94,7 @@ def render() -> None:
         _upload_mode()
 
     _selector_map_section()
+    _repo_context_section()
     _options_section()
 
     # ── Step 2: Generate ──────────────────────────────────────────────
@@ -287,6 +288,54 @@ def _selector_map_section() -> None:
         )
 
 
+def _repo_context_section() -> None:
+    st.markdown("---")
+    if "codegen_project_context" not in st.session_state:
+        st.session_state.codegen_project_context = None
+
+    with st.expander("🔍 Project Repository Context (optional — improves code accuracy)", expanded=False):
+        st.caption(
+            "Provide your project's repo so the generator uses your real classes, "
+            "fixtures, base URLs and env vars instead of invented placeholders."
+        )
+        repo_source = st.text_input(
+            "Local folder path or GitHub URL",
+            placeholder="e.g. C:/projects/my-app  or  https://github.com/owner/repo",
+            key="codegen_repo_source",
+        )
+        col_scan, col_clear = st.columns([2, 1])
+        with col_scan:
+            if st.button("🔎 Scan Repository", key="btn_scan_repo"):
+                if not repo_source.strip():
+                    st.warning("Enter a folder path or GitHub URL first.")
+                else:
+                    with st.spinner("Scanning repository…"):
+                        try:
+                            from src.codegen.repo_scanner import scan
+                            ctx = scan(repo_source.strip())
+                            st.session_state.codegen_project_context = ctx
+                            st.success(f"✅ Scanned **{ctx['project_name']}** — "
+                                       f"{len(ctx['dependencies'])} deps, "
+                                       f"{len(ctx['existing_fixtures'])} fixtures, "
+                                       f"{len(ctx['existing_helpers'])} helpers, "
+                                       f"{len(ctx['base_urls'])} URLs found")
+                        except Exception as e:
+                            st.error(f"Scan failed: {e}")
+        with col_clear:
+            if st.button("🗑️ Clear", key="btn_clear_repo"):
+                st.session_state.codegen_project_context = None
+                st.rerun()
+
+    ctx = st.session_state.codegen_project_context
+    if ctx:
+        with st.expander("📋 Scanned Project Context", expanded=False):
+            st.code(ctx["summary"], language="text")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Dependencies", len(ctx["dependencies"]))
+            c2.metric("Fixtures", len(ctx["existing_fixtures"]))
+            c3.metric("Helpers", len(ctx["existing_helpers"]))
+
+
 def _options_section() -> None:
     with st.expander("⚙️ Generation Options"):
         c1, c2 = st.columns(2)
@@ -356,6 +405,7 @@ def _generate(fw_label: str) -> None:
         orchestrator = CodeGenOrchestrator(llm_client=client)
 
         completed = [0]
+        project_context = st.session_state.get("codegen_project_context")
         def _tracked(req):
             from src.codegen.renderer import _FRAMEWORK_CONFIG
             from src.codegen.agent_config import PIPELINE_SETTINGS
@@ -399,6 +449,7 @@ def _generate(fw_label: str) -> None:
                         test_cases=tc_dicts,
                         framework_value=fw.value,
                         selector_map=dict(req.selector_map),
+                        project_context=project_context,
                     )
                     group_valid = all(bool(c.strip()) for c in codes)
                 except Exception as exc:

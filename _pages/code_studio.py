@@ -23,8 +23,8 @@ def render() -> None:
     st.markdown("""
     <div class="page-header">
         <div class="page-header-left">
-            <div class="breadcrumb"><span>Home</span><span class="breadcrumb-sep">›</span><span>Code Studio</span></div>
-            <div class="page-title">🐍 Code Studio</div>
+            <div class="breadcrumb"><span>Home</span><span class="breadcrumb-sep">›</span><span>Framework Migration</span></div>
+            <div class="page-title">🔄 Framework Migration</div>
             <div class="page-subtitle">Convert test suites between frameworks automatically</div>
         </div>
     </div>
@@ -154,12 +154,40 @@ def _show_single_result() -> None:
             st.markdown(cicd_block.strip())
 
 
+_TEST_EXTS = {"py", "js", "ts", "jsx", "tsx", "java", "robot", "feature", "yml", "yaml"}
+_SKIP_DIRS = {"node_modules", "__pycache__", ".git", ".venv", "venv", "dist", "build", "target"}
+
+
+def _extract_files_from_zip(zip_bytes: bytes) -> list[dict]:
+    """Extract all test files from a ZIP archive, skipping build/vendor dirs."""
+    files = []
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+        for info in zf.infolist():
+            if info.is_dir():
+                continue
+            parts = _re.split(r"[/\\]", info.filename)
+            if any(p in _SKIP_DIRS for p in parts):
+                continue
+            ext = info.filename.rsplit(".", 1)[-1].lower() if "." in info.filename else ""
+            if ext not in _TEST_EXTS:
+                continue
+            try:
+                content = zf.read(info.filename).decode("utf-8", errors="replace")
+                # Strip the top-level repo folder prefix (e.g. repo-main/)
+                rel_path = "/".join(parts[1:]) if len(parts) > 1 else parts[0]
+                files.append({"filename": rel_path, "content": content})
+            except Exception:
+                pass
+    return files
+
+
 def _multi_file_mode(from_fw, to_fw, v, get_stack) -> None:
     uploaded_files = st.file_uploader(
-        "Upload test files",
-        type=["py", "js", "ts", "java", "robot", "feature", "yml", "yaml"],
+        "Upload test files or a repo ZIP",
+        type=["py", "js", "ts", "jsx", "tsx", "java", "robot", "feature", "yml", "yaml", "zip"],
         accept_multiple_files=True,
         key=f"multi_convert_files_{v}",
+        help="Upload individual test files OR a single ZIP of your entire repo.",
     )
 
     if not uploaded_files and not st.session_state.get("multi_convert_result"):
@@ -168,65 +196,82 @@ def _multi_file_mode(from_fw, to_fw, v, get_stack) -> None:
             <span class="empty-state-icon">📂</span>
             <div class="empty-state-title">Upload your test repository</div>
             <div class="empty-state-desc">
-                Upload multiple test files. Each is converted with shared cross-file context.
+                Upload individual test files <strong>or a ZIP of your entire repo</strong>.
+                Each file is converted with shared cross-file context.
                 Helper scripts are auto-generated for capability gaps.
             </div>
             <span class="empty-state-hint">⬆ Use the file uploader above</span>
         </div>
         """, unsafe_allow_html=True)
 
+    files_payload: list[dict] = []
+    zip_count = 0
+
     if uploaded_files:
-        st.caption(f"{len(uploaded_files)} file(s) selected: " +
-                   ", ".join(f.name for f in uploaded_files))
+        for uf in uploaded_files:
+            if uf.name.lower().endswith(".zip"):
+                extracted = _extract_files_from_zip(uf.read())
+                files_payload.extend(extracted)
+                zip_count += len(extracted)
+            else:
+                try:
+                    files_payload.append({
+                        "filename": uf.name,
+                        "content": uf.read().decode("utf-8", errors="replace"),
+                    })
+                except Exception as exc:
+                    st.warning(f"Could not read {uf.name}: {exc}")
+
+        if zip_count:
+            st.caption(f"📦 ZIP extracted {zip_count} test file(s). "
+                       f"Total: {len(files_payload)} file(s) ready for conversion.")
+        else:
+            st.caption(f"{len(files_payload)} file(s) selected: " +
+                       ", ".join(f.name for f in uploaded_files))
 
     do_multi = st.button(
-        f"🔄 Convert {len(uploaded_files) if uploaded_files else 0} file(s)",
+        f"🔄 Convert {len(files_payload)} file(s)",
         key="btn_multi_convert",
-        disabled=not uploaded_files,
+        disabled=not files_payload,
         type="primary",
     )
 
-    if do_multi and uploaded_files:
-        files_payload = []
-        for uf in uploaded_files:
-            try:
-                files_payload.append({
-                    "filename": uf.name,
-                    "content": uf.read().decode("utf-8", errors="replace"),
-                })
-            except Exception as exc:
-                st.warning(f"Could not read {uf.name}: {exc}")
+    if files_payload and len(files_payload) > 20:
+        st.warning(
+            f"⚠️ {len(files_payload)} files detected. Only the first 20 will be converted "
+            "to avoid rate limits. Consider uploading a subset of your test files."
+        )
+        files_payload = files_payload[:20]
 
-        if files_payload:
-            loading_slot = st.empty()
-            with loading_slot.container():
-                render_thinking(f"Converting {len(files_payload)} file(s): {from_fw} → {to_fw}…")
+    if do_multi and files_payload:
+        loading_slot = st.empty()
+        with loading_slot.container():
+            render_thinking(f"Converting {len(files_payload)} file(s): {from_fw} → {to_fw}…")
 
-            try:
-                from src.tools.executor import ToolExecutor
-                from services.app_services import get_kb, get_advisor_stack
-                kb = get_kb()
-                _client, _graph, _graphrag, _ = get_stack()
-                executor = ToolExecutor(knowledge_base=kb, knowledge_graph=_graph, graphrag_engine=_graphrag)
-                executor._llm = _client
+        try:
+            from src.tools.executor import ToolExecutor
+            from services.app_services import get_kb, get_advisor_stack
+            kb = get_kb()
+            _client, _graph, _graphrag, _ = get_stack()
+            executor = ToolExecutor(knowledge_base=kb, knowledge_graph=_graph, graphrag_engine=_graphrag)
+            executor._llm = _client
 
-                result = executor.convert_multi_file(
-                    files=files_payload,
-                    from_framework=from_fw,
-                    to_framework=to_fw,
-                )
+            result = executor.convert_multi_file(
+                files=files_payload,
+                from_framework=from_fw,
+                to_framework=to_fw,
+            )
 
-                loading_slot.empty()
-                st.session_state["multi_convert_result"] = result
-                st.session_state["multi_convert_from"] = from_fw
-                st.session_state["multi_convert_to"] = to_fw
-                # Render immediately
-                _show_multi_result(result, to_fw)
+            loading_slot.empty()
+            st.session_state["multi_convert_result"] = result
+            st.session_state["multi_convert_from"] = from_fw
+            st.session_state["multi_convert_to"] = to_fw
+            _show_multi_result(result, to_fw)
 
-            except Exception as exc:
-                loading_slot.empty()
-                st.error(f"Multi-file conversion failed: {exc}")
-                logger.error("Multi-file conversion error: %s", exc)
+        except Exception as exc:
+            loading_slot.empty()
+            st.error(f"Multi-file conversion failed: {exc}")
+            logger.error("Multi-file conversion error: %s", exc)
         return
 
     result = st.session_state.get("multi_convert_result")
