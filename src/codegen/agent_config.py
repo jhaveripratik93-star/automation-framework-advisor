@@ -822,6 +822,7 @@ Category: {category}
 
 Scenario analysis:
 - Test type: {test_type}
+- Domain: {domain}
 - Auth required: {auth_required}
 - Pages: {pages_visited}
 - Complexity: {complexity}
@@ -1242,31 +1243,38 @@ ACTION_KEYWORDS: dict[str, list[str]] = {
 
 PIPELINE_SETTINGS: dict = {
     # Maximum LLM repair attempts after validation failures.
-    "max_validation_retries": 3,
+    # Set to 0 to disable retry loop entirely (saves LLM calls).
+    "max_validation_retries": 0,
 
-    # Analyse scenarios before generation.
+    # Analyse scenarios before generation (1 LLM call per TC).
     "scenario_analysis": True,
 
     # Build a suite-level dependency/symbol architecture before generating tests.
-    "suite_architecture": True,
+    # When True this runs ONCE for the whole suite (not per-TC) in the orchestrator.
+    # Per-TC pipeline always skips it to avoid redundant calls.
+    "suite_architecture": False,
 
-    # Resolve selectors before generation.
-    "selector_resolution": True,
+    # Resolve selectors before generation (1 LLM call per TC).
+    # Skipped automatically for non-UI domains (git/api/db/messaging).
+    # Disabled — step generator uses data-testid placeholders directly.
+    "selector_resolution": False,
 
-    # Validate generated code and its symbol graph.
-    "run_validation": True,
+    # Validate generated code with LLM (1 LLM call per TC).
+    # Disabled — static check still runs, LLM validation skipped.
+    "run_validation": False,
 
     # Run the dedicated test/symbol dependency validator.
-    "run_dependency_validation": True,
+    "run_dependency_validation": False,
 
     # Assemble/link individual components into a project.
-    "run_assembler": True,
+    # Disabled — assembler LLM call skipped; bundling done deterministically.
+    "run_assembler": False,
 
     # Low temperature improves structural consistency.
     "llm_temperature": 0.1,
 
     # Maximum characters of individual test context sent to the LLM.
-    "max_context_chars": 8000,
+    "max_context_chars": 4000,
 
     # Maximum characters of suite-level architecture context.
     "max_suite_context_chars": 30000,
@@ -1277,12 +1285,19 @@ PIPELINE_SETTINGS: dict = {
     # Inject a canonical, correctly-formatted example file (from
     # data/samples/framework_examples/) into the generation prompt so output
     # matches the expected framework format. Set to False to disable.
-    "include_framework_example": True,
+    # Disabled — system prompt already contains inline examples; avoids
+    # adding ~8000 chars to every request which pushes over TPM limits.
+    "include_framework_example": False,
 
     # Require architecture/symbol validation even for template-generated code.
-    "validate_template_code": True,
+    "validate_template_code": False,
 
     # Minimum confidence to accept template-generated code without additional
     # LLM generation. Validation still applies when this is enabled.
     "template_confidence_threshold": 0.85,
+
+    # Maximum test cases per generated file. When a category has more TCs
+    # than this, they are split into multiple files (e.g. happy_path_1.py,
+    # happy_path_2.py). Set to 0 to disable splitting.
+    "max_tests_per_file": 3,
 }

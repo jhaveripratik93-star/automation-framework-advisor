@@ -64,7 +64,7 @@ def render() -> None:
         st.markdown("""
         <div class="feature-card">
             <span class="feature-card-icon">🐍</span>
-            <div class="feature-card-title">Code Studio</div>
+            <div class="feature-card-title">Framework Migration</div>
             <div class="feature-card-desc">
                 Convert test files between frameworks automatically.
                 Supports single-file paste or full repo upload with
@@ -84,7 +84,7 @@ def render() -> None:
         st.markdown("""
         <div class="feature-card">
             <span class="feature-card-icon">📊</span>
-            <div class="feature-card-title">Coverage Analyser</div>
+            <div class="feature-card-title">Framework Fit</div>
             <div class="feature-card-desc">
                 Upload your test cases via Excel or JSON. Get a full
                 coverage matrix across all frameworks, best-fit recommendations,
@@ -140,7 +140,7 @@ def render() -> None:
     with qc:
         st.markdown("""
         **Verifying coverage?**
-        1. Go to **Coverage Analyser**
+        1. Go to **Framework Fit**
         2. Upload your test case Excel sheet
         3. See which frameworks cover 100% of your needs
         """)

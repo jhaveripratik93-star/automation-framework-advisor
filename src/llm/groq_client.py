@@ -36,7 +36,7 @@ load_dotenv(_ENV_PATH, override=True)
 # ---------------------------------------------------------------------
 
 _API_BASE = "https://api.groq.com/openai/v1"
-_DEFAULT_MODEL = "openai/gpt-oss-120b"
+_DEFAULT_MODEL = "qwen/qwen3.8-27b"
 _TIMEOUT = 60.0
 
 
@@ -47,13 +47,14 @@ class GroqClient:
         api_key: str | None = None,
         model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: int = 2048,
+        max_tokens: int = 1500,
     ) -> None:
 
         self._api_key_override = api_key
         self.model = model or os.getenv("GROQ_MODEL", _DEFAULT_MODEL)
         self.temperature = temperature
         self.max_tokens = max_tokens
+
 
         # Cumulative token usage across all calls in a session
         self._session_prompt_tokens: int = 0
@@ -168,7 +169,7 @@ class GroqClient:
                 len(all_messages),
             )
 
-            max_retries = 3
+            max_retries = 5
             for attempt in range(max_retries):
                 response = httpx.post(
                     f"{_API_BASE}/chat/completions",
@@ -181,11 +182,16 @@ class GroqClient:
                 )
                 if response.status_code != 429 or attempt == max_retries - 1:
                     break
-                # Parse retry-after from error message, default to 5s
-                wait = 5.0
+                # Parse retry-after from error message or header
+                wait = 60.0  # safe default — Groq TPM window is 60s
                 match = re.search(r"try again in ([\d.]+)s", response.text)
                 if match:
-                    wait = float(match.group(1)) + 0.5
+                    wait = float(match.group(1)) + 1.0
+                elif "retry-after" in response.headers:
+                    try:
+                        wait = float(response.headers["retry-after"]) + 1.0
+                    except ValueError:
+                        pass
                 logger.warning(
                     "GroqClient.chat: 429 rate limit — waiting %.1fs (attempt %d/%d)",
                     wait, attempt + 1, max_retries,

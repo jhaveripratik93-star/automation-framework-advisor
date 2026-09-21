@@ -35,6 +35,14 @@ def run_suite_architect(state: CodeGenState, llm_client: Any) -> dict:
         logger.info("SuiteArchitect: skipped (disabled in PIPELINE_SETTINGS)")
         return {"suite_architecture": _EMPTY_ARCHITECTURE}
 
+    # If architecture was pre-computed by the orchestrator (suite-level run),
+    # skip the per-TC LLM call entirely.
+    existing = state.get("suite_architecture", {})
+    if existing and existing.get("files") is not None:
+        logger.info("SuiteArchitect: using pre-computed architecture (%d files)",
+                    len(existing.get("files", [])))
+        return {"suite_architecture": existing}
+
     tc = state["test_case"]
     framework = state.get("framework", "playwright_ts")
     scenario = state.get("scenario", {})

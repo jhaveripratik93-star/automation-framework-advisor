@@ -14,27 +14,27 @@ from ui.components import render_thinking
 logger = logging.getLogger(__name__)
 
 
-def render() -> None:
-    from services.app_services import get_kb, get_advisor_stack
+_SUPPORTED_FRAMEWORKS = ["Robot Framework", "Playwright", "Selenium"]
 
-    kb = get_kb()
-    known_frameworks = [fw.framework_name for fw in kb.list_all()]
+
+def render() -> None:
+    from services.app_services import get_advisor_stack
 
     st.markdown("""
     <div class="page-header">
         <div class="page-header-left">
-            <div class="breadcrumb"><span>Home</span><span class="breadcrumb-sep">›</span><span>Code Studio</span></div>
-            <div class="page-title">🐍 Code Studio</div>
-            <div class="page-subtitle">Convert test suites between frameworks automatically</div>
+            <div class="breadcrumb"><span>Home</span><span class="breadcrumb-sep">›</span><span>Framework Migration</span></div>
+            <div class="page-title">🔄 Framework Migration</div>
+            <div class="page-subtitle">Convert test suites between frameworks — Python only</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
     with col1:
-        from_fw = st.selectbox("From framework", known_frameworks, index=3, key="convert_from")
+        from_fw = st.selectbox("From framework", _SUPPORTED_FRAMEWORKS, index=0, key="convert_from")
     with col2:
-        to_options = [f for f in known_frameworks if f != from_fw]
+        to_options = [f for f in _SUPPORTED_FRAMEWORKS if f != from_fw]
         to_fw = st.selectbox("To framework", to_options, index=0, key="convert_to")
 
     if from_fw and to_fw:
@@ -255,6 +255,7 @@ def _multi_file_mode(from_fw, to_fw, v, get_stack) -> None:
         type=["py", "js", "ts", "java", "robot", "feature", "yml", "yaml", "zip"],
         accept_multiple_files=True,
         key=f"multi_convert_files_{v}",
+        help="Upload .py / .robot / .feature files OR a ZIP of your entire repo.",
     )
 
     if not uploaded_files and not st.session_state.get("multi_convert_result"):
@@ -287,6 +288,14 @@ def _multi_file_mode(from_fw, to_fw, v, get_stack) -> None:
         disabled=not files_payload,
         type="primary",
     )
+
+    # Rate-limit guard: cap the number of files converted per run
+    if files_payload and len(files_payload) > 20:
+        st.warning(
+            f"⚠️ {len(files_payload)} files detected. Only the first 20 will be converted "
+            "to avoid rate limits. Consider uploading a subset of your test files."
+        )
+        files_payload = files_payload[:20]
 
     if do_multi and files_payload:
         loading_slot = st.empty()

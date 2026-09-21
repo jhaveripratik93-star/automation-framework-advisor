@@ -74,20 +74,9 @@ class CodeGenOrchestrator:
     # ------------------------------------------------------------------
 
     def generate(self, request: CodeGenRequest) -> GeneratedTestSuite:
-        """Execute the full code generation pipeline.
-
-        Uses the LangGraph agent pipeline by default.
-        Falls back to the legacy template+LLM pipeline if agents are disabled
-        or if the LLM client is unavailable.
-        """
+        """Execute the full code generation pipeline (agent pipeline only)."""
         if self._use_agent_pipeline:
-            try:
-                return self._generate_with_agents(request)
-            except Exception as exc:
-                logger.warning(
-                    "CodeGenOrchestrator: agent pipeline failed (%s) — falling back to legacy", exc
-                )
-
+            return self._generate_with_agents(request)
         return self._generate_legacy(request)
 
     @staticmethod
@@ -110,6 +99,26 @@ class CodeGenOrchestrator:
             groups.setdefault(key, []).append(tc)
         return groups
 
+    @staticmethod
+    def _split_groups(
+        groups: "dict[str, list[ManualTestCase]]",
+        max_per_file: int,
+    ) -> "dict[str, list[ManualTestCase]]":
+        """Split large groups into numbered sub-groups (max_per_file TCs each).
+
+        e.g. "Happy Path" with 9 TCs and max=3 → "Happy Path_1", "Happy Path_2", "Happy Path_3"
+        """
+        if max_per_file <= 0:
+            return groups
+        result: dict[str, list[ManualTestCase]] = {}
+        for key, tcs in groups.items():
+            if len(tcs) <= max_per_file:
+                result[key] = tcs
+            else:
+                for i, chunk_start in enumerate(range(0, len(tcs), max_per_file), 1):
+                    result[f"{key}_{i}"] = tcs[chunk_start:chunk_start + max_per_file]
+        return result
+
     def _bundle_group(self, codes: list[str], framework_value: str) -> str:
         """Combine a category group's per-test code into one file's content.
 
@@ -128,24 +137,124 @@ class CodeGenOrchestrator:
             return merge_robot_files(codes)
         return ("\n\n".join(c.strip() for c in codes)) + "\n"
 
+    def _batch_generate(
+        self,
+        test_cases: list,
+        framework_value: str,
+        selector_map: dict,
+        project_context: dict | None = None,
+    ) -> list[str]:
+        """Generate ALL test cases in a SINGLE LLM call.
+
+        Returns a list of code strings, one per test case, in the same order.
+        project_context is an optional ProjectContext dict from RepoScanner.
+        """
+        from src.codegen.agent_config import (
+            STEP_GENERATOR_SYSTEM, FRAMEWORK_CONTEXT, PIPELINE_SETTINGS,
+        )
+        from src.codegen.agents.scenario_planner import _heuristic_scenario
+
+        system = STEP_GENERATOR_SYSTEM.get(framework_value, STEP_GENERATOR_SYSTEM["playwright_ts"])
+        fw_ctx = FRAMEWORK_CONTEXT.get(framework_value, "")
+        if fw_ctx:
+            system = f"{system}\n\nFramework reference:\n{fw_ctx}"
+
+        # Inject real project context so LLM uses actual symbols, not invented ones
+        if project_context and project_context.get("summary"):
+            system = (
+                f"{system}\n\n"
+                f"PROJECT CONTEXT (use these real symbols — do NOT invent alternatives):\n"
+                f"{project_context['summary']}"
+            )
+
+        # Build one prompt block per TC
+        tc_blocks = []
+        for i, tc in enumerate(test_cases, 1):
+            steps_text = "\n".join(
+                f"  {s.get('step_number', j)}. {s.get('action', '')}"
+                + (f" | data: {s['test_data']}" if s.get('test_data') else "")
+                + (f" | expect: {s['expected_result']}" if s.get('expected_result') else "")
+                for j, s in enumerate(tc.get("steps", []), 1)
+            )
+            scenario = _heuristic_scenario(tc)
+            pre = ", ".join(tc.get("preconditions", []))
+            exp = ", ".join(tc.get("expected_results", []))
+            tc_blocks.append(
+                f"=== TEST {i}: {tc.get('title', '')} (ID: {tc.get('id', '')}) ===\n"
+                f"Category: {tc.get('category', '')} | Auth: {scenario.get('auth_required', False)}"
+                f" | Domain: {scenario.get('domain', 'e2e')}\n"
+                + (f"Preconditions: {pre}\n" if pre else "")
+                + f"Steps:\n{steps_text}\n"
+                + (f"Expected: {exp}\n" if exp else "")
+            )
+
+        n = len(test_cases)
+        prompt = (
+            f"Generate {framework_value} test code for ALL {n} test cases below.\n"
+            f"Output EXACTLY {n} code blocks, each preceded by a marker line:\n"
+            f"  ### TEST_1 ###\n  <code for test 1>\n"
+            f"  ### TEST_2 ###\n  <code for test 2>\n"
+            f"  ... and so on up to ### TEST_{n} ###\n"
+            f"No other text outside the markers. No markdown fencing.\n\n"
+            + "\n\n".join(tc_blocks)
+        )
+
+        try:
+            result = self._llm_client.chat(
+                messages=[{"role": "user", "content": prompt[:PIPELINE_SETTINGS["max_context_chars"] * n]}],
+                system=system,
+                max_tokens=1200 * n,
+            )
+            raw = result.get("content", "")
+            return self._split_batch_response(raw, n)
+        except Exception as exc:
+            logger.error("_batch_generate failed: %s", exc)
+            raise
+
+    @staticmethod
+    def _split_batch_response(raw: str, n: int) -> list[str]:
+        """Split the batch LLM response into per-TC code strings."""
+        import re as _re
+        parts = _re.split(r"###\s*TEST_\d+\s*###", raw)
+        # parts[0] is text before first marker (discard), parts[1..n] are the codes
+        codes = [p.strip() for p in parts[1:n + 1]]
+        # Pad with empty strings if LLM returned fewer blocks than expected
+        while len(codes) < n:
+            codes.append("")
+        return codes
+
     def _generate_with_agents(self, request: CodeGenRequest) -> GeneratedTestSuite:
-        """Generate using the LangGraph 5-agent pipeline."""
+        """Generate using the LangGraph 5-agent pipeline.
+
+        Optimisations vs. the naive per-TC approach:
+        - Suite architect runs ONCE across all test cases (not per-TC).
+        - Selector resolver is skipped for non-UI domains.
+        - Validator and assembler are disabled by default (see PIPELINE_SETTINGS).
+        - Large category groups are split into multiple files (max_tests_per_file).
+        - A real common/resources file is generated from shared symbols.
+        """
         from src.codegen.pipeline import run_codegen_pipeline
         from src.codegen.renderer import _FRAMEWORK_CONFIG
+        from src.codegen.agent_config import PIPELINE_SETTINGS
 
         start_time = time.time()
         framework = request.target_framework
         cfg = _FRAMEWORK_CONFIG.get(framework.value, _FRAMEWORK_CONFIG["playwright_ts"])
         files: list[GeneratedFile] = []
         stats = GenerationStats(total_steps=sum(len(tc.steps) for tc in request.test_cases))
-        last_state: dict = {}
         _per_tc_states: list[dict] = []
 
-        # Group test cases by feature/category so cases in the same category
-        # end up in ONE file. Each manual test case still becomes exactly one
-        # test case; grouping only controls how they are bundled into files.
-        grouped = self._group_by_category(request.test_cases)
+        # ── Step 1: Run suite architect ONCE for all TCs ──────────────
+        suite_arch: dict = {}
+        if PIPELINE_SETTINGS.get("suite_architecture", False):
+            suite_arch = self._run_suite_architect_once(request, framework.value)
 
+        # ── Step 2: Group and split into files ────────────────────────
+        max_per_file = PIPELINE_SETTINGS.get("max_tests_per_file", 3)
+        grouped = self._group_by_category(request.test_cases)
+        grouped = self._split_groups(grouped, max_per_file)
+
+        # ── Step 3: Generate each TC (1-2 LLM calls each) ─────────────
         for group_key, group_tcs in grouped.items():
             group_codes: list[str] = []
             group_valid = True
@@ -171,13 +280,15 @@ class CodeGenOrchestrator:
                     "tags": tc.tags,
                 }
 
+                # Inject pre-computed suite architecture so per-TC pipeline
+                # skips its own architect call.
                 final_state = run_codegen_pipeline(
                     test_case=tc_dict,
                     framework=framework.value,
                     selector_map=dict(request.selector_map),
                     llm_client=self._llm_client,
+                    suite_architecture=suite_arch,
                 )
-                last_state = final_state
                 _per_tc_states.append(final_state)
 
                 code = final_state.get("assembled_code") or final_state.get("generated_code", "")
@@ -197,11 +308,14 @@ class CodeGenOrchestrator:
                 confidence=0.9 if group_valid else 0.6,
             ))
 
-        # --- Generate supporting files from suite architecture ---
-        arch = last_state.get("suite_architecture", {})
-        files += self._generate_common_files(arch, framework.value, cfg)
+        # ── Step 4: Generate common/resources file ────────────────────
+        common_file = self._generate_common_resource(
+            _per_tc_states, framework.value, cfg, request.test_cases
+        )
+        if common_file:
+            files.append(common_file)
 
-        # Config file (e.g. playwright.config.ts, pytest.ini, robot.yaml)
+        # ── Step 5: Config + package files ────────────────────────────
         config_content = self._renderer._render_config(framework)
         if config_content:
             files.append(GeneratedFile(
@@ -211,7 +325,6 @@ class CodeGenOrchestrator:
                 source=GenerationSource.TEMPLATE,
             ))
 
-        # Package/dependency file (requirements.txt, package.json)
         pkg_content = self._renderer._render_package_file(framework)
         if pkg_content:
             files.append(GeneratedFile(
@@ -224,12 +337,11 @@ class CodeGenOrchestrator:
         elapsed_ms = int((time.time() - start_time) * 1000)
         stats.time_elapsed_ms = elapsed_ms
 
-        # Collect undefined symbols across all test cases for suite-level validation
-        all_undefined: list[str] = []
-        for gf_state in _per_tc_states:
-            vr = gf_state.get("validation_result", {})
-            all_undefined.extend(vr.get("undefined_symbols", []))
-        all_undefined = list(dict.fromkeys(all_undefined))  # deduplicate, preserve order
+        all_undefined: list[str] = list(dict.fromkeys(
+            sym
+            for s in _per_tc_states
+            for sym in s.get("validation_result", {}).get("undefined_symbols", [])
+        ))
 
         suite = GeneratedTestSuite(
             framework=framework.value,
@@ -250,6 +362,266 @@ class CodeGenOrchestrator:
             len(files), elapsed_ms,
         )
         return suite
+
+    def _run_suite_architect_once(
+        self,
+        request: CodeGenRequest,
+        framework_value: str,
+    ) -> dict:
+        """Run the suite architect LLM call once for ALL test cases combined.
+
+        Returns the architecture dict to be injected into every per-TC pipeline
+        run so the per-TC architect node is skipped.
+        """
+        from src.codegen.agents.suite_architect_agent import run_suite_architect
+        from src.codegen.renderer import _FRAMEWORK_CONFIG
+
+        # Build a synthetic state that contains all TCs as a combined text
+        all_tc_text = "\n\n".join(
+            f"ID: {tc.id}\nTitle: {tc.title}\nCategory: {tc.category}\n"
+            f"Steps:\n" + "\n".join(
+                f"  {s.step_number}. {s.action}"
+                + (f" [{s.test_data}]" if s.test_data else "")
+                for s in tc.steps
+            )
+            for tc in request.test_cases
+        )
+        synthetic_state = {
+            "test_case": {
+                "id": "SUITE",
+                "title": f"Suite of {len(request.test_cases)} test cases",
+                "category": "",
+                "preconditions": [],
+                "steps": [
+                    {"step_number": i + 1, "action": line, "test_data": "", "expected_result": ""}
+                    for i, line in enumerate(all_tc_text.split("\n"))[:30]  # cap at 30 lines
+                ],
+                "expected_results": [],
+                "tags": [],
+            },
+            "framework": framework_value,
+            "scenario": {},
+            "selector_map": dict(request.selector_map),
+        }
+        try:
+            result = run_suite_architect(synthetic_state, self._llm_client)
+            arch = result.get("suite_architecture", {})
+            logger.info(
+                "SuiteArchitect (once): %d files, %d symbols",
+                len(arch.get("files", [])),
+                len(arch.get("symbols", [])),
+            )
+            return arch
+        except Exception as exc:
+            logger.warning("SuiteArchitect (once): failed (%s) — skipping", exc)
+            return {}
+
+    def _generate_common_resource(
+        self,
+        per_tc_states: list[dict],
+        framework_value: str,
+        cfg: dict,
+        test_cases: list[ManualTestCase],
+    ) -> GeneratedFile | None:
+        """Generate a common/resources file with shared fixtures and helpers.
+
+        Deterministic (no LLM) — extracts patterns that appear in multiple
+        generated test files and writes them to a single shared resource.
+        """
+        if not per_tc_states:
+            return None
+
+        is_robot = framework_value == "robot_framework"
+        is_py = cfg.get("language") in ("python", "Python")
+
+        # Collect all preconditions and categories to infer shared setup
+        all_preconditions: list[str] = []
+        categories: set[str] = set()
+        for tc in test_cases:
+            all_preconditions.extend(tc.preconditions)
+            if tc.category:
+                categories.add(tc.category)
+
+        # Detect shared setup patterns
+        needs_auth = any(
+            kw in p.lower()
+            for p in all_preconditions
+            for kw in ("authenticated", "logged in", "valid credentials", "user is authenticated")
+        )
+        needs_git = any(
+            kw in p.lower()
+            for p in all_preconditions
+            for kw in ("cloned", "git", "repository", "write access", "write permission")
+        )
+        needs_browser = any(
+            kw in p.lower()
+            for p in all_preconditions
+            for kw in ("browser", "page", "login page", "github is accessible")
+        )
+
+        if is_robot:
+            return self._robot_common_resource(needs_auth, needs_git, needs_browser)
+        elif is_py:
+            return self._python_conftest(framework_value, needs_auth, needs_git, needs_browser)
+        return None
+
+    @staticmethod
+    def _robot_common_resource(
+        needs_auth: bool,
+        needs_git: bool,
+        needs_browser: bool,
+    ) -> GeneratedFile:
+        """Generate resources/common.resource for Robot Framework."""
+        lines = [
+            "*** Settings ***",
+            "Library    SeleniumLibrary",
+            "Library    OperatingSystem",
+            "Library    Process",
+            "",
+            "*** Variables ***",
+            "${GITHUB_URL}       https://github.com",
+            "${BROWSER}          chrome",
+            "${TIMEOUT}          10s",
+        ]
+        if needs_auth:
+            lines += [
+                "${GITHUB_USER}      %{GITHUB_USER}",
+                "${GITHUB_PASSWORD}  %{GITHUB_PASSWORD}",
+            ]
+        lines += [
+            "",
+            "*** Keywords ***",
+        ]
+        if needs_browser:
+            lines += [
+                "Open GitHub",
+                "    Open Browser    ${GITHUB_URL}    ${BROWSER}",
+                "    Set Selenium Timeout    ${TIMEOUT}",
+                "",
+            ]
+        if needs_auth:
+            lines += [
+                "Login To GitHub",
+                "    [Arguments]    ${username}=${GITHUB_USER}    ${password}=${GITHUB_PASSWORD}",
+                "    Go To    ${GITHUB_URL}/login",
+                "    Input Text      [data-testid='login-field']    ${username}",
+                "    Input Password  [data-testid='password']       ${password}",
+                "    Click Button    [data-testid='sign-in-button']",
+                "    Wait Until Page Contains Element    [data-testid='user-navigation-header-avatar']",
+                "",
+            ]
+        if needs_git:
+            lines += [
+                "Run Git Command",
+                "    [Arguments]    @{cmd}",
+                "    ${result}=    Run Process    git    @{cmd}    shell=True",
+                "    RETURN    ${result}",
+                "",
+                "Clone Repository",
+                "    [Arguments]    ${url}    ${target_dir}=.",
+                "    ${result}=    Run Git Command    clone    ${url}    ${target_dir}",
+                "    Should Be Equal As Integers    ${result.rc}    0",
+                "",
+            ]
+        lines += [
+            "Teardown Browser",
+            "    Close All Browsers",
+        ]
+        return GeneratedFile(
+            path="resources/common.resource",
+            content="\n".join(lines) + "\n",
+            file_type=FileType.UTILITY,
+            source=GenerationSource.TEMPLATE,
+            confidence=0.95,
+        )
+
+    @staticmethod
+    def _python_conftest(
+        framework_value: str,
+        needs_auth: bool,
+        needs_git: bool,
+        needs_browser: bool,
+    ) -> GeneratedFile:
+        """Generate tests/conftest.py with shared pytest fixtures."""
+        lines = [
+            '"""Shared pytest fixtures for the GitHub test suite."""',
+            "import os",
+            "import subprocess",
+            "import pytest",
+        ]
+        if framework_value == "playwright_py":
+            lines += [
+                "from playwright.sync_api import Page, Browser, BrowserContext",
+                "",
+                "GITHUB_URL = \"https://github.com\"",
+                "GITHUB_USER = os.environ.get(\"GITHUB_USER\", \"\")",
+                "GITHUB_PASSWORD = os.environ.get(\"GITHUB_PASSWORD\", \"\")",
+                "",
+            ]
+            if needs_auth:
+                lines += [
+                    "@pytest.fixture",
+                    "def authenticated_page(page: Page) -> Page:",
+                    '    \"\"\"Fixture: log in to GitHub and return an authenticated page.\"\"\"",',
+                    '    page.goto(f"{GITHUB_URL}/login")',
+                    "    page.fill(\"[data-testid='login-field']\", GITHUB_USER)",
+                    "    page.fill(\"[data-testid='password']\", GITHUB_PASSWORD)",
+                    "    page.click(\"[data-testid='sign-in-button']\")",
+                    "    page.wait_for_selector(\"[data-testid='user-navigation-header-avatar']\")",
+                    "    return page",
+                    "",
+                ]
+        elif framework_value == "selenium_py":
+            lines += [
+                "from selenium import webdriver",
+                "from selenium.webdriver.common.by import By",
+                "from selenium.webdriver.support.ui import WebDriverWait",
+                "from selenium.webdriver.support import expected_conditions as EC",
+                "",
+                "GITHUB_URL = \"https://github.com\"",
+                "GITHUB_USER = os.environ.get(\"GITHUB_USER\", \"\")",
+                "GITHUB_PASSWORD = os.environ.get(\"GITHUB_PASSWORD\", \"\")",
+                "",
+                "@pytest.fixture",
+                "def driver():",
+                "    d = webdriver.Chrome()",
+                "    d.implicitly_wait(10)",
+                "    yield d",
+                "    d.quit()",
+                "",
+            ]
+            if needs_auth:
+                lines += [
+                    "@pytest.fixture",
+                    "def authenticated_driver(driver):",
+                    '    \"\"\"Fixture: log in to GitHub and return an authenticated WebDriver.\"\"\"",',
+                    '    driver.get(f"{GITHUB_URL}/login")',
+                    "    WebDriverWait(driver, 10).until(",
+                    "        EC.presence_of_element_located((By.CSS_SELECTOR, \"[data-testid='login-field']\"))",
+                    "    )",
+                    "    driver.find_element(By.CSS_SELECTOR, \"[data-testid='login-field']\").send_keys(GITHUB_USER)",
+                    "    driver.find_element(By.CSS_SELECTOR, \"[data-testid='password']\").send_keys(GITHUB_PASSWORD)",
+                    "    driver.find_element(By.CSS_SELECTOR, \"[data-testid='sign-in-button']\").click()",
+                    "    WebDriverWait(driver, 10).until(",
+                    "        EC.presence_of_element_located((By.CSS_SELECTOR, \"[data-testid='user-navigation-header-avatar']\"))",
+                    "    )",
+                    "    return driver",
+                    "",
+                ]
+        if needs_git:
+            lines += [
+                "def run_git(*args: str, cwd: str | None = None) -> subprocess.CompletedProcess:",
+                '    \"\"\"Run a git command and return the CompletedProcess result.\"\"\"",',
+                "    return subprocess.run([\"git\", *args], capture_output=True, text=True, cwd=cwd)",
+                "",
+            ]
+        return GeneratedFile(
+            path="tests/conftest.py",
+            content="\n".join(lines) + "\n",
+            file_type=FileType.FIXTURE,
+            source=GenerationSource.TEMPLATE,
+            confidence=0.95,
+        )
 
     def _generate_common_files(
         self,

@@ -28,7 +28,8 @@
         "test_data": null,
         "expected_result": "User is successfully authenticated and redirected to the appropriate GitHub page"
       }
-    ]
+    ],
+    "enabled": true
   },
   {
     "test_case_title": "Login with invalid password",
@@ -58,7 +59,8 @@
         "test_data": null,
         "expected_result": "Authentication fails and an appropriate error message is displayed"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Login with empty credentials",
@@ -83,7 +85,8 @@
         "test_data": null,
         "expected_result": "Login is rejected and validation or authentication feedback is displayed"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Login with two-factor authentication enabled",
@@ -114,7 +117,8 @@
         "test_data": null,
         "expected_result": "User is successfully logged in"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Create a new repository",
@@ -144,7 +148,8 @@
         "test_data": null,
         "expected_result": "Repository is created successfully and repository page is displayed"
       }
-    ]
+    ],
+    "enabled": true
   },
   {
     "test_case_title": "Create repository with duplicate name",
@@ -169,7 +174,8 @@
         "test_data": null,
         "expected_result": "Repository is not incorrectly duplicated and an appropriate message is displayed"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Create a public repository",
@@ -194,7 +200,8 @@
         "test_data": null,
         "expected_result": "Repository is created and is accessible according to public visibility rules"
       }
-    ]
+    ],
+    "enabled": true
   },
   {
     "test_case_title": "Create a private repository",
@@ -224,7 +231,8 @@
         "test_data": "Unauthorized user",
         "expected_result": "Repository contents are not accessible"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Clone a public repository using HTTPS",
@@ -255,7 +263,8 @@
         "test_data": "Local repository directory",
         "expected_result": "Repository files and Git metadata are present"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Clone a private repository with valid authentication",
@@ -281,7 +290,8 @@
         "test_data": "Local clone directory",
         "expected_result": "Private repository contents are downloaded successfully"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Clone a private repository without permission",
@@ -302,7 +312,8 @@
         "test_data": null,
         "expected_result": "An authentication or authorization error is returned and repository contents are not downloaded"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Push a new file to a GitHub repository",
@@ -343,7 +354,8 @@
         "test_data": null,
         "expected_result": "The new file and commit are visible on GitHub"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Push without write permission",
@@ -369,7 +381,8 @@
         "test_data": "git push origin main",
         "expected_result": "Push is rejected because the user does not have required write permission"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Pull latest changes from GitHub",
@@ -395,7 +408,8 @@
         "test_data": "Files changed by the remote commit",
         "expected_result": "Latest remote changes are present locally"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Pull with local uncommitted changes causing conflict",
@@ -421,7 +435,8 @@
         "test_data": "git status",
         "expected_result": "Git clearly identifies the affected files and repository state"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Create a feature branch",
@@ -441,7 +456,8 @@
         "test_data": "git branch --show-current",
         "expected_result": "feature/login is displayed as the current branch"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Push feature branch to GitHub",
@@ -466,7 +482,8 @@
         "test_data": "git push -u origin feature/login",
         "expected_result": "Feature branch is created on GitHub and local branch tracks the remote branch"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Create pull request from feature branch",
@@ -497,7 +514,8 @@
         "test_data": null,
         "expected_result": "Pull request is created successfully"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Merge a pull request with no conflicts",
@@ -528,7 +546,8 @@
         "test_data": null,
         "expected_result": "Merged changes are present in the target branch"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Handle pull request merge conflict",
@@ -552,7 +571,8 @@
         "test_data": null,
         "expected_result": "Automatic merge is prevented until the conflict is resolved"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Verify commit appears in repository history",
@@ -576,7 +596,8 @@
         "test_data": null,
         "expected_result": "The commit remains present after refresh"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Verify repository data persists after logout and login",
@@ -606,7 +627,8 @@
         "test_data": "Existing repository",
         "expected_result": "Repository and previously committed data remain available"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Delete a repository and verify it is no longer accessible",
@@ -637,7 +659,8 @@
         "test_data": "Deleted repository URL",
         "expected_result": "Repository is no longer accessible as an existing repository"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Verify branch data persists after page refresh",
@@ -667,7 +690,8 @@
         "test_data": null,
         "expected_result": "persistence-test-branch is still present"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Verify GitHub handles a large repository clone",
@@ -693,7 +717,8 @@
         "test_data": "Expected file and commit counts",
         "expected_result": "Repository is complete and consistent with the remote repository"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Measure GitHub repository page response with large repository",
@@ -718,7 +743,8 @@
         "test_data": "Large directories",
         "expected_result": "File listings remain responsive and usable"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Verify concurrent repository access",
@@ -743,7 +769,8 @@
         "test_data": "Performance SLA",
         "expected_result": "Error rate and response time remain within agreed limits"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Verify concurrent Git pushes to different branches",
@@ -769,7 +796,8 @@
         "test_data": "All test branches",
         "expected_result": "Each branch contains only its intended changes"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Verify existing repository functionality after a GitHub UI change",
@@ -799,7 +827,8 @@
         "test_data": "main and test branch",
         "expected_result": "Branch switching works correctly"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Verify existing Git clone and push workflow after release",
@@ -835,7 +864,8 @@
         "test_data": "Regression test commit",
         "expected_result": "Commit and file are visible on GitHub"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Verify existing pull request workflow after release",
@@ -865,7 +895,8 @@
         "test_data": null,
         "expected_result": "Checks, review state, changed files, commits, and merge state are displayed correctly"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Verify repository contents remain consistent between Git and GitHub",
@@ -895,7 +926,8 @@
         "test_data": "Repository file listing",
         "expected_result": "GitHub contains the expected committed files"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Verify SSH authentication for Git operations",
@@ -926,7 +958,8 @@
         "test_data": "git add . && git commit -m \"SSH test\" && git push",
         "expected_result": "Change is pushed successfully through SSH"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Verify invalid SSH key cannot access private repository",
@@ -946,7 +979,8 @@
         "test_data": "Local clone directory",
         "expected_result": "Private repository data is not exposed"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Verify repository search",
@@ -970,7 +1004,8 @@
         "test_data": "Target repository",
         "expected_result": "Correct repository page is opened"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Search for a repository that does not exist",
@@ -989,7 +1024,8 @@
         "test_data": null,
         "expected_result": "No matching repository is shown or GitHub clearly indicates that no matching results were found"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Verify repository README persistence",
@@ -1019,7 +1055,8 @@
         "test_data": null,
         "expected_result": "Previously saved README content is still present"
       }
-    ]
+    ],
+    "enabled": false
   },
   {
     "test_case_title": "Verify file deletion persists",
@@ -1054,6 +1091,7 @@
         "test_data": "Delete test file commit",
         "expected_result": "Deletion commit is retained in repository history"
       }
-    ]
+    ],
+    "enabled": false
   }
 ]
