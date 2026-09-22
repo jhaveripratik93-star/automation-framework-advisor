@@ -100,24 +100,36 @@ def _single_file_mode(from_fw, to_fw, v, get_stack) -> None:
 
             loading_slot.empty()
 
-            cicd_marker = "# === CI/CD INTEGRATION ==="
-            gap_marker  = "### ⚠️ Capabilities Requiring"
+            # Split on any CI/CD marker variant the LLM may produce
+            _cicd_re = _re.compile(
+                r"(#\s*={0,3}\s*CI/?CD\s*INTEGRATION[^\n]*)",
+                _re.IGNORECASE,
+            )
+            gap_marker = "### \u26a0\ufe0f Capabilities Requiring"
 
-            cicd_split = full_result.split(cicd_marker, 1)
-            pre_cicd   = cicd_split[0]
-            cicd_block = (cicd_marker + cicd_split[1]) if len(cicd_split) > 1 else ""
+            cicd_match = _cicd_re.search(full_result)
+            if cicd_match:
+                pre_cicd   = full_result[:cicd_match.start()]
+                cicd_block = full_result[cicd_match.start():]
+            else:
+                pre_cicd   = full_result
+                cicd_block = ""
 
-            gap_split  = pre_cicd.split(gap_marker, 1)
-            code_part  = gap_split[0]
-            gap_block  = (gap_marker + gap_split[1]) if len(gap_split) > 1 else ""
+            gap_split = pre_cicd.split(gap_marker, 1)
+            code_part = gap_split[0]
+            gap_block = (gap_marker + gap_split[1]) if len(gap_split) > 1 else ""
 
             if gap_marker in cicd_block and not gap_block:
                 cicd_gap   = cicd_block.split(gap_marker, 1)
                 cicd_block = cicd_gap[0]
                 gap_block  = gap_marker + cicd_gap[1]
 
-            code_blocks = _re.findall(r"```(?:python)?\n(.*?)```", code_part, _re.DOTALL)
+            # Strip any markdown code fence the LLM may have added despite instructions
+            code_blocks = _re.findall(r"```(?:[a-zA-Z]*)\n(.*?)```", code_part, _re.DOTALL)
             runnable = code_blocks[0].strip() if code_blocks else code_part.strip()
+
+            # Strip the leading header line added by _convert_test_cases ("## 🔄 Converted…")
+            runnable = _re.sub(r"^##.*?\n", "", runnable).strip()
 
             st.session_state.last_converted_code = runnable
             st.session_state.studio_source_code  = source_code
@@ -133,9 +145,72 @@ def _single_file_mode(from_fw, to_fw, v, get_stack) -> None:
             logger.error("Conversion error: %s", exc)
 
 
+_RUN_INSTRUCTIONS: dict[str, tuple[str, str, str]] = {
+    "robot framework": (
+        "robotframework>=7.0\nrobotframework-seleniumlibrary>=6.0\nSelenium>=4.0",
+        "robot tests/",
+        "pip install -r requirements.txt\nplaywright install  # if using Browser library instead",
+    ),
+    "playwright": (
+        "playwright>=1.40.0\npytest-playwright>=0.4.0\npytest>=7.0",
+        "pytest tests/ -v",
+        "pip install -r requirements.txt\nplaywright install",
+    ),
+    "selenium": (
+        "selenium>=4.0\npytest>=7.0\nwebdriver-manager>=4.0",
+        "pytest tests/ -v",
+        "pip install -r requirements.txt",
+    ),
+}
+
+
+def _get_run_instructions(to_fw_lower: str) -> tuple[str, str, str]:
+    """Return (requirements_txt, run_cmd, install_cmd) for the target framework."""
+    for key, val in _RUN_INSTRUCTIONS.items():
+        if key in to_fw_lower:
+            return val
+    return "pytest>=7.0", "pytest tests/ -v", "pip install -r requirements.txt"
+
+
+def _parse_cicd_block(raw: str, to_fw: str) -> dict:
+    """Extract install and run commands from the LLM CI/CD comment block.
+
+    Returns {"install": str, "run": str, "yaml": str} where yaml is the
+    full GitHub Actions step block (comment lines stripped of leading #).
+    """
+    lines = raw.splitlines()
+    install, run, yaml_lines = "", "", []
+
+    for line in lines:
+        # Strip leading comment chars and whitespace
+        clean = _re.sub(r"^\s*#\s?", "", line).strip()
+        # Decode HTML entities (&#39; -> ')
+        clean = clean.replace("&#39;", "'").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+        if not clean:
+            continue
+        low = clean.lower()
+        if low.startswith("pip install") or low.startswith("pip3 install"):
+            install = clean
+        elif (low.startswith("robot ") or low.startswith("pytest ") or
+              low.startswith("python -m pytest") or low.startswith("python -m robot")):
+            run = clean
+        yaml_lines.append(clean)
+
+    # Fallback run commands per framework
+    if not run:
+        fw_lower = to_fw.lower()
+        if "robot" in fw_lower:
+            run = "robot tests/"
+        elif "playwright" in fw_lower:
+            run = "pytest tests/ --tb=short"
+        elif "selenium" in fw_lower:
+            run = "pytest tests/ --tb=short"
+
+    return {"install": install, "run": run, "yaml": "\n".join(yaml_lines)}
+
+
 def _show_single_result() -> None:
     runnable   = st.session_state.last_converted_code
-    gap_block  = st.session_state.get("studio_gap_block", "")
     cicd_block = st.session_state.get("studio_cicd_block", "")
     to_fw      = st.session_state.get("studio_to_fw", "")
 
@@ -150,28 +225,45 @@ def _show_single_result() -> None:
             mime=mime,
             key="btn_dl_single",
         )
-    if gap_block.strip():
-        with st.expander("⚠️ Capability Gaps & Helper Scripts", expanded=False):
-            st.markdown(gap_block.strip())
-    if cicd_block.strip():
-        with st.expander("⚙️ CI/CD Integration", expanded=False):
-            st.markdown(cicd_block.strip())
+
+    # ── How to run ───────────────────────────────────────────────────
+    to_fw_lower = (to_fw or "").lower()
+    req, run_cmd, install_cmd = _get_run_instructions(to_fw_lower)
+
+    with st.expander("📋 Requirements & Execution Guide", expanded=True):
+        col_req, col_run = st.columns(2)
+        with col_req:
+            st.markdown("**`requirements.txt`**")
+            st.code(req, language="text")
+        with col_run:
+            st.markdown("**Install & Run**")
+            st.code(install_cmd + "\n" + run_cmd, language="bash")
 
 
-# Display metadata per language: (streamlit code lang, file extension, mime type)
 _LANG_DISPLAY = {
-    "python":     ("python",     ".py",   "text/x-python"),
-    "javascript": ("javascript", ".js",   "text/javascript"),
-    "typescript": ("typescript", ".ts",   "text/typescript"),
-    "java":       ("java",       ".java", "text/x-java"),
-    "c#":         ("csharp",     ".cs",   "text/plain"),
-    "ruby":       ("ruby",       ".rb",   "text/x-ruby"),
-    "go":         ("go",         ".go",   "text/x-go"),
+    "python":     ("python",      ".py",    "text/x-python"),
+    "javascript": ("javascript",  ".js",    "text/javascript"),
+    "typescript": ("typescript",  ".ts",    "text/typescript"),
+    "java":       ("java",        ".java",  "text/x-java"),
+    "c#":         ("csharp",      ".cs",    "text/plain"),
+    "ruby":       ("ruby",        ".rb",    "text/x-ruby"),
+    "go":         ("go",          ".go",    "text/x-go"),
+    "robot":      ("robotframework", ".robot", "text/plain"),
+}
+
+# Map framework name → language key (overrides YAML lookup for known frameworks)
+_FW_LANG_OVERRIDE = {
+    "robot framework": "robot",
+    "playwright":      "python",
+    "selenium":        "python",
 }
 
 
 def _target_lang_display(to_fw_name: str):
-    """Return (streamlit_lang, ext, mime) for the target framework's language."""
+    """Return (streamlit_lang, ext, mime) for the target framework."""
+    override = _FW_LANG_OVERRIDE.get((to_fw_name or "").lower())
+    if override:
+        return _LANG_DISPLAY[override]
     try:
         from services.app_services import get_kb
         from src.tools.executor import ToolExecutor
@@ -337,13 +429,14 @@ def _multi_file_mode(from_fw, to_fw, v, get_stack) -> None:
 
 def _show_multi_result(result: dict, to_label: str) -> None:
     code_lang, ext, mime = _target_lang_display(to_label)
+    to_fw_lower = (to_label or "").lower()
+    req, run_cmd, install_cmd = _get_run_instructions(to_fw_lower)
 
     st.markdown("---")
     st.markdown(result["summary"])
     st.markdown("### 📂 Converted Project Files")
     all_files: dict[str, str] = {}
 
-    # conftest.py / requirements.txt only exist for Python targets
     if result.get("conftest"):
         with st.expander("📄 `conftest.py`", expanded=False):
             st.code(result["conftest"], language="python")
@@ -368,16 +461,15 @@ def _show_multi_result(result: dict, to_label: str) -> None:
                                    key=f"dl_{path.replace('/', '_')}")
             all_files[path] = code
 
-    if result["helpers"]:
-        st.markdown("#### 🔧 Gap-Bridging Helper Scripts")
-        st.caption(f"Auto-generated to cover capabilities {to_label} cannot handle natively.")
-        for path, code in sorted(result["helpers"].items()):
-            with st.expander(f"📄 `{path}`", expanded=False):
-                st.code(code, language=code_lang)
-                st.download_button(f"⬇ {Path(path).name}", code,
-                                   file_name=Path(path).name, mime=mime,
-                                   key=f"dl_{path.replace('/', '_')}")
-            all_files[path] = code
+    # ── Requirements & Execution Guide ────────────────────────────────
+    with st.expander("📋 Requirements & Execution Guide", expanded=True):
+        col_req, col_run = st.columns(2)
+        with col_req:
+            st.markdown("**`requirements.txt`**")
+            st.code(req, language="text")
+        with col_run:
+            st.markdown("**Install & Run**")
+            st.code(install_cmd + "\n" + run_cmd, language="bash")
 
     st.markdown("---")
     zip_buf = io.BytesIO()

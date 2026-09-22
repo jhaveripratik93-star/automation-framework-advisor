@@ -950,6 +950,62 @@ class ToolExecutor:
             f"- {n}" for n in notes[:8]
         )
 
+    # Per-target-framework syntax rules injected into the system prompt
+    _FW_SYNTAX_RULES: dict[str, str] = {
+        "robot framework": """
+OUTPUT FORMAT — Robot Framework .robot file (STRICT):
+- Use EXACTLY these four sections in order (omit empty ones):
+    *** Settings ***
+    *** Variables ***
+    *** Test Cases ***
+    *** Keywords ***
+- Library imports go under *** Settings *** as:  Library    SeleniumLibrary
+- Variables use syntax:  ${VAR_NAME}    value
+- Each test case name is on its own line with NO indentation.
+- Every keyword call inside a test case is indented with 4 spaces.
+- Keyword arguments are separated by 4 spaces (or a tab), NOT commas.
+- Use SeleniumLibrary keywords: Open Browser, Input Text, Input Password,
+  Click Button, Click Element, Element Should Be Visible,
+  Element Text Should Be, Location Should Contain, Close Browser.
+- Wrap each test with [Teardown]    Close Browser
+- Do NOT output Python, pytest, or any non-Robot syntax.
+- Do NOT wrap the output in a markdown code fence.
+EXAMPLE:
+*** Settings ***
+Library    SeleniumLibrary
+
+*** Variables ***
+${URL}         https://example.com
+${BROWSER}     chrome
+
+*** Test Cases ***
+Login With Valid Credentials
+    Open Browser    ${URL}    ${BROWSER}
+    Input Text      id=username    admin
+    Click Button    id=login-btn
+    Location Should Contain    /dashboard
+    [Teardown]    Close Browser
+""",
+        "playwright": """
+OUTPUT FORMAT — Playwright Python (.py file):
+- Use pytest as the test runner.
+- Import: from playwright.sync_api import Page, expect
+- Each test is a function: def test_<name>(page: Page):
+- Use page.goto(), page.fill(), page.click(), page.locator(), expect().
+- Do NOT output Robot Framework or Selenium syntax.
+- Do NOT wrap the output in a markdown code fence.
+""",
+        "selenium": """
+OUTPUT FORMAT — Selenium Python (.py file):
+- Use pytest as the test runner.
+- Import: from selenium import webdriver; from selenium.webdriver.common.by import By
+- Each test is a method inside a class inheriting unittest.TestCase, OR a plain pytest function.
+- Use driver.get(), driver.find_element(By.CSS_SELECTOR, ...), element.send_keys(), element.click().
+- Do NOT output Robot Framework or Playwright syntax.
+- Do NOT wrap the output in a markdown code fence.
+""",
+    }
+
     def _build_system_prompt(self, from_name: str, to_name: str, gap_notes: str,
                               shared_context: str = "", target_lang: str = "python",
                               to_fw: Any = None) -> str:
@@ -958,11 +1014,13 @@ class ToolExecutor:
         ctx = f"\n\nShared project context (page objects / base classes):\n{shared_context[:2000]}" if shared_context else ""
         api_notes = self._build_api_notes(to_fw, to_name)
 
-        # Framework-specific conversion guidance from YAML
         conv_notes = ""
         raw_conv = getattr(to_fw, "conversion_notes", "") if to_fw else ""
         if raw_conv:
             conv_notes = f"\n\n{to_name}-specific conversion guidance:\n{raw_conv.strip()}"
+
+        # Inject framework-specific syntax rules
+        syntax_rules = self._FW_SYNTAX_RULES.get(to_name.lower(), "")
 
         return (
             f"You are an expert test automation engineer.{ctx}\n"
@@ -974,15 +1032,13 @@ class ToolExecutor:
             f"3. Use {eco['runner']} as the test runner/entry point.\n"
             f"4. Resolve any imports that reference other files in the shared context above.\n"
             f"5. For any capability {to_name} cannot handle natively, generate a "
-            f"   helper in {lang_title} in a `// === HELPER: <name> ===` section (or "
-            f"   language-appropriate comment) and show how the test calls it.\n"
-            f"6. Use the CURRENT stable API — do NOT use deprecated or experimental "
-            f"   import paths that have since been renamed or graduated.\n"
-            f"7. End with a CI/CD INTEGRATION comment block showing the GitHub "
-            f"   Actions step to run the converted tests with {to_name}."
+            f"   helper in {lang_title} in a `// === HELPER: <name> ===` section and show how the test calls it.\n"
+            f"6. Use the CURRENT stable API — do NOT use deprecated or experimental import paths.\n"
+            f"7. End with a CI/CD INTEGRATION comment block showing the GitHub Actions step."
             + conv_notes
             + api_notes
             + gap_notes
+            + (f"\n\n{syntax_rules}" if syntax_rules else "")
         )
 
     def _llm_convert(self, prompt: str, system: str) -> str:
