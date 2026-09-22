@@ -133,9 +133,9 @@ def _single_file_mode(from_fw, to_fw, v, get_stack) -> None:
 
             st.session_state.last_converted_code = runnable
             st.session_state.studio_source_code  = source_code
-            st.session_state.studio_gap_block    = gap_block
             st.session_state.studio_cicd_block   = cicd_block
             st.session_state.studio_to_fw        = to_fw
+            st.session_state.studio_split_files  = getattr(executor, '_last_split_files', None) or {}
             # Render immediately — no rerun needed
             _show_single_result()
 
@@ -210,26 +210,50 @@ def _parse_cicd_block(raw: str, to_fw: str) -> dict:
 
 
 def _show_single_result() -> None:
-    runnable   = st.session_state.last_converted_code
-    cicd_block = st.session_state.get("studio_cicd_block", "")
-    to_fw      = st.session_state.get("studio_to_fw", "")
+    to_fw       = st.session_state.get("studio_to_fw", "")
+    cicd_block  = st.session_state.get("studio_cicd_block", "")
+    split_files = st.session_state.get("studio_split_files", {})
+    runnable    = st.session_state.last_converted_code
 
     code_lang, ext, mime = _target_lang_display(to_fw)
-
-    with st.expander("📄 Converted Test Code", expanded=True):
-        st.code(runnable, language=code_lang)
-        st.download_button(
-            label="⬇ Download converted file",
-            data=runnable,
-            file_name=f"test_converted{ext}",
-            mime=mime,
-            key="btn_dl_single",
-        )
-
-    # ── How to run ───────────────────────────────────────────────────
     to_fw_lower = (to_fw or "").lower()
     req, run_cmd, install_cmd = _get_run_instructions(to_fw_lower)
 
+    # ── Converted files ───────────────────────────────────────────────
+    if split_files and len(split_files) > 1:
+        st.markdown("### 📂 Converted Project Files")
+        all_dl: dict[str, str] = {}
+        for fpath, fcode in sorted(split_files.items()):
+            icon = "🧪" if "/test" in fpath or fpath.startswith("test") else (
+                   "📄" if "/page" in fpath.lower() else (
+                   "🔧" if "conftest" in fpath else "🛠️"))
+            with st.expander(f"{icon} `{fpath}`", expanded=False):
+                st.code(fcode, language=code_lang)
+                st.download_button(
+                    f"⬇ {Path(fpath).name}", fcode,
+                    file_name=Path(fpath).name, mime=mime,
+                    key=f"dl_split_{fpath.replace('/', '_')}",
+                )
+            all_dl[fpath] = fcode
+        # ZIP of all split files
+        import io as _io, zipfile as _zf
+        buf = _io.BytesIO()
+        with _zf.ZipFile(buf, "w", _zf.ZIP_DEFLATED) as zf:
+            for p, c in all_dl.items():
+                zf.writestr(p, c)
+        buf.seek(0)
+        st.download_button("⬇ Download all files (ZIP)", buf.getvalue(),
+                           file_name=f"converted_{to_fw_lower.replace(' ','_')}.zip",
+                           mime="application/zip", key="btn_dl_split_zip")
+    else:
+        # Single file fallback
+        with st.expander("📄 Converted Test Code", expanded=True):
+            st.code(runnable, language=code_lang)
+            st.download_button("⬇ Download converted file", runnable,
+                               file_name=f"test_converted{ext}", mime=mime,
+                               key="btn_dl_single")
+
+    # ── Requirements & Execution Guide ────────────────────────────────
     with st.expander("📋 Requirements & Execution Guide", expanded=True):
         col_req, col_run = st.columns(2)
         with col_req:

@@ -47,7 +47,7 @@ class GroqClient:
         api_key: str | None = None,
         model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: int = 1500,
+        max_tokens: int = 8000,
     ) -> None:
 
         self._api_key_override = api_key

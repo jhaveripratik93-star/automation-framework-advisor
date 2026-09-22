@@ -1108,16 +1108,14 @@ OUTPUT FORMAT — Selenium Python (.py file):
         to_framework: str,
         language: str = "python",
     ) -> str:
-        """Single-file conversion — preserves existing behaviour."""
+        import re as _re
         from_fw = self._resolve_framework(from_framework)
-        to_fw = self._resolve_framework(to_framework)
+        to_fw   = self._resolve_framework(to_framework)
         from_name = from_fw.framework_name if from_fw else from_framework
-        to_name = to_fw.framework_name if to_fw else to_framework
-
+        to_name   = to_fw.framework_name   if to_fw   else to_framework
         target_lang, eco = self._resolve_target_language(to_fw, to_name)
         lang_title = target_lang.title() if target_lang != "c#" else "C#"
-
-        gap_notes, gaps = self._build_gap_notes(from_fw, to_fw, to_name, target_lang)
+        gap_notes, _ = self._build_gap_notes(from_fw, to_fw, to_name, target_lang)
         system = self._build_system_prompt(from_name, to_name, gap_notes,
                                            target_lang=target_lang, to_fw=to_fw)
         prompt = (
@@ -1125,9 +1123,13 @@ OUTPUT FORMAT — Selenium Python (.py file):
             f"```\n{source_code[:4000]}\n```"
         )
         converted = self._llm_convert(prompt, system)
-        lines = [f"## 🔄 Converted: {from_name} → {to_name} ({lang_title})\n", converted]
-        lines += self._gap_table_lines(gaps, to_name)
-        return "\n".join(lines)
+        # Strip any markdown fence the LLM added
+        code_blocks = _re.findall(r"```(?:[a-zA-Z]*)\n(.*?)```", converted, _re.DOTALL)
+        clean_code = code_blocks[0].strip() if code_blocks else converted.strip()
+        # Single-file conversion — store as-is, no splitting
+        ext = ".robot" if "robot" in to_name.lower() else ".py"
+        self._last_split_files = {f"tests/test_converted{ext}": clean_code}
+        return f"## Converted: {from_name} -> {to_name} ({lang_title})\n" + converted
 
     def convert_multi_file(
         self,
@@ -1206,6 +1208,19 @@ OUTPUT FORMAT — Selenium Python (.py file):
                     # Keep the relative folder path (e.g. e2e/login.spec.js -> e2e/login.js)
                     out_name = f"{parent}/{stem}{ext}"
             converted[out_name] = "\n\n".join(file_parts)
+
+
+        # Split each converted file into logical sub-files
+        from src.tools.output_splitter import split as split_output
+        split_converted: dict[str, str] = {}
+        for _path, _code in converted.items():
+            _stem = Path(_path).stem
+            _parts = split_output(_code, to_name, source_stem=_stem)
+            if len(_parts) > 1:
+                split_converted.update(_parts)
+            else:
+                split_converted[_path] = _code
+        converted = split_converted
 
         # Generate helper scripts for every capability gap (in the target language)
         helpers = self._generate_helper_scripts(gaps, to_name, target_lang)
