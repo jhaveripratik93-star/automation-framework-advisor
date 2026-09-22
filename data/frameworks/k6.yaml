@@ -124,6 +124,36 @@ limitations:
   - "No built-in UI for test management"
   - "Extension ecosystem smaller than JMeter"
 
+conversion_notes: |
+  K6 is primarily a load/performance testing tool (HTTP via k6/http), NOT a UI tool.
+  When converting UI tests (Playwright/Cypress/Selenium) to K6:
+  - For API/HTTP checks: use `import http from 'k6/http'` and `import { check } from 'k6'`.
+    Export a default function that makes requests and asserts with check().
+  - For browser/UI flows: use the k6 browser module. The correct structure is:
+      import { browser } from 'k6/browser';
+      import { check } from 'k6';
+      export const options = {
+        scenarios: { ui: { executor: 'shared-iterations',
+          options: { browser: { type: 'chromium' } } } },
+      };
+      export default async function () {
+        const page = await browser.newPage();
+        try {
+          await page.goto('URL');
+          await page.locator('SELECTOR').type('text');
+          await page.locator('SELECTOR').click();
+          await page.waitForNavigation();
+          check(page, { 'assertion': (p) => p.url().includes('/expected') });
+        } finally {
+          await page.close();
+        }
+      }
+  - Do NOT call chromium.launch() or browserType.launch() — those are Playwright APIs and
+    do NOT exist in k6. The browser type is declared in options.scenarios.*.options.browser.type.
+  - Do NOT use `import { chromium } from ...` — `chromium` is not a k6 export.
+  - Use page.locator(sel).type()/.click()/.tap(), page.goto(), page.waitForNavigation().
+  - Run browser tests with: k6 run script.js (browser is auto-managed via options).
+
 versions:
   - version: "0.50"
     release_date: "2024-03-26"
@@ -139,8 +169,16 @@ versions:
       - name: "websocket_improvements"
         status: "improved"
         description: "Enhanced WebSocket testing with better lifecycle control"
-    capabilities_deprecated: []
-    breaking_changes: []
+    capabilities_deprecated:
+      - name: "k6/experimental/browser"
+        status: "removed"
+        description: "The k6/experimental/browser module graduated to stable"
+        replacement: "k6/browser"
+    breaking_changes:
+      - description: "k6/experimental/browser import path removed — module graduated to stable"
+        migration_effort: "low"
+        affected_apis: ["import { browser } from 'k6/experimental/browser'"]
+        workaround: "Use import { browser } from 'k6/browser' instead"
     known_limitations:
       - "Browser module resource usage is significantly higher than protocol tests"
 
