@@ -27,6 +27,11 @@ _PATTERNS: dict[str, list[str]] = {
         r"^\s+list should",
         r"^\s+variable should",
         r"^\s+run keyword and expect error",
+    # --- ADDED PATTERNS ---
+        r"^\s+should\s+be\s+",             # Matches 'Should Be Equal', 'Should Be True', 'Should Be Empty', etc.
+        r"^\s+should\s+contain",           # Matches 'Should Contain', 'Should Contain X Times'
+        r"^\s+should\s+match",             # Matches 'Should Match', 'Should Match Regexp'
+        r"^\s+except\b",                   # Catches native Robot v5+ TRY/EXCEPT assertion blocks
     ],
     "playwright": [
         r"\bexpect\s*\(",
@@ -39,6 +44,11 @@ _PATTERNS: dict[str, list[str]] = {
         r"\.to_have_url\(",
         r"\.to_have_title\(",
         r"\.to_contain_text\(",
+    # --- ADDED PATTERNS ---
+        r"\.to_be_ok\(",                    # API response status assertions
+        r"\.to_have_count\(",               # Locator count assertions
+        r"\.to_be_attached\(",              # DOM state assertions
+        r"\.to_be_in_viewport\(",           # Visibility/viewport assertions    
         r"\bassert\b",
     ],
     "selenium": [
@@ -50,11 +60,15 @@ _PATTERNS: dict[str, list[str]] = {
         r"\bassertIsNotNone\b",
         r"\.assert_",
         r"pytest\.raises\(",
+    # --- ADDED PATTERNS ---
+        r"pytest\.fail\(",                 # Explicit pytest failure triggers
+        r"\.until\s*\(",                   # Explicit wait checks (e.g., WebDriverWait.until)
     ],
     # K6: after pre-processing, each check entry becomes its own synthetic line
     # tagged __k6_check__ so the pattern below matches exactly once per entry.
     "k6": [
         r"__k6_check__",
+        r"\bcheck\s*\(",                   # Fallback for raw k6 check calls
         r"\bexpect\s*\(",
     ],
 }
