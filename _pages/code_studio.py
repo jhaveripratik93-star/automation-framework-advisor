@@ -14,7 +14,7 @@ from ui.components import render_thinking
 logger = logging.getLogger(__name__)
 
 
-_SUPPORTED_FRAMEWORKS = ["Robot Framework", "Playwright", "Selenium"]
+_SUPPORTED_FRAMEWORKS = ["Robot Framework", "Playwright", "Selenium", "K6"]
 
 
 def render() -> None:
@@ -147,9 +147,9 @@ def _single_file_mode(from_fw, to_fw, v, get_stack) -> None:
 
 _RUN_INSTRUCTIONS: dict[str, tuple[str, str, str]] = {
     "robot framework": (
-        "robotframework>=7.0\nrobotframework-seleniumlibrary>=6.0\nSelenium>=4.0",
+        "robotframework>=7.0\nrobotframework-seleniumlibrary>=6.0\nrobotframework-requests>=0.9\nSelenium>=4.0\nrequests>=2.31",
         "robot tests/",
-        "pip install -r requirements.txt\nplaywright install  # if using Browser library instead",
+        "pip install -r requirements.txt",
     ),
     "playwright": (
         "playwright>=1.40.0\npytest-playwright>=0.4.0\npytest>=7.0",
@@ -160,6 +160,11 @@ _RUN_INSTRUCTIONS: dict[str, tuple[str, str, str]] = {
         "selenium>=4.0\npytest>=7.0\nwebdriver-manager>=4.0",
         "pytest tests/ -v",
         "pip install -r requirements.txt",
+    ),
+    "k6": (
+        "# K6 is a standalone Go binary — no pip packages required\n# Install via: brew install k6  OR  apt-get install k6",
+        "k6 run tests/load_test.js",
+        "# Install k6:\nbrew install k6\n# or: apt-get install k6",
     ),
 }
 
@@ -192,7 +197,8 @@ def _parse_cicd_block(raw: str, to_fw: str) -> dict:
         if low.startswith("pip install") or low.startswith("pip3 install"):
             install = clean
         elif (low.startswith("robot ") or low.startswith("pytest ") or
-              low.startswith("python -m pytest") or low.startswith("python -m robot")):
+              low.startswith("python -m pytest") or low.startswith("python -m robot") or
+              low.startswith("k6 run")):
             run = clean
         yaml_lines.append(clean)
 
@@ -205,6 +211,8 @@ def _parse_cicd_block(raw: str, to_fw: str) -> dict:
             run = "pytest tests/ --tb=short"
         elif "selenium" in fw_lower:
             run = "pytest tests/ --tb=short"
+        elif "k6" in fw_lower:
+            run = "k6 run tests/load_test.js"
 
     return {"install": install, "run": run, "yaml": "\n".join(yaml_lines)}
 
@@ -280,6 +288,7 @@ _FW_LANG_OVERRIDE = {
     "robot framework": "robot",
     "playwright":      "python",
     "selenium":        "python",
+    "k6":              "javascript",
 }
 
 
@@ -302,7 +311,7 @@ def _target_lang_display(to_fw_name: str):
 
 # Source file extensions we convert (everything else in a ZIP is ignored)
 _SOURCE_EXTS = {".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".robot",
-                ".feature", ".yml", ".yaml", ".rb", ".cs"}
+                ".feature", ".yml", ".yaml", ".rb", ".cs", ".k6.js"}
 # Directories to skip when extracting a ZIP repo
 _SKIP_DIRS = {"node_modules", ".git", "__pycache__", ".venv", "venv",
               "dist", "build", ".idea", ".vscode", "target", "bin", "obj"}

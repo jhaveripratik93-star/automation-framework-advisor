@@ -38,11 +38,13 @@ def split(converted_code: str, framework: str, source_stem: str = "tests") -> di
     try:
         if "robot" in fw:
             return _split_robot(converted_code, source_stem)
+        elif "k6" in fw:
+            return _split_k6(converted_code, source_stem)
         else:
             return _split_python(converted_code, source_stem)
     except Exception as exc:
         logger.warning("output_splitter: split failed (%s), returning single file", exc)
-        ext = ".robot" if "robot" in fw else ".py"
+        ext = ".robot" if "robot" in fw else (".js" if "k6" in fw else ".py")
         return {f"tests/{source_stem}{ext}": converted_code}
 
 
@@ -145,6 +147,33 @@ def _build_robot_settings(settings_block: str, variables_block: str, keywords_bl
         lines.append("Resource    ../resources/keywords.robot")
 
     return "\n".join(lines) + "\n\n"
+
+
+# ── K6 JavaScript splitter ───────────────────────────────────────────
+
+_K6_EXPORT_DEFAULT = re.compile(r"^export\s+default\s+(?:async\s+)?function", re.MULTILINE)
+_K6_OPTIONS = re.compile(r"^export\s+const\s+options\s*=", re.MULTILINE)
+
+
+def _split_k6(code: str, stem: str) -> dict[str, str]:
+    """K6 scripts are self-contained JS files — return as single file.
+
+    Only splits when multiple export default functions are detected
+    (rare multi-scenario output), otherwise keeps as one file.
+    """
+    defaults = list(_K6_EXPORT_DEFAULT.finditer(code))
+    if len(defaults) <= 1:
+        return {f"tests/{stem}.js": code}
+
+    # Multiple scenarios — split each into its own file
+    files: dict[str, str] = {}
+    for i, m in enumerate(defaults):
+        start = m.start()
+        end = defaults[i + 1].start() if i + 1 < len(defaults) else len(code)
+        # Include options block if present before this function
+        block = code[start:end].strip()
+        files[f"tests/{stem}_{i + 1}.js"] = block
+    return files
 
 
 # ── Python splitter ───────────────────────────────────────────────────

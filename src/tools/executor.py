@@ -868,13 +868,14 @@ class ToolExecutor:
 
     # Language → ecosystem details (extension, test runner, package manifest)
     _LANG_ECOSYSTEM: dict[str, dict[str, str]] = {
-        "python":     {"ext": ".py",   "runner": "pytest",      "manifest": "requirements.txt", "fence": "python"},
-        "javascript": {"ext": ".js",   "runner": "the framework CLI (e.g. k6 run, npx cypress run)", "manifest": "package.json", "fence": "javascript"},
-        "typescript": {"ext": ".ts",   "runner": "the framework CLI",  "manifest": "package.json", "fence": "typescript"},
-        "java":       {"ext": ".java", "runner": "Maven/Gradle (JUnit/TestNG)", "manifest": "pom.xml", "fence": "java"},
-        "c#":         {"ext": ".cs",   "runner": "dotnet test", "manifest": "packages.config", "fence": "csharp"},
-        "ruby":       {"ext": ".rb",   "runner": "rspec",       "manifest": "Gemfile", "fence": "ruby"},
-        "go":         {"ext": ".go",   "runner": "go test",     "manifest": "go.mod", "fence": "go"},
+        "python":     {"ext": ".py",    "runner": "pytest",                                        "manifest": "requirements.txt", "fence": "python"},
+        "robot":      {"ext": ".robot", "runner": "robot (e.g. robot tests/)",                    "manifest": "requirements.txt", "fence": "robot"},
+        "javascript": {"ext": ".js",    "runner": "the framework CLI (e.g. k6 run, npx cypress run)", "manifest": "package.json",    "fence": "javascript"},
+        "typescript": {"ext": ".ts",    "runner": "the framework CLI",                             "manifest": "package.json",    "fence": "typescript"},
+        "java":       {"ext": ".java",  "runner": "Maven/Gradle (JUnit/TestNG)",                  "manifest": "pom.xml",         "fence": "java"},
+        "c#":         {"ext": ".cs",    "runner": "dotnet test",                                  "manifest": "packages.config", "fence": "csharp"},
+        "ruby":       {"ext": ".rb",    "runner": "rspec",                                        "manifest": "Gemfile",         "fence": "ruby"},
+        "go":         {"ext": ".go",    "runner": "go test",                                      "manifest": "go.mod",          "fence": "go"},
     }
 
     def _resolve_target_language(self, to_fw: Any, to_name: str) -> tuple[str, dict[str, str]]:
@@ -882,6 +883,10 @@ class ToolExecutor:
 
         Returns (language_lower, ecosystem_dict). Falls back to Python if unknown.
         """
+        # Robot Framework is its own language/format — never resolve to "python"
+        if "robot" in to_name.lower():
+            return "robot", self._LANG_ECOSYSTEM["robot"]
+
         default = self._LANG_ECOSYSTEM["python"]
         if not to_fw or not getattr(to_fw, "languages_supported", None):
             return "python", default
@@ -970,7 +975,11 @@ OUTPUT FORMAT — Robot Framework .robot file (STRICT):
 - Wrap each test with [Teardown]    Close Browser
 - Do NOT output Python, pytest, or any non-Robot syntax.
 - Do NOT wrap the output in a markdown code fence.
-EXAMPLE:
+KEYWORD RULES (CRITICAL — read carefully):
+- Do NOT create a keyword that wraps only ONE library call. Write that call directly in the test case body.
+- Only define a keyword in *** Keywords *** when it groups 2 or more steps AND is reused across multiple test cases.
+- If a step is used in only one test case, write it inline — never wrap it in a named keyword.
+CORRECT EXAMPLE (steps written inline, no pointless wrappers):
 *** Settings ***
 Library    SeleniumLibrary
 
@@ -981,10 +990,19 @@ ${BROWSER}     chrome
 *** Test Cases ***
 Login With Valid Credentials
     Open Browser    ${URL}    ${BROWSER}
-    Input Text      id=username    admin
-    Click Button    id=login-btn
+    Input Text      css=[data-testid='username']    admin
+    Input Text      css=[data-testid='password']    secret
+    Click Button    css=[data-testid='login-btn']
     Location Should Contain    /dashboard
+    Element Text Should Be    css=h1    Dashboard
     [Teardown]    Close Browser
+
+WRONG EXAMPLE — do NOT produce this:
+*** Keywords ***
+Fill Username
+    Input Text    css=[data-testid='username']    admin
+Click Login Button
+    Click Button    css=[data-testid='login-btn']
 """,
         "playwright": """
 OUTPUT FORMAT — Playwright Python (.py file):
@@ -1004,6 +1022,87 @@ OUTPUT FORMAT — Selenium Python (.py file):
 - Do NOT output Robot Framework or Playwright syntax.
 - Do NOT wrap the output in a markdown code fence.
 """,
+        "k6": """
+OUTPUT FORMAT — K6 JavaScript (.js file):
+- Import http from 'k6/http' for HTTP requests.
+- Import { check, sleep } from 'k6' for assertions and pacing.
+- Export a default function as the test entry point.
+- Export const options = { vus: 1, duration: '10s' } for load config.
+- For API tests: use http.get(), http.post(), check() with response assertions.
+- For browser/UI flows: import { browser } from 'k6/browser'; declare browser type in options.scenarios.
+- Do NOT use chromium.launch() or import { chromium } — those are Playwright APIs, not k6.
+- Do NOT output Python, Robot Framework, or pytest syntax.
+- Do NOT wrap the output in a markdown code fence.
+EXAMPLE (API test):
+import http from 'k6/http';
+import { check, sleep } from 'k6';
+export const options = { vus: 1, duration: '10s' };
+export default function () {
+  const res = http.get('https://example.com/api/users');
+  check(res, { 'status is 200': (r) => r.status === 200 });
+  sleep(1);
+}
+""",
+    }
+
+    # Pair-specific conversion rules: (from_lower, to_lower) → extra instructions
+    _FW_PAIR_RULES: dict[tuple[str, str], str] = {
+        ("k6", "robot framework"): """
+K6 → Robot Framework CONVERSION RULES:
+K6 is an HTTP/load tool. Robot Framework replaces it using RequestsLibrary for HTTP calls.
+MANDATORY library imports under *** Settings ***:
+    Library    RequestsLibrary
+    Library    Collections
+
+K6 → Robot Framework keyword mapping (MUST follow exactly):
+  http.get(url)                        → GET On Session    alias    endpoint
+  http.post(url, body)                 → POST On Session   alias    endpoint    json=${body}
+  http.put(url, body)                  → PUT On Session    alias    endpoint    json=${body}
+  http.del(url)                        → DELETE On Session alias    endpoint
+  check(res, {'status is 200': ...})   → Status Should Be    ${response}    200
+  check(res, {'body contains X': ...}) → Should Contain    ${response.text}    X
+  check(res, {'duration < N': ...})    → Should Be True    ${response.elapsed.total_seconds()} < N
+  JSON field assertion                 → ${json}=    Set Variable    ${response.json()}
+                                         Dictionary Should Contain Key    ${json}    field_name
+                                         Should Be Equal As Strings    ${json}[field]    expected
+  sleep(N)                             → Sleep    Ns
+  options.vus / options.duration       → Document in *** Variables *** as ${VUS} and ${DURATION}
+
+Session setup pattern (REQUIRED for every test suite):
+*** Keywords ***
+Setup Session
+    Create Session    alias    ${BASE_URL}
+
+Each test MUST:
+  1. Call Setup Session (or use Suite Setup    Setup Session)
+  2. Make the HTTP call and store in ${response}
+  3. Assert EVERY k6 check() entry with the matching RF keyword above
+  4. Use [Teardown]    Delete All Sessions
+
+EXAMPLE — converting this k6 code:
+  const res = http.get(`${BASE_URL}/users`);
+  check(res, {
+    'status is 200': (r) => r.status === 200,
+    'has users key': (r) => r.json().users !== undefined,
+  });
+
+MUST produce:
+*** Settings ***
+Library    RequestsLibrary
+Library    Collections
+
+*** Variables ***
+${BASE_URL}    https://example.com
+
+*** Test Cases ***
+Get Users Returns 200 With Users Key
+    Create Session    api    ${BASE_URL}
+    ${response}=    GET On Session    api    /users
+    Status Should Be    ${response}    200
+    ${json}=    Set Variable    ${response.json()}
+    Dictionary Should Contain Key    ${json}    users
+    [Teardown]    Delete All Sessions
+""",
     }
 
     def _build_system_prompt(self, from_name: str, to_name: str, gap_notes: str,
@@ -1021,24 +1120,25 @@ OUTPUT FORMAT — Selenium Python (.py file):
 
         # Inject framework-specific syntax rules
         syntax_rules = self._FW_SYNTAX_RULES.get(to_name.lower(), "")
+        # Inject pair-specific rules (overrides generic syntax rules when present)
+        pair_rules = self._FW_PAIR_RULES.get((from_name.lower(), to_name.lower()), "")
 
         return (
             f"You are an expert test automation engineer.{ctx}\n"
             f"Convert the following test code from {from_name} to {to_name}. "
-            f"{to_name} uses {lang_title}, so output {lang_title} code.\n"
+            f"Output ONLY valid {to_name} syntax — {'a .robot file with *** sections ***' if target_lang == 'robot' else f'{lang_title} code'}.\n"
             f"Rules:\n"
-            f"1. Output ONLY valid, runnable {lang_title} code using {to_name}'s native API.\n"
-            f"2. Preserve all test intent and assertions.\n"
+            f"1. Output ONLY valid, runnable {to_name} {'keywords and test cases' if target_lang == 'robot' else f'{lang_title} code'} using {to_name}'s native API.\n"
+            f"2. Preserve ALL test intent and assertions — every source assertion MUST become a {to_name} assertion {'keyword' if target_lang == 'robot' else 'call'}.\n"
             f"3. Use {eco['runner']} as the test runner/entry point.\n"
             f"4. Resolve any imports that reference other files in the shared context above.\n"
-            f"5. For any capability {to_name} cannot handle natively, generate a "
-            f"   helper in {lang_title} in a `// === HELPER: <name> ===` section and show how the test calls it.\n"
+            f"5. {'Define reusable steps in a *** Keywords *** section.' if target_lang == 'robot' else f'For any capability {to_name} cannot handle natively, generate a helper in {lang_title} in a `# === HELPER: <name> ===` section.'}\n"
             f"6. Use the CURRENT stable API — do NOT use deprecated or experimental import paths.\n"
             f"7. End with a CI/CD INTEGRATION comment block showing the GitHub Actions step."
             + conv_notes
             + api_notes
             + gap_notes
-            + (f"\n\n{syntax_rules}" if syntax_rules else "")
+            + (f"\n\n{pair_rules}" if pair_rules else (f"\n\n{syntax_rules}" if syntax_rules else ""))
         )
 
     def _llm_convert(self, prompt: str, system: str) -> str:
@@ -1127,7 +1227,7 @@ OUTPUT FORMAT — Selenium Python (.py file):
         code_blocks = _re.findall(r"```(?:[a-zA-Z]*)\n(.*?)```", converted, _re.DOTALL)
         clean_code = code_blocks[0].strip() if code_blocks else converted.strip()
         # Single-file conversion — store as-is, no splitting
-        ext = ".robot" if "robot" in to_name.lower() else ".py"
+        ext = eco.get("ext", ".py")
         self._last_split_files = {f"tests/test_converted{ext}": clean_code}
         return f"## Converted: {from_name} -> {to_name} ({lang_title})\n" + converted
 
@@ -1205,7 +1305,6 @@ OUTPUT FORMAT — Selenium Python (.py file):
                 if parent in (".", "", "/"):
                     out_name = f"tests/{stem}{ext}"
                 else:
-                    # Keep the relative folder path (e.g. e2e/login.spec.js -> e2e/login.js)
                     out_name = f"{parent}/{stem}{ext}"
             converted[out_name] = "\n\n".join(file_parts)
 
@@ -1230,7 +1329,7 @@ OUTPUT FORMAT — Selenium Python (.py file):
         conftest = self._generate_conftest(to_name, gaps, list(helpers.keys())) if target_lang == "python" else ""
 
         # Generate dependency manifest
-        requirements = self._generate_requirements(to_name, gaps) if target_lang == "python" else ""
+        requirements = self._generate_requirements(to_name, gaps, from_name) if target_lang == "python" else ""
 
         # Markdown summary
         summary_lines = [
@@ -1276,7 +1375,7 @@ OUTPUT FORMAT — Selenium Python (.py file):
             f"# Add any project-wide fixtures below\n"
         )
 
-    def _generate_requirements(self, to_name: str, gaps: list[str]) -> str:
+    def _generate_requirements(self, to_name: str, gaps: list[str], from_name: str = "") -> str:
         base = {"pytest": ">=7.0", "pytest-asyncio": ">=0.21"}
         # Read pip_packages from YAML — no hardcoded framework list
         fw = self._resolve_framework(to_name)
@@ -1293,6 +1392,10 @@ OUTPUT FORMAT — Selenium Python (.py file):
         deps = {**base, **fw_deps}
         for gap in gaps:
             deps.update(gap_deps.get(gap, {}))
+        # K6 → Robot Framework needs RequestsLibrary for HTTP assertions
+        if "k6" in from_name.lower() and "robot" in to_name.lower():
+            deps["robotframework-requests"] = ">=0.9"
+            deps["robotframework"] = ">=7.0"
         return "\n".join(f"{pkg}{ver}" for pkg, ver in sorted(deps.items()))
 
     def _score_frameworks(
