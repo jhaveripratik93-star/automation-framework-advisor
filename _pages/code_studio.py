@@ -131,11 +131,12 @@ def _single_file_mode(from_fw, to_fw, v, get_stack) -> None:
             # Strip the leading header line added by _convert_test_cases ("## 🔄 Converted…")
             runnable = _re.sub(r"^##.*?\n", "", runnable).strip()
 
-            st.session_state.last_converted_code = runnable
-            st.session_state.studio_source_code  = source_code
-            st.session_state.studio_cicd_block   = cicd_block
-            st.session_state.studio_to_fw        = to_fw
-            st.session_state.studio_split_files  = getattr(executor, '_last_split_files', None) or {}
+            st.session_state.last_converted_code    = runnable
+            st.session_state.studio_source_code      = source_code
+            st.session_state.studio_cicd_block       = cicd_block
+            st.session_state.studio_to_fw            = to_fw
+            st.session_state.studio_split_files      = getattr(executor, '_last_split_files', None) or {}
+            st.session_state.studio_assertion_report = getattr(executor, '_last_assertion_report', None)
             # Render immediately — no rerun needed
             _show_single_result()
 
@@ -217,15 +218,64 @@ def _parse_cicd_block(raw: str, to_fw: str) -> dict:
     return {"install": install, "run": run, "yaml": "\n".join(yaml_lines)}
 
 
+def _render_assertion_report(report: dict | None) -> None:
+    """Render the assertion parity badge + detail table."""
+    if not report:
+        return
+    status = report.get("status", "pass")
+    src_n  = report.get("source_count", 0)
+    cvt_n  = report.get("converted_count", 0)
+    msg    = report.get("message", "")
+
+    colour = {"pass": "#1e7e34", "warn": "#856404", "fail": "#721c24"}.get(status, "#333")
+    bg     = {"pass": "#d4edda", "warn": "#fff3cd", "fail": "#f8d7da"}.get(status, "#eee")
+
+    st.markdown(
+        f'<div style="background:{bg};border-left:4px solid {colour};'
+        f'padding:0.6rem 1rem;border-radius:4px;margin:0.5rem 0;">'
+        f'<b style="color:{colour};">Assertion Parity Check</b><br>'
+        f'<span style="color:{colour};">{msg}</span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Detail table
+    breakdown = report.get("breakdown")
+    if breakdown:
+        with st.expander("📊 Assertion count breakdown", expanded=(status == "fail")):
+            st.markdown(
+                f"| | Count |\n|---|---|\n"
+                f"| Source assertions | **{src_n}** |\n"
+                f"| Converted assertions | **{cvt_n}** |\n"
+                f"| Delta | **{cvt_n - src_n:+d}** |"
+            )
+            if breakdown:
+                rows = "\n".join(
+                    f"| `{r['file']}` | {r['source_assertions']} |"
+                    for r in breakdown
+                )
+                st.markdown(f"\n**Per source file:**\n| File | Assertions |\n|---|---|\n{rows}")
+    else:
+        st.markdown(
+            f"| | Count |\n|---|---|\n"
+            f"| Source assertions | **{src_n}** |\n"
+            f"| Converted assertions | **{cvt_n}** |\n"
+            f"| Delta | **{cvt_n - src_n:+d}** |"
+        )
+
+
 def _show_single_result() -> None:
-    to_fw       = st.session_state.get("studio_to_fw", "")
-    cicd_block  = st.session_state.get("studio_cicd_block", "")
-    split_files = st.session_state.get("studio_split_files", {})
-    runnable    = st.session_state.last_converted_code
+    to_fw            = st.session_state.get("studio_to_fw", "")
+    cicd_block       = st.session_state.get("studio_cicd_block", "")
+    split_files      = st.session_state.get("studio_split_files", {})
+    runnable         = st.session_state.last_converted_code
+    assertion_report = st.session_state.get("studio_assertion_report")
 
     code_lang, ext, mime = _target_lang_display(to_fw)
     to_fw_lower = (to_fw or "").lower()
     req, run_cmd, install_cmd = _get_run_instructions(to_fw_lower)
+
+    _render_assertion_report(assertion_report)
 
     # ── Converted files ───────────────────────────────────────────────
     if split_files and len(split_files) > 1:
@@ -467,6 +517,7 @@ def _show_multi_result(result: dict, to_label: str) -> None:
 
     st.markdown("---")
     st.markdown(result["summary"])
+    _render_assertion_report(result.get("assertion_report"))
     st.markdown("### 📂 Converted Project Files")
     all_files: dict[str, str] = {}
 

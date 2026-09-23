@@ -32,9 +32,6 @@ class AdvisorLLM:
         knowledge_base: KnowledgeBase = None,
         knowledge_graph: KnowledgeGraph | None = None,
         llm_client=None,
-        # legacy compat params — ignored
-        ollama_client=None,
-        fallback_advisor=None,
     ) -> None:
         self._client = llm_client
         self._graphrag = graphrag_engine

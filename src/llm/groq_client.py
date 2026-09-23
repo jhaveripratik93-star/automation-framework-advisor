@@ -118,6 +118,7 @@ class GroqClient:
         max_tokens: int | None = None,
         caller: str = "",
         response_format: dict[str, str] | None = None,
+        temperature: float | None = None,
     ) -> dict:
 
         api_key = self._get_api_key()
@@ -149,7 +150,7 @@ class GroqClient:
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": all_messages,
-            "temperature": self.temperature,
+            "temperature": temperature if temperature is not None else self.temperature,
             "max_tokens": max_tokens if max_tokens is not None else self.max_tokens,
         }
 
@@ -226,6 +227,11 @@ class GroqClient:
                 or message.get("reasoning")
                 or ""
             )
+
+            # Strip <think>...</think> block produced by reasoning models
+            # (qwen3, deepseek-r1, etc.) — keep only the final answer
+            import re as _re
+            content = _re.sub(r"<think>[\s\S]*?</think>\s*", "", content).strip()
 
             logger.debug(
                 "Groq response: model=%s response_len=%d",

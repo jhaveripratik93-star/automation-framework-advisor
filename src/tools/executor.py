@@ -958,152 +958,230 @@ class ToolExecutor:
     # Per-target-framework syntax rules injected into the system prompt
     _FW_SYNTAX_RULES: dict[str, str] = {
         "robot framework": """
-OUTPUT FORMAT — Robot Framework .robot file (STRICT):
-- Use EXACTLY these four sections in order (omit empty ones):
+    OUTPUT RULES (STRICT):
+    1. Output ONLY valid Robot Framework code.
+    2. Do NOT wrap the code in markdown code fences.
+    3. Do NOT include introductory text, explanations, or conclusions.
+
+    SYNTAX & FORMATTING:
+    - Maintain EXACTLY these four standard sections in order (omit empty sections):
+        *** Settings ***
+        *** Variables ***
+        *** Keywords ***
+        *** Test Cases ***
+    - CRITICAL SPACING RULE: Separate all keywords, arguments, and variable assignments with AT LEAST TWO SPACES (or a TAB).
+    - Set global teardown under *** Settings ***:
+        Test Teardown    Close Browser
+    - Test Case titles must start at the beginning of the line (0 indentation).
+    - Steps inside test cases and keywords MUST be indented with 4 spaces.
+
+    LIBRARY & KEYWORD USAGE:
+    - Default Library: Library    SeleniumLibrary
+    - Allowed Core Keywords: Open Browser, Input Text, Input Password, Click Button, Click Element, Element Should Be Visible, Element Text Should Be, Location Should Contain, Close Browser.
+
+    KEYWORD CREATION RULES:
+    - Write steps inline inside *** Test Cases *** by default.
+    - DO NOT create single-action wrapper keywords.
+    - Define custom keywords under *** Keywords *** ONLY if they encapsulate 2+ sequential steps AND are reused across multiple test cases.
+
+    SYNTAX & PARSING RULES:
+    - CRITICAL SPACING: Separate all keywords, arguments, and assignments with AT LEAST TWO SPACES (or a TAB). Single spaces are invalid cell separators.
+    - NO PYTHON DOCSTRINGS: Do NOT use triple quotes (\"\"\") for keyword documentation or comments. ALWAYS use [Documentation] or '#' comments.
+    - DEPRECATION RULE: DO NOT use [Return] to return values from keywords. ALWAYS use the modern block keyword 'RETURN'.
+    - ARGUMENT ORDER: Do NOT put list varargs (@{LIST}) before standard scalar arguments (\({ARG}) in [Arguments]. Always place scalar arguments first or pass lists as standard scalars (\){LIST}).
+    - NESTED DICTIONARIES: Do NOT pass multiple key arguments to 'Get From Dictionary'. Access nested keys directly using RF variable syntax (e.g., '${json}[data][result]').
+    - INLINE IF STATEMENTS: Always use 'Set Variable' inside inline IF/ELSE blocks when assigning values.
+
+    CORRECT EXAMPLE:
     *** Settings ***
+    Library    SeleniumLibrary
+    Test Teardown    Close Browser
+
     *** Variables ***
+    ${URL}    https://example.com
+    ${BROWSER}    chrome
+
     *** Test Cases ***
-    *** Keywords ***
-- Library imports go under *** Settings *** as:  Library    SeleniumLibrary
-- Variables use syntax:  ${VAR_NAME}    value
-- Each test case name is on its own line with NO indentation.
-- Every keyword call inside a test case is indented with 4 spaces.
-- Keyword arguments are separated by 4 spaces (or a tab), NOT commas.
-- Use SeleniumLibrary keywords: Open Browser, Input Text, Input Password,
-  Click Button, Click Element, Element Should Be Visible,
-  Element Text Should Be, Location Should Contain, Close Browser.
-- Wrap each test with [Teardown]    Close Browser
-- Do NOT output Python, pytest, or any non-Robot syntax.
-- Do NOT wrap the output in a markdown code fence.
-KEYWORD RULES (CRITICAL — read carefully):
-- Do NOT create a keyword that wraps only ONE library call. Write that call directly in the test case body.
-- Only define a keyword in *** Keywords *** when it groups 2 or more steps AND is reused across multiple test cases.
-- If a step is used in only one test case, write it inline — never wrap it in a named keyword.
-CORRECT EXAMPLE (steps written inline, no pointless wrappers):
-*** Settings ***
-Library    SeleniumLibrary
+    Login With Valid Credentials
+        Open Browser    \({URL}\){BROWSER}
+        Input Text    css=[data-testid='username']    admin
+        Input Text    css=[data-testid='password']    secret
+        Click Button    css=[data-testid='login-btn']
+        Location Should Contain    /dashboard
+        Element Text Should Be    css=h1    Dashboard
+    """,
 
-*** Variables ***
-${URL}         https://example.com
-${BROWSER}     chrome
+            "playwright": """
+    OUTPUT RULES (STRICT):
+    1. Output ONLY valid executable Python code using pytest-playwright idioms.
+    2. Do NOT wrap the code in markdown code fences.
+    3. Do NOT output any explanations or conversational text.
 
-*** Test Cases ***
-Login With Valid Credentials
-    Open Browser    ${URL}    ${BROWSER}
-    Input Text      css=[data-testid='username']    admin
-    Input Text      css=[data-testid='password']    secret
-    Click Button    css=[data-testid='login-btn']
-    Location Should Contain    /dashboard
-    Element Text Should Be    css=h1    Dashboard
-    [Teardown]    Close Browser
+    TECHNICAL REQUIREMENTS:
+    - Standard Imports:
+        from playwright.sync_api import Page, expect
+    - Structure tests as standalone pytest functions: `def test_(page: Page):`
+    - Preferred Locator Strategy: Use user-facing locators (`page.get_by_role`, `page.get_by_label`, `page.get_by_test_id`) over raw CSS/XPath when possible.
+    - Assertions: ALWAYS use auto-retrying web-first assertions via `expect()` (e.g., `expect(page.get_by_role("heading")).to_be_visible()`).
+    - Do NOT explicitly instantiate browsers or drivers inside tests; rely on the injected `page` fixture.
+    - Do NOT output Robot Framework, Selenium, or JavaScript syntax.
+    """,
 
-WRONG EXAMPLE — do NOT produce this:
-*** Keywords ***
-Fill Username
-    Input Text    css=[data-testid='username']    admin
-Click Login Button
-    Click Button    css=[data-testid='login-btn']
-""",
-        "playwright": """
-OUTPUT FORMAT — Playwright Python (.py file):
-- Use pytest as the test runner.
-- Import: from playwright.sync_api import Page, expect
-- Each test is a function: def test_<name>(page: Page):
-- Use page.goto(), page.fill(), page.click(), page.locator(), expect().
-- Do NOT output Robot Framework or Selenium syntax.
-- Do NOT wrap the output in a markdown code fence.
-""",
-        "selenium": """
-OUTPUT FORMAT — Selenium Python (.py file):
-- Use pytest as the test runner.
-- Import: from selenium import webdriver; from selenium.webdriver.common.by import By
-- Each test is a method inside a class inheriting unittest.TestCase, OR a plain pytest function.
-- Use driver.get(), driver.find_element(By.CSS_SELECTOR, ...), element.send_keys(), element.click().
-- Do NOT output Robot Framework or Playwright syntax.
-- Do NOT wrap the output in a markdown code fence.
-""",
-        "k6": """
-OUTPUT FORMAT — K6 JavaScript (.js file):
-- Import http from 'k6/http' for HTTP requests.
-- Import { check, sleep } from 'k6' for assertions and pacing.
-- Export a default function as the test entry point.
-- Export const options = { vus: 1, duration: '10s' } for load config.
-- For API tests: use http.get(), http.post(), check() with response assertions.
-- For browser/UI flows: import { browser } from 'k6/browser'; declare browser type in options.scenarios.
-- Do NOT use chromium.launch() or import { chromium } — those are Playwright APIs, not k6.
-- Do NOT output Python, Robot Framework, or pytest syntax.
-- Do NOT wrap the output in a markdown code fence.
-EXAMPLE (API test):
-import http from 'k6/http';
-import { check, sleep } from 'k6';
-export const options = { vus: 1, duration: '10s' };
-export default function () {
-  const res = http.get('https://example.com/api/users');
-  check(res, { 'status is 200': (r) => r.status === 200 });
-  sleep(1);
-}
-""",
+            "selenium": """
+    OUTPUT RULES (STRICT):
+    1. Output ONLY valid Python code using pytest and Selenium Webdriver.
+    2. Do NOT wrap the output in markdown code fences.
+    3. Do NOT include explanatory text outside the code block.
+
+    TECHNICAL REQUIREMENTS:
+    - Imports:
+        import pytest
+        from selenium import webdriver
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
+    - Test Structure: Plain pytest functions (e.g., `def test_(driver):`).
+    - Element Selection: ALWAYS use `By` enum explicit locators (e.g., `By.CSS_SELECTOR`, `By.ID`, `By.XPATH`).
+    - Explicit Waits: Favor `WebDriverWait(driver, timeout).until(...)` over raw `time.sleep()`.
+    - Do NOT output Playwright, K6, or Robot Framework syntax.
+    """,
+
+            "k6": """
+    OUTPUT RULES (STRICT):
+    1. Output ONLY valid K6 JavaScript ES6 code.
+    2. Do NOT wrap the output in markdown code fences.
+    3. Do NOT include conversational text or markdown headings.
+
+    TECHNICAL REQUIREMENTS:
+    - Standard API Imports:
+        import http from 'k6/http';
+        import { check, sleep } from 'k6';
+    - Mandatory Config Export:
+        export const options = { vus: 1, duration: '10s' };
+    - Default Function Entrypoint:
+        export default function () { ... }
+    - Assertion Pattern: Use `check(res, { 'status is 200': (r) => r.status === 200 });`
+
+    FOR BROWSER (UI) PERFORMANCE TESTS:
+    - Import `browser` module: `import { browser } from 'k6/browser';`
+    - Scenario Config: Set `options.scenarios` with `executor: 'shared-iterations'` and `options: { browser: { type: 'chromium' } }`.
+    - Execution: Use `const context = await browser.newContext(); const page = await context.newPage();`.
+    - STRICT NEGATIVE RULE: Do NOT import or use `chromium.launch()` or standard Node/Playwright syntax.
+
+    CORRECT K6 API EXAMPLE:
+    import http from 'k6/http';
+    import { check, sleep } from 'k6';
+
+    export const options = {
+    vus: 1,
+    duration: '10s',
+    };
+
+    export default function () {
+    const res = http.get('https://example.com/api/users');
+    check(res, {
+        'status is 200': (r) => r.status === 200,
+    });
+    sleep(1);
     }
+    """,
+
+            "k6_to_robot": """
+    OUTPUT RULES (STRICT):
+    1. Output ONLY valid Robot Framework syntax (.robot file).
+    2. Do NOT wrap the output in markdown code fences.
+    3. Do NOT include explanations, conversational text, or header commentary.
+
+    SHARED HELPER & COMMON FUNCTION CONVERSION RULES:
+    - Identify imported functions from `common/` or shared JS modules (e.g., `import { login } from '../common/auth.js'`).
+    - Convert every shared helper function into a reusable entry under the `*** Keywords ***` section.
+    - Function parameters must be converted to Robot Framework arguments using standard syntax:
+        [Arguments]    \({username}\){password}
+    - Convert K6 API calls (`http.get`, `http.post`) to `RequestsLibrary` keywords (`GET On Session`, `POST On Session`).
+    - Convert K6 browser calls (`page.goto`, `page.fill`) to `Browser` or `SeleniumLibrary` keywords (`New Page`, `Type Text`, `Open Browser`, `Input Text`).
+    - Convert K6 `check()` assertions into explicit Robot Framework assertions (e.g., `Status Should Be    200`).
+
+    FORMATTING RULES:
+    - Maintain section order:
+        *** Settings ***
+        *** Variables ***
+        *** Keywords ***
+        *** Test Cases ***
+    - Under `*** Settings ***`, import required libraries (e.g., `Library    RequestsLibrary` or `Library    SeleniumLibrary`).
+    - CRITICAL SPACING RULE: Use AT LEAST TWO SPACES (or a TAB) between keywords, arguments, and variable names. Single spaces are invalid.
+    """
+        }
 
     # Pair-specific conversion rules: (from_lower, to_lower) → extra instructions
     _FW_PAIR_RULES: dict[tuple[str, str], str] = {
-        ("k6", "robot framework"): """
-K6 → Robot Framework CONVERSION RULES:
-K6 is an HTTP/load tool. Robot Framework replaces it using RequestsLibrary for HTTP calls.
-MANDATORY library imports under *** Settings ***:
+            ("k6", "robot framework"): """
+    K6 → Robot Framework CONVERSION RULES:
+    K6 is an HTTP/load tool. Robot Framework replaces it using RequestsLibrary for HTTP calls.
+    MANDATORY library imports under *** Settings ***:
+        Library    RequestsLibrary
+        Library    Collections
+
+    - Return Statements: Use modern 'RETURN    ${variable}' syntax (NEVER use '[Return]').
+    - Exception Handling: Use standard TRY / EXCEPT AS ${error} / END blocks.
+    - Dictionary Lookups: Use direct index syntax '${json}[key1][key2]' for nested properties instead of multi-arg 'Get From Dictionary'.
+    - Variable Types in Keywords: Pass list parameters as standard scalars '${METRICS}' when placed before other arguments in [Arguments].
+
+    EXAMPLE CONVERSION PATTERN:
+    *** Keywords ***
+    Get PM Server Response
+        [Arguments]    ${metric_name}
+        [Documentation]    Calls the PM server endpoint for a single metric.
+        \({endpoint}=    Set Variable    /metrics/\){metric_name}
+        \({response}=    GET On Session    api\){endpoint}
+        RETURN    ${response}
+
+    K6 → Robot Framework keyword mapping (MUST follow exactly):
+    http.get(url)                        → GET On Session    alias    endpoint
+    http.post(url, body)                 → POST On Session   alias    endpoint    json=${body}
+    http.put(url, body)                  → PUT On Session    alias    endpoint    json=${body}
+    http.del(url)                        → DELETE On Session alias    endpoint
+    check(res, {'status is 200': ...})   → Status Should Be    200    ${response}
+    check(res, {'body contains X': ...}) → Should Contain    ${response.text}    X
+    check(res, {'duration < N': ...})    → Should Be True    ${response.elapsed.total_seconds()} < N
+    JSON field assertion                 → \({json}=    Set Variable\){response.json()}
+                                            Dictionary Should Contain Key    ${json}    field_name
+                                            Should Be Equal As Strings    ${json}[field]    expected
+    sleep(N)                             → Sleep    Ns
+    options.vus / options.duration       → Document in *** Variables *** as \({VUS} and\){DURATION}
+
+    Session setup pattern (REQUIRED for every test suite):
+    *** Keywords ***
+    Setup Session
+        Create Session    alias    ${BASE_URL}
+
+    Each test MUST:
+    1. Call Setup Session (or use Suite Setup    Setup Session under *** Settings ***)
+    2. Make the HTTP call and store in ${response}
+    3. Assert EVERY k6 check() entry with the matching RF keyword above
+
+    EXAMPLE — converting this k6 code:
+    const res = http.get(`${BASE_URL}/users`);
+    check(res, {
+        'status is 200': (r) => r.status === 200,
+        'has users key': (r) => r.json().users !== undefined,
+    });
+
+    MUST produce:
+    *** Settings ***
     Library    RequestsLibrary
     Library    Collections
 
-K6 → Robot Framework keyword mapping (MUST follow exactly):
-  http.get(url)                        → GET On Session    alias    endpoint
-  http.post(url, body)                 → POST On Session   alias    endpoint    json=${body}
-  http.put(url, body)                  → PUT On Session    alias    endpoint    json=${body}
-  http.del(url)                        → DELETE On Session alias    endpoint
-  check(res, {'status is 200': ...})   → Status Should Be    ${response}    200
-  check(res, {'body contains X': ...}) → Should Contain    ${response.text}    X
-  check(res, {'duration < N': ...})    → Should Be True    ${response.elapsed.total_seconds()} < N
-  JSON field assertion                 → ${json}=    Set Variable    ${response.json()}
-                                         Dictionary Should Contain Key    ${json}    field_name
-                                         Should Be Equal As Strings    ${json}[field]    expected
-  sleep(N)                             → Sleep    Ns
-  options.vus / options.duration       → Document in *** Variables *** as ${VUS} and ${DURATION}
+    *** Variables ***
+    ${BASE_URL}    https://example.com
 
-Session setup pattern (REQUIRED for every test suite):
-*** Keywords ***
-Setup Session
-    Create Session    alias    ${BASE_URL}
-
-Each test MUST:
-  1. Call Setup Session (or use Suite Setup    Setup Session)
-  2. Make the HTTP call and store in ${response}
-  3. Assert EVERY k6 check() entry with the matching RF keyword above
-  4. Use [Teardown]    Delete All Sessions
-
-EXAMPLE — converting this k6 code:
-  const res = http.get(`${BASE_URL}/users`);
-  check(res, {
-    'status is 200': (r) => r.status === 200,
-    'has users key': (r) => r.json().users !== undefined,
-  });
-
-MUST produce:
-*** Settings ***
-Library    RequestsLibrary
-Library    Collections
-
-*** Variables ***
-${BASE_URL}    https://example.com
-
-*** Test Cases ***
-Get Users Returns 200 With Users Key
-    Create Session    api    ${BASE_URL}
-    ${response}=    GET On Session    api    /users
-    Status Should Be    ${response}    200
-    ${json}=    Set Variable    ${response.json()}
-    Dictionary Should Contain Key    ${json}    users
-    [Teardown]    Delete All Sessions
-""",
-    }
+    *** Test Cases ***
+    Get Users Returns 200 With Users Key
+        Create Session    api    \({BASE_URL}\){response}=    GET On Session    api    /users
+        Status Should Be    200    ${response}
+        \({json}=    Set Variable\){response.json()}
+        Dictionary Should Contain Key    ${json}    users
+    """,
+        }
 
     def _build_system_prompt(self, from_name: str, to_name: str, gap_notes: str,
                               shared_context: str = "", target_lang: str = "python",
@@ -1149,6 +1227,7 @@ Get Users Returns 200 With Users Key
             result = self._llm.chat(
                 messages=[{"role": "user", "content": prompt}],
                 system=system,
+                temperature=0.1,
             )
             return result.get("content") or result.get("reasoning", "")
         except Exception as exc:
@@ -1229,6 +1308,9 @@ Get Users Returns 200 With Users Key
         # Single-file conversion — store as-is, no splitting
         ext = eco.get("ext", ".py")
         self._last_split_files = {f"tests/test_converted{ext}": clean_code}
+        # Assertion parity check
+        from src.tools.assertion_counter import compare as _cmp_assert
+        self._last_assertion_report = _cmp_assert(source_code, clean_code, from_name, to_name)
         return f"## Converted: {from_name} -> {to_name} ({lang_title})\n" + converted
 
     def convert_multi_file(
@@ -1331,6 +1413,12 @@ Get Users Returns 200 With Users Key
         # Generate dependency manifest
         requirements = self._generate_requirements(to_name, gaps, from_name) if target_lang == "python" else ""
 
+        # Assertion parity check
+        from src.tools.assertion_counter import compare_multi as _cmp_multi
+        all_source = files
+        all_converted_code = converted
+        assertion_report = _cmp_multi(all_source, all_converted_code, from_name, to_name)
+
         # Markdown summary
         summary_lines = [
             f"## 🔄 Multi-File Conversion: {from_name} → {to_name} ({lang_title})",
@@ -1359,6 +1447,7 @@ Get Users Returns 200 With Users Key
             "requirements": requirements,
             "gaps": gaps,
             "summary": "\n".join(summary_lines),
+            "assertion_report": assertion_report,
         }
 
     def _generate_conftest(self, to_name: str, gaps: list[str], helper_paths: list[str]) -> str:
