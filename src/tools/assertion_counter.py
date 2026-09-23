@@ -19,7 +19,7 @@ _PATTERNS: dict[str, list[str]] = {
     "robot framework": [
         r"^\s+should\s+",
         r"^\s+status should be",
-        r"^\s+element should",
+        r"^\s+element",
         r"^\s+page should",
         r"^\s+location should",
         r"^\s+title should",

@@ -73,3 +73,6 @@ elif page == "codegen":
 elif page == "coverage":
     from _pages.coverage import render
     render()
+elif page == "repo_compare":
+    from _pages.repo_compare import render
+    render()

@@ -25,6 +25,10 @@ _DEFAULTS: dict = {
     "studio_cicd_block": "",
     "studio_widget_key_v": 0,
     "multi_convert_result": None,
+    # Repo Comparator
+    "rc_report":   None,
+    "rc_fw_a_lbl": "",
+    "rc_fw_b_lbl": "",
     # Coverage
     "excel_test_cases": [],
     "excel_summary": "",

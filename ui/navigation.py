@@ -4,11 +4,12 @@ from __future__ import annotations
 import streamlit as st
 
 _NAV_ITEMS = [
-    ("home",     "🏠", "Home"),
-    ("advisor",  "🧭", "Advisor"),
-    ("studio",   "🔄", "Framework Migration"),
-    ("codegen",  "🤖", "Test Generator"),
-    ("coverage", "🎯", "Framework Fit"),
+    ("home",        "🏠", "Home"),
+    ("advisor",     "🧭", "Advisor"),
+    ("studio",      "🔄", "Framework Migration"),
+    ("codegen",     "🤖", "Test Generator"),
+    ("coverage",    "🎯", "Framework Fit"),
+    ("repo_compare","🔍", "Repo Comparator"),
 ]
 
 
