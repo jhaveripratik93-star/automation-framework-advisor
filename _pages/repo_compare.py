@@ -153,8 +153,10 @@ def _render_report(report: dict, fw_a: str, fw_b: str) -> None:
             f"| Test Case "
             f"| {fw_a} — Assertions "
             f"| {fw_b} — Assertions "
+            f"| {fw_a} — Loop ⟳ "
+            f"| {fw_b} — Loop ⟳ "
             f"| Status |\n"
-            f"|---|:---:|:---:|:---:|"
+            f"|---|:---:|:---:|:---:|:---:|:---:|"
         )
         lines = [header]
 
@@ -168,22 +170,27 @@ def _render_report(report: dict, fw_a: str, fw_b: str) -> None:
                 status_cell = f"❌ Mismatch ({delta:+d})"
                 b_cell      = f"**{m.assertions_b}**"
 
+            la = f"⟳ {m.loop_assertions_a}" if m.loop_assertions_a else "—"
+            lb = f"⟳ {m.loop_assertions_b}" if m.loop_assertions_b else "—"
+
             # Use whichever name is more descriptive (longer)
             display = m.display_a if len(m.display_a) >= len(m.display_b) else m.display_b
             lines.append(
-                f"| {display} | {m.assertions_a} | {b_cell} | {status_cell} |"
+                f"| {display} | {m.assertions_a} | {b_cell} | {la} | {lb} | {status_cell} |"
             )
 
         # Only in A
         for u in only_a:
+            la = f"\u27f3 {u.loop_assertions}" if u.loop_assertions else "\u2014"
             lines.append(
-                f"| {u.display_name} | {u.assertions} | — | ⚠️ Only in Repo A |"
+                f"| {u.display_name} | {u.assertions} | \u2014 | {la} | \u2014 | \u26a0\ufe0f Only in Repo A |"
             )
 
         # Only in B
         for u in only_b:
+            lb = f"\u27f3 {u.loop_assertions}" if u.loop_assertions else "\u2014"
             lines.append(
-                f"| {u.display_name} | — | {u.assertions} | ⚠️ Only in Repo B |"
+                f"| {u.display_name} | \u2014 | {u.assertions} | \u2014 | {lb} | \u26a0\ufe0f Only in Repo B |"
             )
 
         st.markdown("\n".join(lines))

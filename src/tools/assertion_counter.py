@@ -145,6 +145,66 @@ def _resolve_fw_key(fw: str) -> str | None:
     return None
 
 
+# ---------------------------------------------------------------------------
+# Loop assertion detector
+# ---------------------------------------------------------------------------
+
+# Matches for/while loop openers per language
+_LOOP_OPENERS: dict[str, re.Pattern] = {
+    "python":  re.compile(r"^(\s*)(?:for|while)\s+.+:", re.MULTILINE),
+    "robot":   re.compile(r"^(\s*)(?:FOR|WHILE)\b",    re.MULTILINE | re.IGNORECASE),
+    "js":      re.compile(r"^(\s*)(?:for|while)\s*\(", re.MULTILINE),
+}
+
+
+def _loop_opener(fw_key: str | None) -> re.Pattern | None:
+    if fw_key in ("playwright", "selenium"):
+        return _LOOP_OPENERS["python"]
+    if fw_key == "robot framework":
+        return _LOOP_OPENERS["robot"]
+    if fw_key == "k6":
+        return _LOOP_OPENERS["js"]
+    return None
+
+
+def count_loop_assertions(code: str, framework: str) -> int:
+    """Return the number of assertions that appear inside loop blocks."""
+    fw  = framework.lower()
+    key = _resolve_fw_key(fw)
+    opener = _loop_opener(key)
+    if opener is None:
+        return 0
+
+    patterns   = _COMPILED.get(key) or _COMPILED_GENERIC
+    preprocessor = _PREPROCESSORS.get(key)
+    processed  = preprocessor(code) if preprocessor else code
+    lines      = processed.splitlines()
+
+    total = 0
+    i = 0
+    while i < len(lines):
+        m = opener.match(lines[i])
+        if m:
+            loop_indent = len(m.group(1))  # indentation of the loop keyword
+            i += 1
+            # Collect all lines that are indented deeper than the loop opener
+            while i < len(lines):
+                line = lines[i]
+                stripped = line.lstrip()
+                if stripped == "":
+                    i += 1
+                    continue
+                line_indent = len(line) - len(stripped)
+                if line_indent <= loop_indent:
+                    break  # back to loop level or outer — exit inner scan
+                if any(p.search(line) for p in patterns):
+                    total += 1
+                i += 1
+        else:
+            i += 1
+    return total
+
+
 def count(code: str, framework: str) -> int:
     """Return the number of individual assertions in *code* for *framework*."""
     fw = framework.lower()

@@ -3,13 +3,14 @@
 Repo A: K6 (JavaScript)      — 5 test cases across 3 files + resources/ + clamps/
 Repo B: Robot Framework      — 5 matching test cases across 3 files + resources/ + clamps/
 Repo C: Playwright (Python)  — 5 matching test cases across 3 files + resources/ + clamps/
+Repo D: Selenium (Python)    — 5 test cases matching K6 assertion counts
 
 Assertion counts:
-  TC1 - Login with valid credentials   K6:2  RF:2  PW:2   all MATCH
-  TC2 - Get user profile               K6:2  RF:2  PW:1   PW MISMATCH (missing username check)
-  TC3 - Create new order               K6:3  RF:3  PW:3   all MATCH
-  TC4 - Update user password           K6:3  RF:3  PW:1   PW MISMATCH vs K6/RF
-  TC5 - Delete order                   K6:2  RF:2  PW:2   all MATCH
+  TC1 - Login with valid credentials   K6:2  RF:2  PW:2  SE:2  all MATCH
+  TC2 - Get user profile               K6:4  RF:2  PW:1  SE:4  PW/RF MISMATCH (for-loop assertions in K6/SE)
+  TC3 - Create new order               K6:6  RF:3  PW:3  SE:6  RF/PW MISMATCH (for-loop assertions in K6/SE)
+  TC4 - Update user password           K6:3  RF:3  PW:1  SE:3  PW MISMATCH
+  TC5 - Delete order                   K6:2  RF:2  PW:2  SE:2  all MATCH
 """
 import io
 import zipfile
@@ -24,7 +25,7 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 K6_FILES = {
 
-    # ── tests/auth_tests.js  (TC1, TC2) ──────────────────────────────
+    # ── tests/auth_tests.js  (TC1:2, TC2:4) ─────────────────────────
     "repo_a_k6/tests/auth_tests.js": """\
 import http from 'k6/http';
 import { check, sleep } from 'k6';
@@ -35,34 +36,42 @@ export const options = { vus: 1, duration: '10s' };
 
 export default function () {
 
-  // TC1: Login with valid credentials
+  // TC1: login with valid credentials
   const loginRes = http.post(`${BASE_URL}/api/auth/login`, JSON.stringify({
     username: 'admin',
     password: 'secret123',
   }), { headers: { 'Content-Type': 'application/json' } });
 
   check(loginRes, {
-    'login status is 200':  (r) => r.status === 200,
-    'token present':        (r) => r.json().token !== undefined,
+    'dashboard in redirect url': (r) => r.headers['Location'] !== undefined && r.headers['Location'].includes('dashboard'),
+    'welcome-msg visible':       (r) => r.json().welcome_msg !== undefined,
   });
   sleep(1);
 
-  // TC2: Get user profile
   const token = loginRes.json().token;
-  // TC2: Get user profile
+  // TC2: get user profile
   const profileRes = http.get(`${BASE_URL}/api/users/me`, {
     headers: getAuthHeaders(token),
   });
 
   check(profileRes, {
-    'profile status is 200': (r) => r.status === 200,
-    'username matches':      (r) => r.json().username === 'admin',
+    'profile-card visible': (r) => r.json().profile_card !== undefined,
+    'username matches':     (r) => r.json().username === 'admin',
   });
+
+  const roles = profileRes.json().roles || ['user'];
+  for (const role of roles) {
+    check(role, {
+      'role is non-empty string': (r) => typeof r === 'string' && r.length > 0,
+      'role is known value':      (r) => ['admin', 'user', 'viewer'].includes(r),
+    });
+    break; // assert once to keep count deterministic (2 loop assertions)
+  }
   sleep(1);
 }
 """,
 
-    # ── tests/order_tests.js  (TC3, TC5) ─────────────────────────────
+    # ── tests/order_tests.js  (TC3:6, TC5:2) ────────────────────────
     "repo_a_k6/tests/order_tests.js": """\
 import http from 'k6/http';
 import { check, sleep } from 'k6';
@@ -75,33 +84,43 @@ export default function () {
 
   const token = 'test-token-123';
 
-  // TC3: Create new order
+  // TC3: create new order
   const createRes = http.post(`${BASE_URL}/api/orders`, JSON.stringify({
     product_id: 42,
     quantity: 2,
   }), { headers: getAuthHeaders(token) });
 
   check(createRes, {
-    'create order status 201': (r) => r.status === 201,
-    'order id present':        (r) => r.json().order_id !== undefined,
-    'quantity matches':        (r) => r.json().quantity === 2,
+    'confirmation in redirect url': (r) => r.headers['Location'] !== undefined && r.headers['Location'].includes('confirmation'),
+    'order-id visible':             (r) => r.json().order_id !== undefined,
+    'order-quantity matches':       (r) => String(r.json().quantity) === '2',
   });
+
+  const items = createRes.json().items || [{ sku: 'SKU-42', price: 9.99, in_stock: true }];
+  for (const item of items) {
+    check(item, {
+      'item sku is a string':   (i) => typeof i.sku === 'string' && i.sku.length > 0,
+      'item price is positive': (i) => i.price > 0,
+      'item is in stock':       (i) => i.in_stock === true,
+    });
+    break; // assert once to keep count deterministic (3 loop assertions)
+  }
   sleep(1);
 
-  // TC5: Delete order
+  // TC5: delete order
   const deleteRes = http.del(`${BASE_URL}/api/orders/42`, null, {
     headers: getAuthHeaders(token),
   });
 
   check(deleteRes, {
-    'delete status 204':    (r) => r.status === 204,
-    'body is empty':        (r) => r.body === null || r.body === '',
+    'confirm-dialog visible':       (r) => r.json().confirm_dialog !== undefined,
+    'confirm-dialog title matches': (r) => r.json().title === 'Confirm Delete',
   });
   sleep(1);
 }
 """,
 
-    # ── tests/user_tests.js  (TC4) ────────────────────────────────────
+    # ── tests/user_tests.js  (TC4:3) ─────────────────────────────────
     "repo_a_k6/tests/user_tests.js": """\
 import http from 'k6/http';
 import { check, sleep } from 'k6';
@@ -114,16 +133,16 @@ export default function () {
 
   const token = 'test-token-123';
 
-  // TC4: Update user password
+  // TC4: update user password
   const updateRes = http.put(`${BASE_URL}/api/users/me/password`, JSON.stringify({
     old_password: 'secret123',
     new_password: 'newpass456',
   }), { headers: getAuthHeaders(token) });
 
   check(updateRes, {
-    'update status 200':    (r) => r.status === 200,
-    'message is success':   (r) => r.json().message === 'Password updated',
-    'updated_at present':   (r) => r.json().updated_at !== undefined,
+    'success-banner visible':       (r) => r.json().success_banner !== undefined,
+    'success-banner text matches':  (r) => r.json().message === 'Password updated',
+    'updated-at visible':           (r) => r.json().updated_at !== undefined,
   });
   sleep(1);
 }
@@ -389,13 +408,150 @@ PW_FILES = {
 
 write_zip(PW_FILES, OUT_DIR / "repo_c_playwright.zip")
 
+# ---------------------------------------------------------------------------
+# Repo D — Selenium (Python) — matches K6 assertion counts exactly
+# TC1:2  TC2:4  TC3:6  TC4:3  TC5:2
+# ---------------------------------------------------------------------------
+
+SE_FILES = {
+
+    # ── tests/test_auth.py  (TC1:2, TC2:4) ─────────────────────────────
+    "repo_d_selenium/tests/test_auth.py": """\
+import pytest
+from selenium.webdriver.common.by import By
+from resources.config import BASE_URL
+from clamps.helpers import login, get_driver
+
+
+def test_login_with_valid_credentials():
+    # TC1 - 2 assertions
+    driver = get_driver()
+    login(driver, 'admin', 'secret123')
+    assert 'dashboard' in driver.current_url
+    assert driver.find_element(By.CLASS_NAME, 'welcome-msg').is_displayed()
+    driver.quit()
+
+
+def test_get_user_profile():
+    # TC2 - 4 assertions: 2 base + 2 inside for-loop over roles
+    driver = get_driver()
+    login(driver, 'admin', 'secret123')
+    driver.get(f'{BASE_URL}/profile')
+    assert driver.find_element(By.CLASS_NAME, 'profile-card').is_displayed()
+    assert driver.find_element(By.ID, 'username').text == 'admin'
+
+    roles = driver.execute_script("return window.__userRoles || ['user']")
+    for role in roles:
+        assert isinstance(role, str)                  # role is non-empty string
+        assert role in ['admin', 'user', 'viewer']    # role is known value
+        break  # one iteration only
+    driver.quit()
+""",
+
+    # ── tests/test_orders.py  (TC3:6, TC5:2) ──────────────────────────
+    "repo_d_selenium/tests/test_orders.py": """\
+import pytest
+from selenium.webdriver.common.by import By
+from resources.config import BASE_URL
+from clamps.helpers import login, get_driver
+
+
+def test_create_new_order():
+    # TC3 - 6 assertions: 3 base + 3 inside for-loop over order items
+    driver = get_driver()
+    login(driver, 'admin', 'secret123')
+    driver.get(f'{BASE_URL}/orders/new')
+    driver.find_element(By.NAME, 'product_id').send_keys('42')
+    driver.find_element(By.NAME, 'quantity').send_keys('2')
+    driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
+    assert 'confirmation' in driver.current_url
+    assert driver.find_element(By.CLASS_NAME, 'order-id').is_displayed()
+    assert driver.find_element(By.CLASS_NAME, 'order-quantity').text == '2'
+
+    items = driver.execute_script("return window.__orderItems || [{sku: 'SKU-42', price: 9.99, in_stock: true}]")
+    for item in items:
+        assert isinstance(item['sku'], str)    # item sku is a string
+        assert item['price'] > 0               # item price is positive
+        assert item['in_stock'] is True        # item is in stock
+        break  # one iteration only
+    driver.quit()
+
+
+def test_delete_order():
+    # TC5 - 2 assertions
+    driver = get_driver()
+    login(driver, 'admin', 'secret123')
+    driver.get(f'{BASE_URL}/orders/42')
+    driver.find_element(By.CSS_SELECTOR, 'button.delete-order').click()
+    assert driver.find_element(By.CLASS_NAME, 'confirm-dialog').is_displayed()
+    assert driver.find_element(By.CSS_SELECTOR, '.confirm-dialog .title').text == 'Confirm Delete'
+    driver.quit()
+""",
+
+    # ── tests/test_user.py  (TC4:3) ───────────────────────────────────
+    "repo_d_selenium/tests/test_user.py": """\
+import pytest
+from selenium.webdriver.common.by import By
+from resources.config import BASE_URL
+from clamps.helpers import login, get_driver
+
+
+def test_update_user_password():
+    # TC4 - 3 assertions (matches K6)
+    driver = get_driver()
+    login(driver, 'admin', 'secret123')
+    driver.get(f'{BASE_URL}/settings/password')
+    driver.find_element(By.NAME, 'old_password').send_keys('secret123')
+    driver.find_element(By.NAME, 'new_password').send_keys('newpass456')
+    driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
+    assert driver.find_element(By.CLASS_NAME, 'success-banner').is_displayed()
+    assert driver.find_element(By.CLASS_NAME, 'success-banner').text == 'Password updated'
+    assert driver.find_element(By.CLASS_NAME, 'updated-at').is_displayed()
+    driver.quit()
+""",
+
+    # ── resources/config.py ───────────────────────────────────────────────────
+    "repo_d_selenium/resources/config.py": """\
+import os
+
+BASE_URL = os.getenv('BASE_URL', 'https://app.example.com')
+TIMEOUT  = int(os.getenv('TIMEOUT', '10'))
+""",
+
+    # ── clamps/helpers.py ──────────────────────────────────────────────────────
+    "repo_d_selenium/clamps/helpers.py": """\
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from resources.config import BASE_URL, TIMEOUT
+
+
+def get_driver():
+    opts = Options()
+    opts.add_argument('--headless')
+    driver = webdriver.Chrome(options=opts)
+    driver.implicitly_wait(TIMEOUT)
+    return driver
+
+
+def login(driver, username: str, password: str):
+    driver.get(f'{BASE_URL}/login')
+    driver.find_element(By.NAME, 'username').send_keys(username)
+    driver.find_element(By.NAME, 'password').send_keys(password)
+    driver.find_element(By.CSS_SELECTOR, "button[type='submit']").click()
+""",
+}
+
+write_zip(SE_FILES, OUT_DIR / "repo_d_selenium.zip")
+
 print("\nDone. Upload these to the Repo Comparator:")
-print(f"  Repo A (K6):             {OUT_DIR / 'repo_a_k6.zip'}")
+print(f"  Repo A (K6):              {OUT_DIR / 'repo_a_k6.zip'}")
 print(f"  Repo B (Robot Framework): {OUT_DIR / 'repo_b_robot.zip'}")
 print(f"  Repo C (Playwright):      {OUT_DIR / 'repo_c_playwright.zip'}")
-print("\nExpected results (K6 vs Playwright):")
-print("  TC1 Login With Valid Credentials  — K6:2  PW:2  MATCH")
-print("  TC2 Get User Profile              — K6:2  PW:1  MISMATCH (PW missing username check)")
-print("  TC3 Create New Order              — K6:3  PW:3  MATCH")
-print("  TC4 Update User Password          — K6:2  PW:1  MISMATCH (PW missing 2 assertions)")
-print("  TC5 Delete Order                  — K6:2  PW:2  MATCH")
+print(f"  Repo D (Selenium):        {OUT_DIR / 'repo_d_selenium.zip'}")
+print("\nExpected results (K6 vs Selenium) — all MATCH:")
+print("  TC1 Login With Valid Credentials  — K6:2  SE:2  MATCH")
+print("  TC2 Get User Profile              — K6:4  SE:4  MATCH (for-loop assertions)")
+print("  TC3 Create New Order              — K6:6  SE:6  MATCH (for-loop assertions)")
+print("  TC4 Update User Password          — K6:3  SE:3  MATCH")
+print("  TC5 Delete Order                  — K6:2  SE:2  MATCH")

@@ -16,7 +16,7 @@ import zipfile
 from pathlib import PurePosixPath
 from typing import NamedTuple
 
-from src.tools.assertion_counter import count as count_assertions
+from src.tools.assertion_counter import count as count_assertions, count_loop_assertions
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -27,6 +27,7 @@ class TestCase(NamedTuple):
     display_name: str   # original name as found in source
     file: str           # relative file path
     assertions: int     # assertion count
+    loop_assertions: int = 0  # assertions inside loop blocks
 
 
 class MatchedPair(NamedTuple):
@@ -37,6 +38,8 @@ class MatchedPair(NamedTuple):
     file_b: str
     assertions_a: int
     assertions_b: int
+    loop_assertions_a: int
+    loop_assertions_b: int
     score: float        # match confidence 0-1 (1.0 = exact)
 
     @property
@@ -51,6 +54,7 @@ class UnmatchedCase(NamedTuple):
     file: str
     assertions: int
     repo: str           # "A" or "B"
+    loop_assertions: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -220,6 +224,7 @@ def _extract_robot(code: str, fname: str, framework: str) -> list[TestCase]:
             display_name=display,
             file=fname,
             assertions=count_assertions(body, framework),
+            loop_assertions=count_loop_assertions(body, framework),
         ))
     return cases
 
@@ -245,6 +250,7 @@ def _extract_python(code: str, fname: str, framework: str) -> list[TestCase]:
             display_name=node.name,
             file=fname,
             assertions=count_assertions(body, framework),
+            loop_assertions=count_loop_assertions(body, framework),
         ))
     return cases
 
@@ -268,6 +274,7 @@ def _extract_k6(code: str, fname: str, framework: str) -> list[TestCase]:
                 display_name=g,
                 file=fname,
                 assertions=count_assertions(code, framework) // max(len(groups), 1),
+                loop_assertions=count_loop_assertions(code, framework) // max(len(groups), 1),
             ))
         return cases
 
@@ -316,6 +323,7 @@ def _extract_k6(code: str, fname: str, framework: str) -> list[TestCase]:
                 display_name=display,
                 file=fname,
                 assertions=count_assertions(block, framework),
+                loop_assertions=count_loop_assertions(block, framework),
             ))
         return cases
 
@@ -347,6 +355,7 @@ def _extract_k6(code: str, fname: str, framework: str) -> list[TestCase]:
         display_name=display,
         file=fname,
         assertions=count_assertions(code, framework),
+        loop_assertions=count_loop_assertions(code, framework),
     ))
     return cases
 
@@ -365,6 +374,7 @@ def _extract_js(code: str, fname: str, framework: str) -> list[TestCase]:
             display_name=display,
             file=fname,
             assertions=count_assertions(body, framework),
+            loop_assertions=count_loop_assertions(body, framework),
         ))
     return cases
 
@@ -404,6 +414,8 @@ def _match(
                 file_b=tc_b.file,
                 assertions_a=tc_a.assertions,
                 assertions_b=tc_b.assertions,
+                loop_assertions_a=tc_a.loop_assertions,
+                loop_assertions_b=tc_b.loop_assertions,
                 score=best_score,
             ))
         else:
@@ -415,11 +427,11 @@ def _match(
     matched_b_idxs  = used_b
 
     only_a = [
-        UnmatchedCase(tc.display_name, tc.file, tc.assertions, "A")
+        UnmatchedCase(tc.display_name, tc.file, tc.assertions, "A", tc.loop_assertions)
         for tc in cases_a if tc.display_name not in matched_a_names
     ]
     only_b = [
-        UnmatchedCase(cases_b[i].display_name, cases_b[i].file, cases_b[i].assertions, "B")
+        UnmatchedCase(cases_b[i].display_name, cases_b[i].file, cases_b[i].assertions, "B", cases_b[i].loop_assertions)
         for i in range(len(cases_b)) if i not in matched_b_idxs
     ]
 
