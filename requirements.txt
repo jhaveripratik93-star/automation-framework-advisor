@@ -27,3 +27,6 @@ langgraph>=0.2.0
 langchain-core>=0.3.0
 langchain-groq>=0.2.0
 tenacity>=8.2.0
+
+# MCP server (exposes advisor tools to Kiro / other MCP clients)
+mcp>=1.2.0

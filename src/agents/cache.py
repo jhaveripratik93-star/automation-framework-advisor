@@ -282,17 +282,21 @@ def _normalize_arguments(arguments: dict[str, Any]) -> dict[str, Any]:
     """Normalize tool arguments for cache key consistency.
 
     - Lowercase all string values
-    - Sort lists (so ["Playwright", "Cypress"] == ["Cypress", "Playwright"])
+    - Sort lists of strings (so ["Playwright", "Cypress"] == ["Cypress", "Playwright"])
+    - Lists of non-strings (dicts, numbers, mixed types — e.g. test_cases,
+      prerequisites payloads) are left in their original order: dicts are
+      not orderable via `<`, and arg order is already meaningful for these
+      tools, so sorting would be both wrong and liable to crash.
     """
     normalized = {}
     for k, v in arguments.items():
         if isinstance(v, str):
             normalized[k] = v.strip().lower()
         elif isinstance(v, list):
-            normalized[k] = sorted(
-                item.strip().lower() if isinstance(item, str) else item
-                for item in v
-            )
+            if all(isinstance(item, str) for item in v):
+                normalized[k] = sorted(item.strip().lower() for item in v)
+            else:
+                normalized[k] = v
         else:
             normalized[k] = v
     return normalized
