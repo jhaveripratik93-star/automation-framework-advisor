@@ -50,9 +50,18 @@ def get_kb():
 
 
 def get_groq_client():
-    """Lazily create the Groq LLM client. LLM-backed tools (convert_test_cases,
-    convert_test_files, generate_test_code, discover_new_frameworks,
-    add_framework_to_kb) require GROQ_API_KEY to be set in config/.env."""
+    """Lazily create the Groq LLM client.
+
+    GROQ_API_KEY is OPTIONAL — it is not required to use this server from
+    Kiro. When it's absent, `groq_available()` returns False and the
+    LLM-backed tools (convert_test_code, convert_test_project,
+    generate_test_code) switch to "manual" mode: instead of calling Groq,
+    they return a structured brief (framework rules + source) and ask the
+    calling assistant (Kiro's own model) to produce the result directly.
+    Setting GROQ_API_KEY only changes those tools back to doing the
+    conversion themselves server-side, which is useful for headless/CI
+    use but not needed for interactive Kiro usage.
+    """
     global _groq_client
     if _groq_client is None:
         with _lock:
@@ -60,12 +69,20 @@ def get_groq_client():
                 from src.llm.groq_client import GroqClient
                 client = GroqClient()
                 if not client.is_available:
-                    logger.warning(
-                        "GROQ_API_KEY is not set — LLM-backed MCP tools will "
-                        "raise RuntimeError until it is configured in config/.env"
+                    logger.info(
+                        "GROQ_API_KEY not set — this is optional. LLM-backed "
+                        "tools will return a manual-mode brief for the "
+                        "calling assistant to act on instead of calling Groq."
                     )
                 _groq_client = client
     return _groq_client
+
+
+def groq_available() -> bool:
+    """True if GROQ_API_KEY is configured and the Groq client can be used
+    for server-side generation. False (the common case for interactive
+    Kiro usage) means LLM-backed tools return a manual-mode brief instead."""
+    return get_groq_client().is_available
 
 
 def get_graph():

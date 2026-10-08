@@ -28,5 +28,7 @@ langchain-core>=0.3.0
 langchain-groq>=0.2.0
 tenacity>=8.2.0
 
-# MCP server (exposes advisor tools to Kiro / other MCP clients)
-mcp>=1.2.0
+# MCP server (exposes advisor tools to Kiro / other MCP clients).
+# Pinned below 2.0 — mcp 2.x renamed FastMCP to MCPServer and changed the
+# server API; mcp_server/server.py uses the 1.x FastMCP interface.
+mcp>=1.2.0,<2.0.0

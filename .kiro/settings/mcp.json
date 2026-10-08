@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "automation-framework-advisor": {
+      "command": "C:\\Users\\xjhapra\\tcs-poc-automation-framework\\automation-framework-advisor\\.venv\\Scripts\\python.exe",
+      "args": [
+        "C:\\Users\\xjhapra\\tcs-poc-automation-framework\\automation-framework-advisor\\mcp_server\\server.py"
+      ],
+      "cwd": "C:\\Users\\xjhapra\\tcs-poc-automation-framework\\automation-framework-advisor",
+      "disabled": false
+    }
+  }
+}

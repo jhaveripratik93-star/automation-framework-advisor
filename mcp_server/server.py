@@ -47,7 +47,16 @@ mcp = FastMCP(
         "comparison, CI/CD + prerequisite automation, and live framework "
         "discovery. Knowledge is grounded in a curated YAML knowledge base "
         "and knowledge graph — prefer these tools over general knowledge "
-        "when answering automation-framework questions."
+        "when answering automation-framework questions.\n\n"
+        "No API key is required to use this server. The code-conversion "
+        "and code-generation tools (convert_test_code, "
+        "convert_test_project, generate_test_code) work without "
+        "GROQ_API_KEY: when it's not configured, they return a dict with "
+        "mode='manual' containing the framework-specific conversion/"
+        "generation rules and the source material — follow the "
+        "`instructions` field in that dict and produce the code yourself "
+        "using your own model rather than treating the tool call as "
+        "failed."
     ),
 )
 
@@ -340,15 +349,25 @@ def convert_test_code(
     from_framework: str,
     to_framework: str,
     language: str = "python",
-) -> str:
+) -> Any:
     """Convert a single test file's source code from one framework to
     another (e.g. Selenium -> Playwright, K6 -> Robot Framework),
-    preserving every assertion. Requires GROQ_API_KEY to be configured.
-    Returns the converted code plus a capability-gap table and a CI/CD
-    integration snippet. For multi-file projects, use
-    convert_test_project instead so cross-file imports and shared context
-    are handled correctly."""
+    preserving every assertion. Returns the converted code plus a
+    capability-gap table and a CI/CD integration snippet.
+
+    GROQ_API_KEY is OPTIONAL. If it's configured, this tool performs the
+    conversion itself via Groq and returns a markdown string. If it's
+    NOT configured (the default — no key needed to use this server from
+    Kiro), it returns a dict with `mode: "manual"` containing the
+    framework conversion rules and the source code — convert the code
+    yourself using that brief and present the result to the user.
+
+    For multi-file projects, use convert_test_project instead so
+    cross-file imports and shared context are handled correctly."""
     executor = svc.get_tool_executor()
+    if not svc.groq_available():
+        from mcp_server.manual_mode import build_conversion_brief
+        return build_conversion_brief(executor, source_code, from_framework, to_framework)
     return executor.execute(
         "convert_test_cases",
         {
@@ -371,10 +390,20 @@ def convert_test_project(
     "content": "..."} dicts. Preserves cross-file references via shared
     context, generates helper scripts for any capability gaps, a
     conftest.py / fixtures file, and a requirements.txt (for Python
-    targets). Requires GROQ_API_KEY to be configured. Returns a dict with
-    `converted` (path -> code), `helpers`, `conftest`, `requirements`,
-    `gaps`, `summary` (markdown), and `assertion_report` (parity check)."""
+    targets).
+
+    GROQ_API_KEY is OPTIONAL. If it's configured, this tool performs the
+    full conversion itself via Groq and returns `converted` (path ->
+    code), `helpers`, `conftest`, `requirements`, `gaps`, `summary`
+    (markdown), and `assertion_report` (parity check). If it's NOT
+    configured (the default), it returns `mode: "manual"` with the
+    conversion rules, the deterministically-generated `conftest`/
+    `requirements`, and `files_to_convert` — convert each file yourself
+    using the rules and present the complete project to the user."""
     executor = svc.get_tool_executor()
+    if not svc.groq_available():
+        from mcp_server.manual_mode import build_multi_file_conversion_brief
+        return build_multi_file_conversion_brief(executor, files, from_framework, to_framework)
     return executor.convert_multi_file(
         files=files, from_framework=from_framework, to_framework=to_framework
     )
@@ -397,9 +426,7 @@ def generate_test_code(
     selector_map: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Generate executable automated test code from manual/plain-English
-    test cases using the hybrid template+LLM pipeline (confidence-routed:
-    known action patterns use templates, novel ones use the LLM and are
-    learned for next time). Requires GROQ_API_KEY to be configured.
+    test cases.
 
     Each test case dict needs: 'id', 'title', 'steps' (list of
     {"step_number", "action", "test_data", "expected_result"}), and
@@ -412,12 +439,15 @@ def generate_test_code(
     to concrete CSS/XPath selectors — anything left unmapped is
     auto-generated and flagged for verification in the result.
 
-    Returns a dict with `files` (path/content/file_type per generated
+    GROQ_API_KEY is OPTIONAL. If it's configured, this tool runs the
+    hybrid template+LLM pipeline itself (confidence-routed: known action
+    patterns use templates, novel ones use Groq and are learned for next
+    time) and returns `files` (path/content/file_type per generated
     file), `framework`, `language`, `install_instructions`, `run_command`,
-    `selector_map` (elements needing verification), `confidence_score`,
-    and `validation` (undefined symbols, if any)."""
-    from src.codegen import CodeGenRequest, ManualTestCase, TargetFramework, TestStep
-
+    `selector_map`, `confidence_score`, and `validation`. If it's NOT
+    configured (the default), it returns `mode: "manual"` with the
+    generation rules and test cases — generate the code yourself using
+    the brief and present it to the user."""
     fw_value = target_framework.lower()
     if fw_value not in _CODEGEN_FRAMEWORKS:
         return {
@@ -426,6 +456,12 @@ def generate_test_code(
                 f"Valid options: {sorted(_CODEGEN_FRAMEWORKS)}"
             )
         }
+
+    if not svc.groq_available():
+        from mcp_server.manual_mode import build_codegen_brief
+        return build_codegen_brief(fw_value, test_cases, selector_map)
+
+    from src.codegen import CodeGenRequest, ManualTestCase, TargetFramework, TestStep
 
     manual_tests = []
     for i, tc in enumerate(test_cases):
@@ -589,11 +625,14 @@ def discover_new_frameworks(force: bool = False) -> dict[str, Any]:
 
 @mcp.tool()
 def add_framework_to_kb(name: str) -> dict[str, Any]:
-    """Research a named framework (via web search + LLM) and add it to the
-    local YAML knowledge base as a new profile, making it available to all
-    other tools afterwards. Requires GROQ_API_KEY to be configured. Returns
-    the written profile path, the generated profile data, and a
-    completeness check (fields that still need manual review)."""
+    """Research a named framework (via web search, and an LLM if
+    GROQ_API_KEY is configured) and add it to the local YAML knowledge
+    base as a new profile, making it available to all other tools
+    afterwards. GROQ_API_KEY is OPTIONAL — without it, the profile is
+    built from a template with sensible defaults instead of LLM-written
+    descriptions; expect to review it manually (the returned
+    `completeness` field flags any gaps). Returns the written profile
+    path, the generated profile data, and the completeness check."""
     from src.knowledge_base.schema import FrameworkData
 
     scanner = svc.get_scanner()
