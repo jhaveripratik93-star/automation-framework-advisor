@@ -29,3 +29,11 @@ logs/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Converted K6 project local secrets
+converted_k6/.env
+
+# Local conversion run output (environment-specific; not a source deliverable)
+converted_k6/
+berg005.yaml
+
