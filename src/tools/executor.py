@@ -1185,10 +1185,11 @@ class ToolExecutor:
 
     def _build_system_prompt(self, from_name: str, to_name: str, gap_notes: str,
                               shared_context: str = "", target_lang: str = "python",
-                              to_fw: Any = None) -> str:
+                              to_fw: Any = None, library_block: str = "") -> str:
         eco = self._LANG_ECOSYSTEM.get(target_lang, self._LANG_ECOSYSTEM["python"])
         lang_title = target_lang.title() if target_lang != "c#" else "C#"
         ctx = f"\n\nShared project context (page objects / base classes):\n{shared_context[:2000]}" if shared_context else ""
+        lib = f"\n\n{library_block}" if library_block else ""
         api_notes = self._build_api_notes(to_fw, to_name)
 
         conv_notes = ""
@@ -1202,7 +1203,7 @@ class ToolExecutor:
         pair_rules = self._FW_PAIR_RULES.get((from_name.lower(), to_name.lower()), "")
 
         return (
-            f"You are an expert test automation engineer.{ctx}\n"
+            f"You are an expert test automation engineer.{ctx}{lib}\n"
             f"Convert the following test code from {from_name} to {to_name}. "
             f"Output ONLY valid {to_name} syntax — {'a .robot file with *** sections ***' if target_lang == 'robot' else f'{lang_title} code'}.\n"
             f"Rules:\n"
@@ -1218,6 +1219,215 @@ class ToolExecutor:
             + gap_notes
             + (f"\n\n{pair_rules}" if pair_rules else (f"\n\n{syntax_rules}" if syntax_rules else ""))
         )
+
+    def _build_library_context(self, files: list[dict], from_name: str,
+                               to_name: str, target_lang: str) -> Any:
+        """Parse+resolve Robot Settings imports within `files`, derive the auth
+        contract, budget it, and return a LibraryContext. Pure w.r.t. `files`
+        (no disk/network). Returns an empty LibraryContext for non-Robot or
+        import-less input, and also on any unexpected failure so the conversion
+        is never broken by this advisory feature."""
+        from src.tools import library_ingest as _li
+        from src.codegen.agent_config import PIPELINE_SETTINGS
+        try:
+            return _li.build_library_context(
+                files, from_name, to_name, target_lang,
+                char_budget=PIPELINE_SETTINGS["max_library_context_chars"],
+            )
+        except Exception as exc:  # noqa: BLE001 — feature must never break conversion
+            logger.error("library ingest failed — %s: %s", type(exc).__name__, exc)
+            return _li.LibraryContext()
+
+    def _build_conversion_report(
+        self,
+        lib_ctx: Any,
+        *,
+        from_name: str,
+        to_name: str,
+        target_lang: str,
+        converted: dict,
+        helpers: dict,
+        conftest: str,
+        requirements: str,
+        gaps: list[str],
+        assertion_report: Any,
+    ) -> dict:
+        """Build a generic, additive conversion completeness report.
+
+        Shared by both conversion paths so no-Groq-key (manual-mode) and
+        Groq-backed conversions report identically. Populated purely from what
+        THIS conversion actually did — no framework specifics hardcoded. Degrades
+        gracefully: for a non-Robot source or a suite with no resolvable imports,
+        HANDLED still lists the basic conversion facts and ASSUMED/NOT_DONE may be
+        empty or note 'no library layer found'.
+
+        Returns:
+            {
+              "handled":  [{"item": str, "detail": str}, ...],
+              "assumed":  [{"item": str, "why": str, "placeholder": str}, ...],
+              "not_done": [{"item": str, "reason": str}, ...],
+              "text":     str,  # human-readable rendering (also folded into summary)
+            }
+        """
+        handled: list[dict] = []
+        assumed: list[dict] = []
+        not_done: list[dict] = []
+
+        # ── HANDLED (basic conversion facts — always present) ──
+        handled.append({
+            "item": "files converted",
+            "detail": f"{len(converted)} file(s) converted from {from_name} to "
+                      f"{to_name} ({target_lang}).",
+        })
+
+        # Assertion parity, when the counter produced a count.
+        preserved = None
+        if isinstance(assertion_report, dict):
+            for key in ("converted_assertions", "target_assertions",
+                        "total_converted", "converted", "target"):
+                if isinstance(assertion_report.get(key), int):
+                    preserved = assertion_report[key]
+                    break
+        if preserved is not None:
+            handled.append({
+                "item": "assertions preserved",
+                "detail": f"{preserved} assertion(s) emitted in the converted suite.",
+            })
+
+        if conftest:
+            handled.append({"item": "conftest generated",
+                            "detail": "conftest.py generated for the target suite."})
+        if requirements:
+            handled.append({"item": "requirements generated",
+                            "detail": "requirements.txt dependency manifest generated."})
+
+        lib_present = lib_ctx is not None and not getattr(lib_ctx, "is_empty", True)
+        resolved = tuple(getattr(lib_ctx, "resolved", ()) or ())
+        unresolved = tuple(getattr(lib_ctx, "unresolved", ()) or ())
+        contract = getattr(lib_ctx, "contract", None)
+        helper_spec = getattr(lib_ctx, "helper_spec", None)
+        aliases = dict(getattr(lib_ctx, "aliases", {}) or {})
+
+        if resolved:
+            names = ", ".join(
+                (r.filename or getattr(r.imp, "target", "?")) for r in resolved
+            )
+            handled.append({
+                "item": "library/resource imports resolved",
+                "detail": f"{len(resolved)} import(s) resolved within the uploaded "
+                          f"set: {names}.",
+            })
+        if aliases:
+            mapping = ", ".join(f"{a} -> {t}" for a, t in aliases.items())
+            handled.append({"item": "import aliases",
+                            "detail": f"WITH NAME aliases carried: {mapping}."})
+
+        auth_derived = (
+            contract is not None and not getattr(contract, "is_empty", True)
+        )
+        if auth_derived:
+            bits: list[str] = []
+            if contract.login_endpoint:
+                bits.append(f"login {contract.login_method or '?'} "
+                            f"{contract.login_endpoint}")
+            if contract.credential_location:
+                bits.append(f"credentials via {contract.credential_location}")
+            if contract.token_response_field:
+                bits.append(f"token field '{contract.token_response_field}'")
+            if contract.later_call_auth:
+                bits.append(f"later calls use {contract.later_call_auth}")
+            for sec in contract.secondary_systems:
+                bits.append(f"secondary '{sec.name}' token endpoint "
+                            f"{sec.token_endpoint} attaches as {sec.attaches_as}")
+            handled.append({
+                "item": "auth/login flow derived",
+                "detail": "Derived from ingested libraries: "
+                          + ("; ".join(bits) if bits else "auth contract detected")
+                          + ".",
+            })
+
+        if helper_spec is not None:
+            handled.append({
+                "item": "shared auth helper generated",
+                "detail": f"{helper_spec.path} exporting "
+                          f"{', '.join(helper_spec.exports)}.",
+            })
+
+        # ── ASSUMED (needs verification) ──
+        if auth_derived and contract is not None:
+            for line in getattr(contract, "assumptions", ()) or ():
+                # Lines look like "<marker> ASSUMPTION — ...: <label> -> <ref>"
+                label, _, ref = line.partition("->")
+                why = label.split(":", 1)[-1].strip() if ":" in label else label.strip()
+                assumed.append({
+                    "item": why or "runtime value",
+                    "why": "cannot be derived from static library code — a runtime/"
+                           "config value.",
+                    "placeholder": ref.strip() or "(env var)",
+                })
+
+        # ── NOT DONE (gaps) ──
+        for g in gaps or []:
+            not_done.append({
+                "item": f"capability gap: {g.replace('_', ' ')}",
+                "reason": f"{to_name} has no native equivalent; a helper/manual step "
+                          f"is required.",
+            })
+        for imp in unresolved:
+            not_done.append({
+                "item": f"unresolved import: {getattr(imp, 'kind', '?')} "
+                        f"{getattr(imp, 'target', '?')}",
+                "reason": "not present in the uploaded file set — could not be "
+                          "ingested for auth/transport derivation.",
+            })
+        if lib_present and not auth_derived:
+            not_done.append({
+                "item": "auth flow derivation",
+                "reason": "library layer found but no auth/transport contract could "
+                          "be derived from it.",
+            })
+        if not resolved and not unresolved:
+            not_done.append({
+                "item": "library layer ingestion",
+                "reason": "no Robot library/resource layer found in the uploaded set "
+                          "(nothing to derive auth from).",
+            })
+
+        report = {
+            "handled": handled,
+            "assumed": assumed,
+            "not_done": not_done,
+        }
+        report["text"] = self._render_report_text(report)
+        return report
+
+    @staticmethod
+    def _render_report_text(report: dict) -> str:
+        """Render a report dict into the human-readable summary section."""
+        lines = ["### What was done / assumed / not done"]
+
+        lines.append("\n**Done (handled):**")
+        if report["handled"]:
+            for h in report["handled"]:
+                lines.append(f"- {h['item']}: {h['detail']}")
+        else:
+            lines.append("- (nothing recorded)")
+
+        lines.append("\n**Assumed (verify before running):**")
+        if report["assumed"]:
+            for a in report["assumed"]:
+                lines.append(f"- {a['item']} — {a['why']} Fill: {a['placeholder']}")
+        else:
+            lines.append("- none")
+
+        lines.append("\n**Not done (gaps):**")
+        if report["not_done"]:
+            for n in report["not_done"]:
+                lines.append(f"- {n['item']} — {n['reason']}")
+        else:
+            lines.append("- none")
+
+        return "\n".join(lines)
 
     def _llm_convert(self, prompt: str, system: str) -> str:
         """Call LLM and return content string, or error string."""
@@ -1349,8 +1559,13 @@ class ToolExecutor:
             for f in files
         )
 
+        # Ingest the imported library/helper layer and derive an auth/transport
+        # contract (additive; empty for non-Robot / import-less input).
+        lib_ctx = self._build_library_context(files, from_name, to_name, target_lang)
+
         system = self._build_system_prompt(from_name, to_name, gap_notes,
-                                           shared_context, target_lang, to_fw=to_fw)
+                                           shared_context, target_lang, to_fw=to_fw,
+                                           library_block=lib_ctx.prompt_block)
 
         converted: dict[str, str] = {}
         import re
@@ -1406,6 +1621,11 @@ class ToolExecutor:
         # Generate helper scripts for every capability gap (in the target language)
         helpers = self._generate_helper_scripts(gaps, to_name, target_lang)
 
+        # Emit the derived shared auth helper (e.g. lib/auth.js) via the existing
+        # additive `helpers` dict when the ingest produced one.
+        if lib_ctx.helper_spec is not None:
+            helpers[lib_ctx.helper_spec.path] = lib_ctx.helper_spec.content
+
         # Generate conftest/setup + manifest (only meaningful for Python;
         # for other langs these become language-appropriate stubs)
         conftest = self._generate_conftest(to_name, gaps, list(helpers.keys())) if target_lang == "python" else ""
@@ -1440,6 +1660,31 @@ class ToolExecutor:
         if gaps:
             summary_lines += self._gap_table_lines(gaps, to_name)
 
+        # Append the (guarded) unresolved-import notes only when there are any,
+        # so an import-less / non-Robot conversion's summary is byte-for-byte
+        # identical to pre-change output.
+        if lib_ctx.notes:
+            summary_lines.append("\n### ⚠️ Unresolved library imports")
+            for note in lib_ctx.notes:
+                summary_lines.append(f"- {note}")
+
+        # Build the generic conversion completeness report (additive) and fold a
+        # concise human-readable rendering into the summary.
+        report = self._build_conversion_report(
+            lib_ctx,
+            from_name=from_name,
+            to_name=to_name,
+            target_lang=target_lang,
+            converted=converted,
+            helpers=helpers,
+            conftest=conftest,
+            requirements=requirements,
+            gaps=gaps,
+            assertion_report=assertion_report,
+        )
+        summary_lines.append("")
+        summary_lines.append(report["text"])
+
         return {
             "converted": converted,
             "helpers": helpers,
@@ -1448,6 +1693,7 @@ class ToolExecutor:
             "gaps": gaps,
             "summary": "\n".join(summary_lines),
             "assertion_report": assertion_report,
+            "report": report,
         }
 
     def _generate_conftest(self, to_name: str, gaps: list[str], helper_paths: list[str]) -> str:

@@ -761,8 +761,49 @@ def build_library_context(
     helper_spec = build_auth_helper(contract, target_lang, to_name)
 
     # ── Assemble the budgeted prompt block ──
+    # The always-included contract summary and the fixed trailing sections
+    # (import-resolution line, unresolved notes, helper instruction) are counted
+    # first; raw helper excerpts fill only the remaining budget. This keeps
+    # len(prompt_block) <= max(char_budget, len(fixed_sections)).
     summary = _render_contract_summary(contract)
-    remaining = max(char_budget - len(summary), 0)
+
+    # Build the fixed trailing sections up front so their size is reserved.
+    trailing_parts: list[str] = [""]
+    trailing_parts.append(
+        f"Import resolution: {len(resolved)} resolved, {len(unresolved)} unresolved."
+    )
+    if notes:
+        trailing_parts.extend(notes)
+    trailing_parts.append("")
+    if helper_spec is not None:
+        trailing_parts.append(
+            f"A shared auth helper ({helper_spec.path}) has been generated from the "
+            f"imported library layer; import its exported functions "
+            f"({', '.join(helper_spec.exports)}) instead of writing inline login."
+        )
+    else:
+        trailing_parts.append(
+            "The derived auth/transport contract below is advisory; implement login "
+            "inline per the contract — no shared helper was generated for this target "
+            "language."
+        )
+    trailing = "\n".join(trailing_parts)
+
+    # Reserve summary + trailing + the excerpt-section header from the budget;
+    # raw excerpts take whatever remains. The joins ("\n") around the summary,
+    # excerpt header, and each excerpt are all accounted for exactly below so the
+    # final prompt_block never exceeds char_budget (at any realistic cap where
+    # char_budget >= fixed_len).
+    _EXCERPT_HEADER_LINES = ["", "Relevant imported helper excerpts:"]
+    # summary + "\n" + "\n".join(header_lines) + "\n" + <excerpts> + "\n" + trailing
+    fixed_len = (
+        len(summary)
+        + 1  # newline after summary before header lines
+        + len("\n".join(_EXCERPT_HEADER_LINES))
+        + 1  # newline before trailing (trailing itself starts with "")
+        + len(trailing)
+    )
+    remaining = max(char_budget - fixed_len, 0)
 
     # Rank resolved helper excerpts: auth-signal files first, then other resolved.
     signals = _signal_fields(contract)
@@ -776,17 +817,20 @@ def build_library_context(
             other_files.append(r)
 
     excerpt_parts: list[str] = []
-    used = 0
+    used = 0  # chars consumed by excerpts, counting the "\n" join before each
     for r in signal_files + other_files:
         if used >= remaining:
             break
         header = f"# --- {r.filename} ---\n"
         chunk = header + (r.content or "")
-        avail = remaining - used
+        # Each excerpt is preceded by a "\n" join in the final block.
+        avail = remaining - used - 1
+        if avail <= 0:
+            break
         if len(chunk) > avail:
             chunk = chunk[:avail]
         excerpt_parts.append(chunk)
-        used += len(chunk)
+        used += len(chunk) + 1
 
     block_parts: list[str] = [summary]
     if excerpt_parts:
@@ -794,7 +838,7 @@ def build_library_context(
         block_parts.append("Relevant imported helper excerpts:")
         block_parts.extend(excerpt_parts)
 
-    # Import-resolution summary + unresolved notes.
+    # Fixed trailing sections (already built + size-reserved above).
     block_parts.append("")
     block_parts.append(
         f"Import resolution: {len(resolved)} resolved, {len(unresolved)} unresolved."

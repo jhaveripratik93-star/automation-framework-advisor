@@ -92,8 +92,15 @@ def build_multi_file_conversion_brief(
         f"# --- {f['filename']} ---\n" + "\n".join(f["content"].splitlines()[:100])
         for f in files
     )
+
+    # Ingest the imported library/helper layer via the SHARED executor method, so
+    # the no-key manual path derives the identical auth/transport contract and
+    # report as the Groq-backed `convert_multi_file`.
+    lib_ctx = executor._build_library_context(files, from_name, to_name, target_lang)
+
     system_prompt = executor._build_system_prompt(
-        from_name, to_name, gap_notes, shared_context, target_lang, to_fw=to_fw
+        from_name, to_name, gap_notes, shared_context, target_lang, to_fw=to_fw,
+        library_block=lib_ctx.prompt_block,
     )
 
     # These two are deterministic (no LLM involved even in the Groq path).
@@ -106,7 +113,33 @@ def build_multi_file_conversion_brief(
         if target_lang == "python" else ""
     )
 
-    return {
+    helper_note = ""
+    if lib_ctx.helper_spec is not None:
+        helper_note = (
+            f" A shared auth helper ({lib_ctx.helper_spec.path}, exporting "
+            f"{', '.join(lib_ctx.helper_spec.exports)}) was derived from the "
+            f"imported library layer — write it and import it from each converted "
+            f"file instead of reinventing inline login."
+        )
+
+    # Build the same generic completeness report the Groq path emits (shared
+    # executor logic). `converted` isn't known yet in manual mode, so report the
+    # count of files the assistant will convert.
+    report = executor._build_conversion_report(
+        lib_ctx,
+        from_name=from_name,
+        to_name=to_name,
+        target_lang=target_lang,
+        converted={f["filename"]: "" for f in files},
+        helpers=({lib_ctx.helper_spec.path: lib_ctx.helper_spec.content}
+                 if lib_ctx.helper_spec is not None else {}),
+        conftest=conftest,
+        requirements=requirements,
+        gaps=gaps,
+        assertion_report=None,
+    )
+
+    brief: dict[str, Any] = {
         "mode": "manual",
         "from_framework": from_name,
         "to_framework": to_name,
@@ -116,6 +149,7 @@ def build_multi_file_conversion_brief(
         "conftest": conftest,
         "requirements": requirements,
         "files_to_convert": files,
+        "report": report,
         "instructions": (
             f"GROQ_API_KEY is not configured, so this tool did not call an "
             f"external LLM. `conftest` and `requirements` were still "
@@ -131,8 +165,21 @@ def build_multi_file_conversion_brief(
                 "There are no capability gaps between these frameworks for "
                 "this source."
             )
+            + helper_note
+            + " See `report` for a structured breakdown of what was handled, "
+            "assumed, and not done; relay it to the user."
         ),
     }
+
+    # Additive, optional: the shared auth helper to write out.
+    if lib_ctx.helper_spec is not None:
+        brief["auth_helper"] = {
+            "path": lib_ctx.helper_spec.path,
+            "content": lib_ctx.helper_spec.content,
+            "exports": list(lib_ctx.helper_spec.exports),
+        }
+
+    return brief
 
 
 def build_codegen_brief(
