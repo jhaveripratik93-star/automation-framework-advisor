@@ -1279,6 +1279,13 @@ PIPELINE_SETTINGS: dict = {
     # Maximum characters of suite-level architecture context.
     "max_suite_context_chars": 30000,
 
+    # Maximum characters of imported library/helper context injected into the
+    # conversion prompt (the derived auth/transport contract block). When the
+    # resolved helper content exceeds this, import-matched (auth/transport-
+    # relevant) files are preferred over unmatched content so the budget is
+    # spent on the files that actually drive the auth contract.
+    "max_library_context_chars": 6000,
+
     # Include planner notes in generation.
     "include_scenario_notes": True,
 
