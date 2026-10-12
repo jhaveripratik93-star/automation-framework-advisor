@@ -29,6 +29,9 @@ export GROQ_API_KEY="your_api_key_here"
 # Option 2: The key is already hardcoded in the app as fallback
 
 # Option 1: Run the Streamlit UI (recommended for interactive use)
+
+.\.venv\Scripts\streamlit.exe run streamlit_app.py
+# or
 streamlit run streamlit_app.py 
 # or 
 python -m streamlit run streamlit_app.py
