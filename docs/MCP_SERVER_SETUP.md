@@ -265,7 +265,53 @@ instead.
 | `discover_new_frameworks` | Scan GitHub for new frameworks not yet in KB | Works fully — profiles are just less rich without an LLM |
 | `add_framework_to_kb` | Research + add a named framework to the KB | Works fully — falls back to a template-based profile; review the returned `completeness` field |
 
-## 6. Troubleshooting
+## 6. Auditing tool calls
+
+Every one of the 20 tools is wrapped with `@log_tool_call`
+(`mcp_server/tool_logging.py`), applied uniformly in `mcp_server/server.py`
+right under each `@mcp.tool()` decorator. This guarantees every
+invocation — regardless of whether the tool happens to route through
+`ToolExecutor` internally or call its implementation directly — writes a
+consistent pair of log lines to `logs/mcp_server.log`:
+
+```
+2026-10-12 18:56:46,538 [INFO] mcp_server.tool_calls: ToolCall START 'compare_repos' args=(files_a=list[len=1](...), files_b=list[len=1](...), framework_a='K6', framework_b='Robot Framework')
+2026-10-12 18:56:46,577 [INFO] mcp_server.tool_calls: ToolCall OK 'compare_repos' after 39.0ms -> 6 chars
+```
+
+On an unhandled exception, you get an `ERROR` line instead of `OK`, and
+the exception still propagates (the decorator only logs — it never
+swallows or alters behavior):
+
+```
+2026-10-12 18:57:36,522 [ERROR] mcp_server.tool_calls: ToolCall ERROR 'compare_repos' after 97.0ms — TypeError: string indices must be integers, not 'str'
+```
+
+To verify which tools were actually called in a session (vs. just
+described in chat), grep the log for the logger name:
+
+```powershell
+Select-String -Path logs\mcp_server.log -Pattern "mcp_server.tool_calls:"
+```
+
+Each `ToolCall START` line also summarizes arguments by shape rather than
+dumping them in full — large strings are truncated, lists/dicts show
+length and a short sample — so file contents passed to tools like
+`compare_repos` or `convert_test_project` don't bloat the log or leak
+full source into it.
+
+Before this fix, only tools that happened to call through
+`ToolExecutor.execute()` (7 of 20) logged their name on invocation. The
+other 13 — including `compare_repos`, `compare_repos_csv`,
+`generate_migration_roadmap`, `analyze_coverage_gaps`,
+`generate_boilerplate_project`, `discover_new_frameworks`,
+`add_framework_to_kb`, `convert_test_project`, `generate_test_code`,
+`list_frameworks` — called their implementation directly and left no
+trace. This is now fixed at the `@mcp.tool()` decoration layer, so any
+future tool automatically gets the same audit logging as long as it adds
+`@log_tool_call` under `@mcp.tool()`.
+
+## 7. Troubleshooting
 
 - **Server shows as disconnected in Kiro**: check `logs/mcp_server.log`
   for a startup traceback (usually a missing dependency or a bad `cwd`).

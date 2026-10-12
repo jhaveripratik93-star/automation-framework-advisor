@@ -26,6 +26,7 @@ if str(_ROOT) not in sys.path:
 from mcp.server.fastmcp import FastMCP
 
 from mcp_server import services as svc
+from mcp_server.tool_logging import log_tool_call
 
 # ── Logging — stdio MCP servers must NEVER write to stdout; file-only ──
 logging.basicConfig(
@@ -66,6 +67,7 @@ mcp = FastMCP(
 # ════════════════════════════════════════════════════════════════════
 
 @mcp.tool()
+@log_tool_call
 def list_frameworks() -> str:
     """List every automation framework in the knowledge base with its
     vendor, license, and supported languages. Use this to discover what
@@ -81,6 +83,7 @@ def list_frameworks() -> str:
 
 
 @mcp.tool()
+@log_tool_call
 def list_frameworks_by_category(category: str = "") -> str:
     """List frameworks grouped by functional category (web UI testing, API
     testing, mobile testing, performance testing, infrastructure as code,
@@ -93,6 +96,7 @@ def list_frameworks_by_category(category: str = "") -> str:
 
 
 @mcp.tool()
+@log_tool_call
 def search_knowledge_graph(query: str, entity_types: list[str] | None = None) -> str:
     """Search the knowledge base/graph for frameworks matching a free-text
     query (e.g. "API testing in Python", "mobile gesture support"). Returns
@@ -105,6 +109,7 @@ def search_knowledge_graph(query: str, entity_types: list[str] | None = None) ->
 
 
 @mcp.tool()
+@log_tool_call
 def get_framework_details(framework_name: str) -> str:
     """Get the full profile of one framework: vendor/version, languages,
     license, architecture fit, capabilities, CI/CD integration, cloud grid
@@ -115,6 +120,7 @@ def get_framework_details(framework_name: str) -> str:
 
 
 @mcp.tool()
+@log_tool_call
 def compare_frameworks(frameworks: list[str], focus_criteria: list[str] | None = None) -> str:
     """Produce a side-by-side comparison of 2+ named frameworks (languages,
     license, architecture fit, capabilities, CI/CD, cloud grids,
@@ -131,6 +137,7 @@ def compare_frameworks(frameworks: list[str], focus_criteria: list[str] | None =
 # ════════════════════════════════════════════════════════════════════
 
 @mcp.tool()
+@log_tool_call
 def recommend_frameworks(
     use_case: str,
     required_capability: str = "",
@@ -155,6 +162,7 @@ def recommend_frameworks(
 
 
 @mcp.tool()
+@log_tool_call
 def score_frameworks(
     use_case: str = "",
     frameworks: list[str] | None = None,
@@ -196,6 +204,7 @@ def score_frameworks(
 # ════════════════════════════════════════════════════════════════════
 
 @mcp.tool()
+@log_tool_call
 def find_migration_paths(from_framework: str, to_frameworks: list[str] | None = None) -> str:
     """Find migration paths from one framework to one or more targets.
     Returns, per target: confidence score, covered capabilities, capability
@@ -209,6 +218,7 @@ def find_migration_paths(from_framework: str, to_frameworks: list[str] | None = 
 
 
 @mcp.tool()
+@log_tool_call
 def generate_migration_roadmap(
     target_framework: str,
     project_name: str = "migration_project",
@@ -241,6 +251,7 @@ def generate_migration_roadmap(
 
 
 @mcp.tool()
+@log_tool_call
 def analyze_coverage_gaps(
     target_framework: str,
     project_name: str = "migration_project",
@@ -272,6 +283,7 @@ def analyze_coverage_gaps(
 
 
 @mcp.tool()
+@log_tool_call
 def analyze_test_case_coverage(
     test_cases: list[dict[str, Any]],
     frameworks: list[str] | None = None,
@@ -296,6 +308,7 @@ def analyze_test_case_coverage(
 
 
 @mcp.tool()
+@log_tool_call
 def analyze_prerequisites(prerequisites: list[dict[str, Any]], target_framework: str = "") -> str:
     """Analyze manual test prerequisites/setup steps (e.g. database seeding,
     environment config, service startup, mocking) and suggest automation
@@ -311,6 +324,7 @@ def analyze_prerequisites(prerequisites: list[dict[str, Any]], target_framework:
 
 
 @mcp.tool()
+@log_tool_call
 def generate_boilerplate_project(
     target_framework: str,
     project_name: str = "automation_project",
@@ -344,6 +358,7 @@ def generate_boilerplate_project(
 # ════════════════════════════════════════════════════════════════════
 
 @mcp.tool()
+@log_tool_call
 def convert_test_code(
     source_code: str,
     from_framework: str,
@@ -380,6 +395,7 @@ def convert_test_code(
 
 
 @mcp.tool()
+@log_tool_call
 def convert_test_project(
     files: list[dict[str, str]],
     from_framework: str,
@@ -420,6 +436,7 @@ _CODEGEN_FRAMEWORKS = {
 
 
 @mcp.tool()
+@log_tool_call
 def generate_test_code(
     test_cases: list[dict[str, Any]],
     target_framework: str = "playwright_py",
@@ -516,6 +533,7 @@ def generate_test_code(
 # ════════════════════════════════════════════════════════════════════
 
 @mcp.tool()
+@log_tool_call
 def compare_repos(
     files_a: list[dict[str, str]],
     files_b: list[dict[str, str]],
@@ -568,6 +586,7 @@ def compare_repos(
 
 
 @mcp.tool()
+@log_tool_call
 def compare_repos_csv(
     files_a: list[dict[str, str]],
     files_b: list[dict[str, str]],
@@ -589,6 +608,7 @@ def compare_repos_csv(
 # ════════════════════════════════════════════════════════════════════
 
 @mcp.tool()
+@log_tool_call
 def discover_new_frameworks(force: bool = False) -> dict[str, Any]:
     """Scan GitHub (and a curated fallback list) for automation frameworks
     not yet present in the knowledge base. By default this is throttled to
@@ -624,6 +644,7 @@ def discover_new_frameworks(force: bool = False) -> dict[str, Any]:
 
 
 @mcp.tool()
+@log_tool_call
 def add_framework_to_kb(name: str) -> dict[str, Any]:
     """Research a named framework (via web search, and an LLM if
     GROQ_API_KEY is configured) and add it to the local YAML knowledge
