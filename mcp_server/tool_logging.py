@@ -17,6 +17,29 @@ log line format regardless of what the function does internally, so
 grepping logs/mcp_server.log for "ToolCall:" gives a complete, consistent
 record of every automation-framework-advisor tool invocation — name,
 argument summary, outcome, size/duration, and errors.
+
+IMPORTANT — "soft failures" vs raised exceptions:
+
+``ToolExecutor.execute()`` (used by 8 of the 20 tools: get_framework_details,
+search_knowledge_graph, recommend_frameworks, score_frameworks,
+find_migration_paths, analyze_prerequisites, compare_frameworks,
+list_frameworks_by_category) catches EVERY exception internally and
+returns it as a plain string — ``"Error executing {tool}: {exc}"`` — it
+never re-raises. Several other tools (analyze_coverage_gaps,
+generate_test_code, add_framework_to_kb) similarly return
+``{"error": "..."}`` dicts on bad input instead of raising. From this
+decorator's point of view, those calls returned a value successfully —
+if we only logged based on whether an exception propagated, every one of
+those failures would be mislabeled ``ToolCall OK``, and grepping for
+"ToolCall ERROR" would silently miss them.
+
+``_detect_soft_error`` recognizes both known shapes (the ToolExecutor
+sentinel-string prefixes, and ``{"error": ...}`` dicts) and logs them as
+``ToolCall ERROR (soft) ...`` — same "ToolCall ERROR" prefix as a raised
+exception's ``ToolCall ERROR (raised) ...``, so a single
+``grep "ToolCall ERROR"`` catches both kinds of failure. Only ``ToolCall
+OK`` means the call both returned without raising AND did not match one
+of these known failure shapes.
 """
 from __future__ import annotations
 
@@ -74,6 +97,35 @@ def _result_size(result: Any) -> int:
         return -1
 
 
+# String prefixes ToolExecutor.execute() and its tool implementations use
+# for a caught-and-swallowed failure instead of raising. Keep in sync with
+# src/tools/executor.py's `execute()` (the generic "Error executing ..."
+# and "Error: unknown tool ..." sentinels) — individual tool methods also
+# return domain-specific "not found" strings, which are intentionally NOT
+# treated as errors here since "Framework 'X' not found" from a
+# user-mistyped name is a normal, expected result rather than a bug.
+_SOFT_ERROR_STR_PREFIXES = ("Error executing ", "Error: unknown tool ")
+
+
+def _detect_soft_error(result: Any) -> str | None:
+    """Return a short reason string if `result` is a known "soft failure"
+    shape (an error swallowed internally and returned as a normal value
+    instead of raised), else None.
+
+    Recognizes:
+      - str results starting with one of _SOFT_ERROR_STR_PREFIXES
+        (ToolExecutor.execute()'s catch-all).
+      - dict results with a truthy "error" key ({"error": "..."} —
+        used by analyze_coverage_gaps, generate_test_code,
+        add_framework_to_kb on invalid input).
+    """
+    if isinstance(result, str) and result.startswith(_SOFT_ERROR_STR_PREFIXES):
+        return result[:200]
+    if isinstance(result, dict) and result.get("error"):
+        return str(result["error"])[:200]
+    return None
+
+
 def log_tool_call(fn: Callable) -> Callable:
     """Decorator: log every call to an MCP tool function uniformly.
 
@@ -93,15 +145,23 @@ def log_tool_call(fn: Callable) -> Callable:
         except Exception as exc:
             elapsed_ms = (time.monotonic() - start) * 1000
             logger.error(
-                "ToolCall ERROR '%s' after %.1fms — %s: %s",
+                "ToolCall ERROR (raised) '%s' after %.1fms — %s: %s",
                 tool_name, elapsed_ms, type(exc).__name__, exc,
             )
             raise
         elapsed_ms = (time.monotonic() - start) * 1000
-        logger.info(
-            "ToolCall OK '%s' after %.1fms -> %d chars",
-            tool_name, elapsed_ms, _result_size(result),
-        )
+
+        soft_error = _detect_soft_error(result)
+        if soft_error is not None:
+            logger.error(
+                "ToolCall ERROR (soft) '%s' after %.1fms — %s",
+                tool_name, elapsed_ms, soft_error,
+            )
+        else:
+            logger.info(
+                "ToolCall OK '%s' after %.1fms -> %d chars",
+                tool_name, elapsed_ms, _result_size(result),
+            )
         return result
 
     return wrapper

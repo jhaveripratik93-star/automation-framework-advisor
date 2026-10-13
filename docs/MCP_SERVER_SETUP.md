@@ -279,13 +279,33 @@ consistent pair of log lines to `logs/mcp_server.log`:
 2026-10-12 18:56:46,577 [INFO] mcp_server.tool_calls: ToolCall OK 'compare_repos' after 39.0ms -> 6 chars
 ```
 
-On an unhandled exception, you get an `ERROR` line instead of `OK`, and
-the exception still propagates (the decorator only logs — it never
-swallows or alters behavior):
+On an unhandled exception, you get an `ERROR (raised)` line instead of
+`OK`, and the exception still propagates (the decorator only logs — it
+never swallows or alters behavior):
 
 ```
-2026-10-12 18:57:36,522 [ERROR] mcp_server.tool_calls: ToolCall ERROR 'compare_repos' after 97.0ms — TypeError: string indices must be integers, not 'str'
+2026-10-12 18:57:36,522 [ERROR] mcp_server.tool_calls: ToolCall ERROR (raised) 'compare_repos' after 97.0ms — TypeError: string indices must be integers, not 'str'
 ```
+
+**Soft failures are also caught.** 8 of the 20 tools route through
+`ToolExecutor.execute()`, which swallows every exception internally and
+returns it as a plain string (`"Error executing {tool}: {exc}"`) instead
+of raising — so no exception ever reaches the decorator for those tools.
+A few others (`analyze_coverage_gaps`, `generate_test_code`,
+`add_framework_to_kb`) similarly return `{"error": "..."}` dicts on bad
+input. The decorator detects both of these known shapes and logs them as
+`ERROR (soft)` instead of `OK`:
+
+```
+2026-10-13 13:57:28,372 [ERROR] mcp_server.tool_calls: ToolCall ERROR (soft) 'get_framework_details' after 2178.9ms — Error executing get_framework_details: 'NoneType' object has no attribute 'lower'
+```
+
+A single `grep "ToolCall ERROR"` catches both `(raised)` and `(soft)`
+failures — don't rely on `(raised)` alone, since most of this server's
+own error handling returns rather than raises. A legitimate "not found"
+result from a user-mistyped framework name (e.g. `"Framework 'Foo' not
+found in knowledge base."`) is intentionally NOT flagged as an error —
+that's an expected outcome, not a bug.
 
 To verify which tools were actually called in a session (vs. just
 described in chat), grep the log for the logger name:
