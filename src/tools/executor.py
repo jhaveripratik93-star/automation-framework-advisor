@@ -983,16 +983,24 @@ class ToolExecutor:
     - Write steps inline inside *** Test Cases *** by default.
     - DO NOT create single-action wrapper keywords.
     - Define custom keywords under *** Keywords *** ONLY if they encapsulate 2+ sequential steps AND are reused across multiple test cases.
+    - MANDATORY — NO ORPHAN KEYWORDS: every keyword you define under *** Keywords ***
+      MUST be called from at least one entry under *** Test Cases ***/*** Tasks ***
+      in the SAME file. A file containing only keyword/function definitions with
+      nothing invoking them is an INVALID, incomplete conversion — it is never
+      an acceptable final answer. If the source performs any check()/expect()/
+      assert, the output MUST contain a runnable test case that calls the
+      converted logic and asserts its result (e.g. with `Should Be True`).
 
     SYNTAX & PARSING RULES:
     - CRITICAL SPACING: Separate all keywords, arguments, and assignments with AT LEAST TWO SPACES (or a TAB). Single spaces are invalid cell separators.
     - NO PYTHON DOCSTRINGS: Do NOT use triple quotes (\"\"\") for keyword documentation or comments. ALWAYS use [Documentation] or '#' comments.
     - DEPRECATION RULE: DO NOT use [Return] to return values from keywords. ALWAYS use the modern block keyword 'RETURN'.
-    - ARGUMENT ORDER: Do NOT put list varargs (@{LIST}) before standard scalar arguments (\({ARG}) in [Arguments]. Always place scalar arguments first or pass lists as standard scalars (\){LIST}).
+    - ARGUMENT ORDER: Do NOT put list varargs (@{LIST}) before standard scalar arguments (${ARG}) in [Arguments]. Always place scalar arguments first or pass lists as standard scalars (${LIST}).
     - NESTED DICTIONARIES: Do NOT pass multiple key arguments to 'Get From Dictionary'. Access nested keys directly using RF variable syntax (e.g., '${json}[data][result]').
     - INLINE IF STATEMENTS: Always use 'Set Variable' inside inline IF/ELSE blocks when assigning values.
 
-    CORRECT EXAMPLE:
+    CORRECT EXAMPLE (note: the keyword is DEFINED under *** Keywords *** AND
+    CALLED from *** Test Cases *** — never ship one section without the other):
     *** Settings ***
     Library    SeleniumLibrary
     Test Teardown    Close Browser
@@ -1003,7 +1011,7 @@ class ToolExecutor:
 
     *** Test Cases ***
     Login With Valid Credentials
-        Open Browser    \({URL}\){BROWSER}
+        Open Browser    ${URL}    ${BROWSER}
         Input Text    css=[data-testid='username']    admin
         Input Text    css=[data-testid='password']    secret
         Click Button    css=[data-testid='login-btn']
@@ -1085,32 +1093,7 @@ class ToolExecutor:
     sleep(1);
     }
     """,
-
-            "k6_to_robot": """
-    OUTPUT RULES (STRICT):
-    1. Output ONLY valid Robot Framework syntax (.robot file).
-    2. Do NOT wrap the output in markdown code fences.
-    3. Do NOT include explanations, conversational text, or header commentary.
-
-    SHARED HELPER & COMMON FUNCTION CONVERSION RULES:
-    - Identify imported functions from `common/` or shared JS modules (e.g., `import { login } from '../common/auth.js'`).
-    - Convert every shared helper function into a reusable entry under the `*** Keywords ***` section.
-    - Function parameters must be converted to Robot Framework arguments using standard syntax:
-        [Arguments]    \({username}\){password}
-    - Convert K6 API calls (`http.get`, `http.post`) to `RequestsLibrary` keywords (`GET On Session`, `POST On Session`).
-    - Convert K6 browser calls (`page.goto`, `page.fill`) to `Browser` or `SeleniumLibrary` keywords (`New Page`, `Type Text`, `Open Browser`, `Input Text`).
-    - Convert K6 `check()` assertions into explicit Robot Framework assertions (e.g., `Status Should Be    200`).
-
-    FORMATTING RULES:
-    - Maintain section order:
-        *** Settings ***
-        *** Variables ***
-        *** Keywords ***
-        *** Test Cases ***
-    - Under `*** Settings ***`, import required libraries (e.g., `Library    RequestsLibrary` or `Library    SeleniumLibrary`).
-    - CRITICAL SPACING RULE: Use AT LEAST TWO SPACES (or a TAB) between keywords, arguments, and variable names. Single spaces are invalid.
-    """
-        }
+    }
 
     # Pair-specific conversion rules: (from_lower, to_lower) → extra instructions
     _FW_PAIR_RULES: dict[tuple[str, str], str] = {
@@ -1126,13 +1109,46 @@ class ToolExecutor:
     - Dictionary Lookups: Use direct index syntax '${json}[key1][key2]' for nested properties instead of multi-arg 'Get From Dictionary'.
     - Variable Types in Keywords: Pass list parameters as standard scalars '${METRICS}' when placed before other arguments in [Arguments].
 
+    *** CRITICAL — group()/exported-function → Test Case MAPPING (read first) ***
+    A k6 source file typically has ONE of two shapes. Identify which shape you
+    are given and follow its rule EXACTLY — this determines whether the output
+    needs a *** Test Cases *** section at all:
+
+    SHAPE A — the file exports a function whose body wraps its checks in a k6
+    `group('<Name>', function () { ... check(...) ... })`. This group() IS the
+    test — it is k6's equivalent of a Robot test case. You MUST produce BOTH:
+      1. A `*** Keywords ***` entry with the converted logic (HTTP calls,
+         retries, check()→assertion translation), returning a boolean/value
+         exactly like the k6 function does.
+      2. A `*** Test Cases ***` entry — named after the group()'s string
+         argument — that CALLS that keyword and asserts the result, e.g.:
+            *** Test Cases ***
+            Verify Health Status For All Microservices
+                ${result}=    Get Health Status    ${ms_url}    ${ms_name}    ${endpoint}    none
+                Should Be True    ${result}
+      Producing only the Keyword (step 1) and omitting the Test Case (step 2)
+      is an INVALID conversion — do not do this even if the function is also
+      imported by another file. Every converted file must be independently
+      runnable.
+
+    SHAPE B — the file exports ONLY pure helper/utility functions with NO
+    check()/group() of their own (e.g. a URL builder, a data mapper, a retry
+    loop wrapper that takes a callback). These are legitimately
+    `*** Keywords ***`-only — do not invent a fake test case for them. State
+    this explicitly in your output as a leading `# Library keyword(s) — no
+    standalone group()/check() in source; consumed by other suites.` comment
+    so the omission is clearly intentional, not a mistake.
+
+    When in doubt (the file has ANY check()/expect() call anywhere), treat it
+    as SHAPE A.
+
     EXAMPLE CONVERSION PATTERN:
     *** Keywords ***
     Get PM Server Response
         [Arguments]    ${metric_name}
         [Documentation]    Calls the PM server endpoint for a single metric.
-        \({endpoint}=    Set Variable    /metrics/\){metric_name}
-        \({response}=    GET On Session    api\){endpoint}
+        ${endpoint}=    Set Variable    /metrics/${metric_name}
+        ${response}=    GET On Session    api    ${endpoint}
         RETURN    ${response}
 
     K6 → Robot Framework keyword mapping (MUST follow exactly):
@@ -1143,11 +1159,13 @@ class ToolExecutor:
     check(res, {'status is 200': ...})   → Status Should Be    200    ${response}
     check(res, {'body contains X': ...}) → Should Contain    ${response.text}    X
     check(res, {'duration < N': ...})    → Should Be True    ${response.elapsed.total_seconds()} < N
-    JSON field assertion                 → \({json}=    Set Variable\){response.json()}
+    JSON field assertion                 → ${json}=    Set Variable    ${response.json()}
                                             Dictionary Should Contain Key    ${json}    field_name
                                             Should Be Equal As Strings    ${json}[field]    expected
     sleep(N)                             → Sleep    Ns
-    options.vus / options.duration       → Document in *** Variables *** as \({VUS} and\){DURATION}
+    options.vus / options.duration       → Document in *** Variables *** as ${VUS} and ${DURATION}
+    group('<Name>', fn)                  → *** Test Cases ***  entry named '<Name>' that calls the
+                                            converted keyword and asserts its result (see SHAPE A above)
 
     Session setup pattern (REQUIRED for every test suite):
     *** Keywords ***
@@ -1160,13 +1178,20 @@ class ToolExecutor:
     3. Assert EVERY k6 check() entry with the matching RF keyword above
 
     EXAMPLE — converting this k6 code:
-    const res = http.get(`${BASE_URL}/users`);
-    check(res, {
-        'status is 200': (r) => r.status === 200,
-        'has users key': (r) => r.json().users !== undefined,
-    });
+    export function getUsers() {
+        let result = true;
+        group('Get Users Returns 200 With Users Key', function () {
+            const res = http.get(`${BASE_URL}/users`);
+            result = check(res, {
+                'status is 200': (r) => r.status === 200,
+                'has users key': (r) => r.json().users !== undefined,
+            });
+        });
+        return result;
+    }
 
-    MUST produce:
+    MUST produce (keyword that does the work, PLUS a test case that calls it
+    and asserts — never the keyword alone):
     *** Settings ***
     Library    RequestsLibrary
     Library    Collections
@@ -1174,12 +1199,19 @@ class ToolExecutor:
     *** Variables ***
     ${BASE_URL}    https://example.com
 
+    *** Keywords ***
+    Get Users
+        Create Session    api    ${BASE_URL}
+        ${response}=    GET On Session    api    /users
+        Status Should Be    200    ${response}
+        ${json}=    Set Variable    ${response.json()}
+        Dictionary Should Contain Key    ${json}    users
+        RETURN    ${True}
+
     *** Test Cases ***
     Get Users Returns 200 With Users Key
-        Create Session    api    \({BASE_URL}\){response}=    GET On Session    api    /users
-        Status Should Be    200    ${response}
-        \({json}=    Set Variable\){response.json()}
-        Dictionary Should Contain Key    ${json}    users
+        ${result}=    Get Users
+        Should Be True    ${result}
     """,
         }
 
@@ -1213,7 +1245,9 @@ class ToolExecutor:
             f"4. Resolve any imports that reference other files in the shared context above.\n"
             f"5. {'Define reusable steps in a *** Keywords *** section.' if target_lang == 'robot' else f'For any capability {to_name} cannot handle natively, generate a helper in {lang_title} in a `# === HELPER: <name> ===` section.'}\n"
             f"6. Use the CURRENT stable API — do NOT use deprecated or experimental import paths.\n"
-            f"7. End with a CI/CD INTEGRATION comment block showing the GitHub Actions step."
+            f"7. Output ONLY the converted test code. Do NOT include CI/CD pipeline YAML, "
+            f"GitHub Actions workflow steps, or any other non-test-code content — those are "
+            f"generated separately by a dedicated tool, not as part of this conversion."
             + conv_notes
             + api_notes
             + gap_notes
@@ -1521,7 +1555,22 @@ class ToolExecutor:
         # Assertion parity check
         from src.tools.assertion_counter import compare as _cmp_assert
         self._last_assertion_report = _cmp_assert(source_code, clean_code, from_name, to_name)
-        return f"## Converted: {from_name} -> {to_name} ({lang_title})\n" + converted
+
+        # Structural validation — catches "definitions only, nothing calls
+        # them" conversions (e.g. a Robot *** Keywords *** section with no
+        # *** Test Cases *** actually invoking it) that assertion counting
+        # alone doesn't surface clearly.
+        from src.tools.conversion_validator import validate_single_file_conversion
+        validation = validate_single_file_conversion(
+            source_code, clean_code, from_name, to_name, target_lang=target_lang,
+        )
+        self._last_conversion_validation = validation
+
+        header = f"## Converted: {from_name} -> {to_name} ({lang_title})\n"
+        validation_block = validation.render()
+        if validation_block:
+            header += "\n" + validation_block + "\n"
+        return header + converted
 
     def convert_multi_file(
         self,

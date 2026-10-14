@@ -65,6 +65,14 @@ def build_conversion_brief(
                 "There are no capability gaps between these frameworks for "
                 "this source."
             )
+            + " IMPORTANT: the converted file must be runnable on its own — "
+            "if `source_code` performs any assertions/checks, the converted "
+            "file MUST contain an actual test entry that calls them (e.g. a "
+            "Robot Framework '*** Test Cases ***' case, a pytest `def "
+            "test_*`, a `test()`/`it()` block), not just keyword/function "
+            "*definitions* with nothing invoking them. Do not emit a file "
+            "that only defines keywords/helpers unless the source file "
+            "itself was purely a library with no top-level invocation."
         ),
     }
 

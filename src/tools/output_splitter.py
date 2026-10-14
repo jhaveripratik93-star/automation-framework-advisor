@@ -34,6 +34,7 @@ def split(converted_code: str, framework: str, source_stem: str = "tests") -> di
     Falls back to {f"tests/{source_stem}.ext": converted_code} on any error
     so the caller always gets something usable.
     """
+    converted_code = strip_trailing_cicd_block(converted_code)
     fw = framework.lower()
     try:
         if "robot" in fw:
@@ -46,6 +47,107 @@ def split(converted_code: str, framework: str, source_stem: str = "tests") -> di
         logger.warning("output_splitter: split failed (%s), returning single file", exc)
         ext = ".robot" if "robot" in fw else (".js" if "k6" in fw else ".py")
         return {f"tests/{source_stem}{ext}": converted_code}
+
+
+# ── Leaked CI/CD trailer guard ─────────────────────────────────────────
+#
+# Despite being instructed not to, LLMs sometimes still append a trailing
+# "CI/CD integration" block (a GitHub Actions snippet, raw YAML, or both)
+# to converted test code — a learned habit from training data, not
+# something the prompt can fully suppress. Rather than relying solely on
+# prompt wording (see executor.py's _build_system_prompt), this function
+# is a second, independent guard: it runs on every piece of converted code
+# before any framework-specific parsing happens, so even if the model
+# ignores instructions, the leaked trailer never reaches _split_robot()/
+# _parse_robot_test_cases() and can't explode into dozens of garbage
+# "test case" files (one per leaked YAML key).
+#
+# _YAML_CI_KEYS / _YAML_LIST_ITEM / _LEADING_KEY are also reused by
+# _looks_like_test_case_name() below — single source of truth for "what
+# counts as leaked YAML" shared by both guards.
+
+_CICD_TRAILER_MARKER = re.compile(
+    r"(ci/cd\s*integration|github\s*actions?\s*(step|workflow)|\.github/workflows)",
+    re.IGNORECASE,
+)
+_LEADING_KEY = re.compile(r"^([A-Za-z][\w\-]*)\s*:(\s|$)")
+_YAML_CI_KEYS = {
+    "on", "push", "pull_request", "pull_request_target", "workflow_dispatch",
+    "workflow_call", "schedule", "release", "branches", "branches-ignore",
+    "tags", "tags-ignore", "paths", "paths-ignore", "jobs", "runs-on", "steps",
+    "uses", "with", "env", "if", "needs", "strategy", "matrix", "fail-fast",
+    "timeout-minutes", "continue-on-error", "working-directory", "shell",
+    "container", "services", "permissions", "concurrency", "defaults",
+    "outputs", "secrets", "inputs", "python-version", "node-version",
+    "java-version", "go-version", "cache", "token", "ref", "repository",
+    "cron",
+}
+_YAML_LIST_ITEM = re.compile(r"^-\s+\S")
+
+
+# Top-level GitHub Actions workflow keys. These two are distinctive enough
+# that a bare, unindented "on:" or "jobs:" line essentially never appears
+# in legitimate Robot Framework / Python / K6 test code — if either shows
+# up, everything from that line to the end of the block is the YAML tree
+# (job names, step names, nested keys) and gets dropped wholesale, rather
+# than relying on recognizing every individual nested key by name (which
+# breaks on arbitrary job/step names like "test:" or "build:" that aren't
+# themselves CI vocabulary).
+_TOP_LEVEL_CICD_ANCHORS = {"on", "jobs"}
+
+
+def strip_trailing_cicd_block(code: str) -> str:
+    """Remove a leaked CI/CD block (comment marker + any raw YAML trailer)
+    from the end of converted code. No-op if nothing matches.
+
+    Three passes, each truncating further if it finds something:
+    1. Explicit marker line ("CI/CD INTEGRATION", "GitHub Actions
+       step/workflow", ".github/workflows") — cut from that line onward.
+    2. A bare top-level YAML anchor key ("on:" or "jobs:") — cut from that
+       line onward wholesale (handles arbitrary nested job/step names that
+       aren't themselves recognizable CI vocabulary, e.g. "test:" as a job
+       name).
+    3. Walk backward from the end, dropping any further trailing lines
+       that are recognizable YAML-CI-key lines ("runs-on: ...",
+       "python-version: ...") or YAML list items ("- uses: ...") —
+       catches a short leftover fragment with no anchor at all.
+    """
+    lines = code.splitlines()
+
+    for i, line in enumerate(lines):
+        if _CICD_TRAILER_MARKER.search(line):
+            lines = lines[:i]
+            break
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        m = _LEADING_KEY.match(stripped)
+        if m and m.group(1).lower() in _TOP_LEVEL_CICD_ANCHORS:
+            lines = lines[:i]
+            break
+
+    while lines:
+        last = lines[-1].strip()
+        if not last:
+            lines.pop()
+            continue
+        bare = last.lstrip("#/ ").strip()
+        if not bare:
+            lines.pop()
+            continue
+        if _YAML_LIST_ITEM.match(bare):
+            lines.pop()
+            continue
+        m = _LEADING_KEY.match(bare)
+        if m and m.group(1).lower() in _YAML_CI_KEYS:
+            lines.pop()
+            continue
+        break
+
+    result = "\n".join(lines).rstrip()
+    if result != code.rstrip():
+        logger.warning("output_splitter: stripped a leaked CI/CD trailer from converted code")
+    return result + "\n" if result else result
 
 
 # ── Robot Framework splitter ──────────────────────────────────────────
@@ -110,7 +212,16 @@ def _split_robot(code: str, stem: str) -> dict[str, str]:
 
 
 def _parse_robot_test_cases(block: str) -> dict[str, str]:
-    """Parse *** Test Cases *** body into {test_name: indented_body}."""
+    """Parse *** Test Cases *** body into {test_name: indented_body}.
+
+    Guards against non-test-case content (e.g. CI/CD YAML such as
+    `on:`, `jobs:`, `runs-on: ubuntu-latest`, `uses: actions/checkout@v3`
+    that an LLM occasionally appends despite instructions not to) leaking
+    into the parse. A line is only treated as a test case name if it looks
+    like one — see `_looks_like_test_case_name`. Lines that fail the check
+    are dropped (with a warning) rather than silently becoming a fake test
+    case + its own garbage output file.
+    """
     cases: dict[str, str] = {}
     current_name: str | None = None
     current_lines: list[str] = []
@@ -118,6 +229,14 @@ def _parse_robot_test_cases(block: str) -> dict[str, str]:
     for line in block.splitlines():
         # A test case name: non-empty line that does NOT start with whitespace
         if line and not line[0].isspace():
+            if not _looks_like_test_case_name(line):
+                logger.warning(
+                    "output_splitter: dropping non-test-case line while parsing "
+                    "*** Test Cases *** section (looks like leaked non-Robot "
+                    "content, e.g. CI/CD YAML): %r",
+                    line.strip()[:80],
+                )
+                continue
             if current_name is not None:
                 cases[current_name] = "\n".join(current_lines)
             current_name = line.rstrip()
@@ -129,6 +248,33 @@ def _parse_robot_test_cases(block: str) -> dict[str, str]:
         cases[current_name] = "\n".join(current_lines)
 
     return cases
+
+
+# Genuine Robot Framework test case names are free-text phrases and MAY
+# legitimately contain a colon (e.g. "TC1: Login with valid credentials" is
+# a common naming convention) — so a generic "anything shaped like key:
+# value" check is too broad and produces false positives on real test
+# names. Instead, reject only lines whose leading token (before the first
+# colon) is a known GitHub Actions / YAML CI vocabulary word, or that are a
+# YAML list item ("- uses: ..."). This targets the actual leaked-content
+# pattern (CI/CD YAML an LLM appended despite being told not to) without
+# rejecting ordinary "ID: description" test names.
+# (_YAML_CI_KEYS / _YAML_LIST_ITEM / _LEADING_KEY are defined once, above,
+# next to strip_trailing_cicd_block — shared by both guards.)
+
+
+def _looks_like_test_case_name(line: str) -> bool:
+    """Return False for lines that look like leaked YAML/CI content instead
+    of a real Robot Framework test case name."""
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        return False
+    if _YAML_LIST_ITEM.match(stripped):
+        return False
+    m = _LEADING_KEY.match(stripped)
+    if m and m.group(1).lower() in _YAML_CI_KEYS:
+        return False
+    return True
 
 
 def _build_robot_settings(settings_block: str, variables_block: str, keywords_block: str) -> str:

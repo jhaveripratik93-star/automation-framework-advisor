@@ -377,13 +377,14 @@ def convert_test_code(
     framework conversion rules and the source code — convert the code
     yourself using that brief and present the result to the user.
 
-    For multi-file projects, use convert_test_project instead so
-    cross-file imports and shared context are handled correctly."""
+    Multi-file/project conversion (convert_test_project) is temporarily
+    disabled — focus is on getting single-file conversion right first.
+    Convert files one at a time with this tool in the meantime."""
     executor = svc.get_tool_executor()
     if not svc.groq_available():
         from mcp_server.manual_mode import build_conversion_brief
         return build_conversion_brief(executor, source_code, from_framework, to_framework)
-    return executor.execute(
+    result = executor.execute(
         "convert_test_cases",
         {
             "source_code": source_code,
@@ -392,37 +393,68 @@ def convert_test_code(
             "language": language,
         },
     )
+    validation = getattr(executor, "_last_conversion_validation", None)
+    if validation is not None and not validation.is_valid:
+        # Groq produced structurally invalid output (definitions with nothing
+        # calling them) — surface this prominently rather than letting it
+        # ship silently; the validation block is already folded into the
+        # markdown `result` by _convert_test_cases, this is a redundant
+        # explicit signal for callers that only inspect structured fields.
+        return {
+            "mode": "groq",
+            "markdown": result,
+            "validation": validation.to_dict(),
+        }
+    return result
 
 
-@mcp.tool()
-@log_tool_call
-def convert_test_project(
-    files: list[dict[str, str]],
-    from_framework: str,
-    to_framework: str,
-) -> dict[str, Any]:
-    """Convert an entire multi-file test project from one framework to
-    another. `files` is a list of {"filename": relative/path.ext,
-    "content": "..."} dicts. Preserves cross-file references via shared
-    context, generates helper scripts for any capability gaps, a
-    conftest.py / fixtures file, and a requirements.txt (for Python
-    targets).
-
-    GROQ_API_KEY is OPTIONAL. If it's configured, this tool performs the
-    full conversion itself via Groq and returns `converted` (path ->
-    code), `helpers`, `conftest`, `requirements`, `gaps`, `summary`
-    (markdown), and `assertion_report` (parity check). If it's NOT
-    configured (the default), it returns `mode: "manual"` with the
-    conversion rules, the deterministically-generated `conftest`/
-    `requirements`, and `files_to_convert` — convert each file yourself
-    using the rules and present the complete project to the user."""
-    executor = svc.get_tool_executor()
-    if not svc.groq_available():
-        from mcp_server.manual_mode import build_multi_file_conversion_brief
-        return build_multi_file_conversion_brief(executor, files, from_framework, to_framework)
-    return executor.convert_multi_file(
-        files=files, from_framework=from_framework, to_framework=to_framework
-    )
+# ──────────────────────────────────────────────────────────────────────
+# convert_test_project is TEMPORARILY DISABLED.
+#
+# Root cause of the regression this was pulled for: when converting
+# multiple files independently with no awareness of the cross-file call
+# graph, "library-only" source files (files that only export functions,
+# with no top-level invocation of their own) correctly produce
+# definitions-only output (e.g. a Robot *** Keywords *** section with no
+# *** Test Cases ***) — but nothing re-assembled those definitions into a
+# calling test suite, and the one file that should have been the
+# orchestrator referenced a Resource file that was never generated. The
+# tool shipped a 26→10 assertion-count regression without surfacing it.
+#
+# Focus is on making single-file conversion (convert_test_code) correct
+# and structurally validated first (see conversion_validator.py). This
+# tool will be re-enabled once multi-file conversion has the same
+# structural guarantees plus cross-file call-graph awareness.
+#
+# @mcp.tool()
+# @log_tool_call
+# def convert_test_project(
+#     files: list[dict[str, str]],
+#     from_framework: str,
+#     to_framework: str,
+# ) -> dict[str, Any]:
+#     """Convert an entire multi-file test project from one framework to
+#     another. `files` is a list of {"filename": relative/path.ext,
+#     "content": "..."} dicts. Preserves cross-file references via shared
+#     context, generates helper scripts for any capability gaps, a
+#     conftest.py / fixtures file, and a requirements.txt (for Python
+#     targets).
+#
+#     GROQ_API_KEY is OPTIONAL. If it's configured, this tool performs the
+#     full conversion itself via Groq and returns `converted` (path ->
+#     code), `helpers`, `conftest`, `requirements`, `gaps`, `summary`
+#     (markdown), and `assertion_report` (parity check). If it's NOT
+#     configured (the default), it returns `mode: "manual"` with the
+#     conversion rules, the deterministically-generated `conftest`/
+#     `requirements`, and `files_to_convert` — convert each file yourself
+#     using the rules and present the complete project to the user."""
+#     executor = svc.get_tool_executor()
+#     if not svc.groq_available():
+#         from mcp_server.manual_mode import build_multi_file_conversion_brief
+#         return build_multi_file_conversion_brief(executor, files, from_framework, to_framework)
+#     return executor.convert_multi_file(
+#         files=files, from_framework=from_framework, to_framework=to_framework
+#     )
 
 
 # ════════════════════════════════════════════════════════════════════
