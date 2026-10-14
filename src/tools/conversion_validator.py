@@ -8,9 +8,10 @@ a `*** Test Cases ***` section with an empty/comment-only body), while the
 source file clearly performed assertions (k6 `check()`, `expect()`, etc.).
 
 This module does NOT call an LLM and does NOT evaluate whether the converted
-logic is *correct* — only whether something runnable exists. It is a second,
-independent guard that runs after conversion, in the same spirit as
-`output_splitter.strip_trailing_cicd_block` / `robot_postprocess`.
+logic is *correct* — only whether something runnable exists. It is used by
+src/conversion/service.py as one of the two gates (alongside the real
+compiler/parser check in src/conversion/compilers.py) in the conversion
+repair loop.
 """
 from __future__ import annotations
 

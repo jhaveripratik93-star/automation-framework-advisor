@@ -1,10 +1,11 @@
 """Automation Framework Advisor — MCP server.
 
-Wraps the existing ``src.tools.executor.ToolExecutor`` (plus the migration
-planner/coverage analyzer, boilerplate generator, repo comparator, test
-code generator, and framework discovery scanner) as MCP tools, so the
-whole advisor can be driven from Kiro chat (or any MCP client) without
-the Streamlit UI.
+Wraps the feature-owned executors (``src.advisor_tools``, ``src.coverage``,
+``src.prerequisites``, composed by ``src.agents.tool_router.ToolRouter``)
+plus the migration planner/coverage analyzer, boilerplate generator, repo
+comparator, test code generator, and framework discovery scanner as MCP
+tools, so the whole advisor can be driven from Kiro chat (or any MCP
+client) without the Streamlit UI.
 
 Run directly for local testing:
     python mcp_server/server.py
@@ -23,7 +24,7 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 
 from mcp_server import services as svc
 from mcp_server.tool_logging import log_tool_call
@@ -43,21 +44,17 @@ mcp = FastMCP(
         "frameworks (Playwright, Cypress, Selenium, Robot Framework, K6, "
         "Appium, Karate, REST Assured, and more). Covers: framework "
         "recommendations/scoring, migration planning, coverage gap "
-        "analysis, cross-framework test-code conversion, test-code "
-        "generation from manual test cases, cross-repo test parity "
-        "comparison, CI/CD + prerequisite automation, and live framework "
+        "analysis, cross-framework test-CODE conversion (test code only — "
+        "never CI/CD pipelines, GitHub Actions, or deployment config), "
+        "test-code generation from manual test cases, cross-repo test "
+        "parity comparison, prerequisite automation, and live framework "
         "discovery. Knowledge is grounded in a curated YAML knowledge base "
         "and knowledge graph — prefer these tools over general knowledge "
         "when answering automation-framework questions.\n\n"
-        "No API key is required to use this server. The code-conversion "
-        "and code-generation tools (convert_test_code, "
-        "convert_test_project, generate_test_code) work without "
-        "GROQ_API_KEY: when it's not configured, they return a dict with "
-        "mode='manual' containing the framework-specific conversion/"
-        "generation rules and the source material — follow the "
-        "`instructions` field in that dict and produce the code yourself "
-        "using your own model rather than treating the tool call as "
-        "failed."
+        "convert_test_code prefers true MCP sampling (your client's own "
+        "model) and falls back to GROQ_API_KEY automatically if your "
+        "client doesn't support sampling — no manual steps needed either "
+        "way."
     ),
 )
 
@@ -300,7 +297,7 @@ def analyze_test_case_coverage(
     "Framework Fit" page. Restrict to specific frameworks via the
     `frameworks` argument, or leave empty to evaluate every framework in
     the knowledge base."""
-    from src.tools.coverage_engine import analyze_coverage, build_display_coverage
+    from src.coverage.engine import analyze_coverage, build_display_coverage
 
     kb = svc.get_kb()
     analysis = analyze_coverage(test_cases, kb, frameworks)
@@ -359,102 +356,120 @@ def generate_boilerplate_project(
 
 @mcp.tool()
 @log_tool_call
-def convert_test_code(
+async def convert_test_code(
     source_code: str,
     from_framework: str,
     to_framework: str,
-    language: str = "python",
-) -> Any:
+    ctx: Context,
+) -> dict[str, Any]:
     """Convert a single test file's source code from one framework to
     another (e.g. Selenium -> Playwright, K6 -> Robot Framework),
-    preserving every assertion. Returns the converted code plus a
-    capability-gap table and a CI/CD integration snippet.
+    preserving every assertion. This tool performs ONLY code conversion —
+    it never generates or suggests CI/CD pipeline config, GitHub Actions
+    workflows, or deployment YAML.
 
-    GROQ_API_KEY is OPTIONAL. If it's configured, this tool performs the
-    conversion itself via Groq and returns a markdown string. If it's
-    NOT configured (the default — no key needed to use this server from
-    Kiro), it returns a dict with `mode: "manual"` containing the
-    framework conversion rules and the source code — convert the code
-    yourself using that brief and present the result to the user.
+    LLM backend: this tool prefers true MCP sampling — it asks YOUR
+    connected client's model (e.g. Kiro's own model) to do the generation
+    via sampling/createMessage, so no server-side API key is spent. If
+    your client hasn't declared the `sampling` capability, it falls back
+    to GROQ_API_KEY (config/.env) automatically. The conversion work
+    itself (prompt assembly, real-compiler validation, structural
+    "no orphan test" checks, and an automatic repair retry loop) always
+    runs in this server regardless of which LLM backend produced the
+    text.
 
-    Multi-file/project conversion (convert_test_project) is temporarily
-    disabled — focus is on getting single-file conversion right first.
-    Convert files one at a time with this tool in the meantime."""
-    executor = svc.get_tool_executor()
-    if not svc.groq_available():
-        from mcp_server.manual_mode import build_conversion_brief
-        return build_conversion_brief(executor, source_code, from_framework, to_framework)
-    result = executor.execute(
-        "convert_test_cases",
-        {
-            "source_code": source_code,
-            "from_framework": from_framework,
-            "to_framework": to_framework,
-            "language": language,
-        },
-    )
-    validation = getattr(executor, "_last_conversion_validation", None)
-    if validation is not None and not validation.is_valid:
-        # Groq produced structurally invalid output (definitions with nothing
-        # calling them) — surface this prominently rather than letting it
-        # ship silently; the validation block is already folded into the
-        # markdown `result` by _convert_test_cases, this is a redundant
-        # explicit signal for callers that only inspect structured fields.
-        return {
-            "mode": "groq",
-            "markdown": result,
-            "validation": validation.to_dict(),
-        }
-    return result
+    After conversion, this tool automatically runs the SAME cross-repo
+    parity engine behind compare_repos/compare_repos_csv (source vs.
+    converted code) to confirm the two frameworks have equivalent
+    validation — any test case whose assertion count doesn't match
+    between source and converted code is surfaced in `parity_report`.
+
+    Returns a dict: `code` (final converted code), `target_language`,
+    `is_valid` (compiled AND structurally sound), `llm_mode`
+    ("sampling" or "groq"), `attempts` (full retry history with each
+    attempt's compile/validation result), `assertion_report` (source vs.
+    converted assertion-count delta), `parity_report` (per-test-case
+    mismatch detail from the auto-chained repo comparator, with
+    `is_equivalent` as the headline signal), and `report` (short
+    markdown summary of all of the above)."""
+    import anyio
+
+    from mcp_server.sampling import make_llm_call
+    from src.conversion.service import ConversionRequest, convert
+
+    llm_call, llm_mode = make_llm_call(ctx)
+
+    def _run_conversion():
+        return convert(ConversionRequest(
+            source_code=source_code,
+            from_framework=from_framework,
+            to_framework=to_framework,
+            llm_call=llm_call,
+        ))
+
+    result = await anyio.to_thread.run_sync(_run_conversion)
+
+    payload = result.to_dict()
+    payload["llm_mode"] = llm_mode
+    payload["report"] = result.render_report()
+    return payload
 
 
-# ──────────────────────────────────────────────────────────────────────
-# convert_test_project is TEMPORARILY DISABLED.
-#
-# Root cause of the regression this was pulled for: when converting
-# multiple files independently with no awareness of the cross-file call
-# graph, "library-only" source files (files that only export functions,
-# with no top-level invocation of their own) correctly produce
-# definitions-only output (e.g. a Robot *** Keywords *** section with no
-# *** Test Cases ***) — but nothing re-assembled those definitions into a
-# calling test suite, and the one file that should have been the
-# orchestrator referenced a Resource file that was never generated. The
-# tool shipped a 26→10 assertion-count regression without surfacing it.
-#
-# Focus is on making single-file conversion (convert_test_code) correct
-# and structurally validated first (see conversion_validator.py). This
-# tool will be re-enabled once multi-file conversion has the same
-# structural guarantees plus cross-file call-graph awareness.
-#
-# @mcp.tool()
-# @log_tool_call
-# def convert_test_project(
-#     files: list[dict[str, str]],
-#     from_framework: str,
-#     to_framework: str,
-# ) -> dict[str, Any]:
-#     """Convert an entire multi-file test project from one framework to
-#     another. `files` is a list of {"filename": relative/path.ext,
-#     "content": "..."} dicts. Preserves cross-file references via shared
-#     context, generates helper scripts for any capability gaps, a
-#     conftest.py / fixtures file, and a requirements.txt (for Python
-#     targets).
-#
-#     GROQ_API_KEY is OPTIONAL. If it's configured, this tool performs the
-#     full conversion itself via Groq and returns `converted` (path ->
-#     code), `helpers`, `conftest`, `requirements`, `gaps`, `summary`
-#     (markdown), and `assertion_report` (parity check). If it's NOT
-#     configured (the default), it returns `mode: "manual"` with the
-#     conversion rules, the deterministically-generated `conftest`/
-#     `requirements`, and `files_to_convert` — convert each file yourself
-#     using the rules and present the complete project to the user."""
-#     executor = svc.get_tool_executor()
-#     if not svc.groq_available():
-#         from mcp_server.manual_mode import build_multi_file_conversion_brief
-#         return build_multi_file_conversion_brief(executor, files, from_framework, to_framework)
-#     return executor.convert_multi_file(
-#         files=files, from_framework=from_framework, to_framework=to_framework
-#     )
+@mcp.tool()
+@log_tool_call
+async def check_conversion_consistency(
+    source_code: str,
+    from_framework: str,
+    to_framework: str,
+    ctx: Context,
+    runs: int = 5,
+) -> dict[str, Any]:
+    """Run the SAME code conversion `runs` times in a row and report how
+    reproducible and accurate the result is — this is the measurement
+    tool for proving convert_test_code gives consistent, trustworthy
+    output rather than a one-shot lucky result.
+
+    Each run goes through the full convert_test_code pipeline
+    independently (its own compile check, structural check, cross-repo
+    parity check, and repair-loop retries), using the same LLM backend
+    selection as convert_test_code (true MCP sampling if your client
+    supports it, else GROQ_API_KEY).
+
+    Returns a dict: `records` (per-run detail: valid?, assertion count,
+    attempts needed, parity-equivalent?), `valid_count`/`total_runs`,
+    `consistency_score` (fraction of runs that were fully valid),
+    `is_consistent` (True only if EVERY run was valid AND every run
+    produced the same assertion count — the strict reproducibility bar),
+    `assertion_counts` (list, one per run, to eyeball variance directly),
+    and `report` (markdown summary). Keep `runs` modest (5-10) — each run
+    can itself make multiple LLM calls via its repair loop."""
+    import anyio
+
+    from mcp_server.sampling import make_llm_call
+    from src.conversion.consistency import check_consistency
+
+    llm_call, llm_mode = make_llm_call(ctx)
+
+    def _run_check():
+        return check_consistency(
+            source_code=source_code,
+            from_framework=from_framework,
+            to_framework=to_framework,
+            llm_call=llm_call,
+            runs=runs,
+        )
+
+    report = await anyio.to_thread.run_sync(_run_check)
+
+    payload = report.to_dict()
+    payload["llm_mode"] = llm_mode
+    payload["report"] = report.render_report()
+    return payload
+
+
+# Multi-file/project conversion is not yet re-implemented under the new
+# architecture. convert_test_code is the single supported conversion
+# tool for a single file; convert files one at a time.
 
 
 # ════════════════════════════════════════════════════════════════════

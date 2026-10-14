@@ -12,10 +12,11 @@ Run this ONE script after cloning/unzipping this project. It:
      absolute root directory — merging the entry in without disturbing
      any other MCP servers already configured there.
 
-No GROQ_API_KEY is required. The code-conversion/generation tools work
-without one — see docs/MCP_SERVER_SETUP.md. Pass --groq-key only if you
-specifically want those tools to call Groq server-side instead of
-handing the work to Kiro's own model.
+No GROQ_API_KEY is required. convert_test_code / check_conversion_consistency
+prefer true MCP sampling (your client's own model) and generate_test_code
+falls back to a manual-mode brief — see docs/MCP_SERVER_SETUP.md. Pass
+--groq-key only if you specifically want those tools to call Groq
+server-side instead.
 
 Usage:
     python scripts/setup_mcp.py                   # full setup, workspace scope
@@ -185,10 +186,10 @@ def main() -> None:
     parser.add_argument(
         "--groq-key", default=None,
         help="OPTIONAL. GROQ_API_KEY is not required to use this server — "
-             "the code-conversion/generation tools work without it by "
-             "handing the work to Kiro's own model instead of calling an "
-             "external API. Only pass this if you specifically want those "
-             "tools to call Groq server-side themselves.",
+             "convert_test_code/check_conversion_consistency prefer true MCP "
+             "sampling (your client's own model) and generate_test_code falls "
+             "back to a manual-mode brief. Only pass this if you specifically "
+             "want those tools to call Groq server-side instead.",
     )
     parser.add_argument(
         "--config-path", default=None,

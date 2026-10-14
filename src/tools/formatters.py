@@ -98,6 +98,42 @@ def format_limitations(field: list[str]) -> str:
     return "\n".join(f"  - {lim}" for lim in field)
 
 
+def find_case_study_relevance(case_study: str, subject_terms: list[str], max_excerpts: int = 3) -> str:
+    """Scan an uploaded case study for paragraphs mentioning any subject term.
+
+    Returns "" when no case study is loaded or nothing relevant is found,
+    so callers can safely do: `if note: lines.append(note)`.
+
+    Shared by every feature executor (advisor_tools, coverage, prerequisites,
+    migration) that renders case-study-aware output — single source of
+    truth so a case-study loaded via the Streamlit sidebar surfaces
+    identically regardless of which tool is answering.
+    """
+    if not case_study or not subject_terms:
+        return ""
+
+    terms = [t.lower() for t in subject_terms if t]
+    paragraphs = [p.strip() for p in case_study.split("\n\n") if p.strip()]
+    if len(paragraphs) <= 1:
+        paragraphs = [line.strip() for line in case_study.split("\n") if line.strip()]
+
+    matches = []
+    for para in paragraphs:
+        if any(term in para.lower() for term in terms):
+            matches.append(para)
+        if len(matches) >= max_excerpts:
+            break
+
+    if not matches:
+        return ""
+
+    lines = ["\n**📄 From Your Case Study:**"]
+    for m in matches:
+        snippet = m if len(m) <= 300 else m[:300].rstrip() + "…"
+        lines.append(f"> {snippet}")
+    return "\n".join(lines)
+
+
 def resolve_framework(kb: Any, name: str) -> Any | None:
     """Resolve a framework name with fuzzy matching (handles 'Selenium' → 'Selenium WebDriver').
 

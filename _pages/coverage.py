@@ -203,8 +203,8 @@ def render() -> None:
 
 def _parse_and_analyse(upload_file, upload_type: str, kb) -> None:
     import json as _json
-    from src.tools.excel_parser import parse_excel_test_cases
-    from src.tools.coverage_engine import analyze_coverage, render_coverage_report, build_display_coverage
+    from src.coverage.excel_parser import parse_excel_test_cases
+    from src.coverage.engine import analyze_coverage, render_coverage_report, build_display_coverage
 
     with st.spinner("Analysing coverage…"):
         try:
@@ -240,7 +240,7 @@ def _parse_and_analyse(upload_file, upload_type: str, kb) -> None:
 def _run_analysis(test_cases: list[dict], kb) -> None:
     """Run coverage analysis for the given test cases against the current
     framework selection and store the results in session state."""
-    from src.tools.coverage_engine import (
+    from src.coverage.engine import (
         analyze_coverage, render_coverage_report, build_display_coverage,
     )
 

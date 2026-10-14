@@ -200,50 +200,7 @@ def test_render_includes_error_text_for_invalid_result():
     assert "Conversion validation failed" in rendered
     assert "no runnable test entry" in rendered
 
-
-# ── End-to-end wiring: ToolExecutor._convert_test_cases surfaces validation ──
-
-class _StubLLM:
-    """Minimal stand-in for GroqClient — returns canned fenced code blocks."""
-
-    def __init__(self, content: str):
-        self._content = content
-
-    def chat(self, messages, system="", temperature=0.1, **kwargs):
-        return {"content": self._content}
-
-
-def _make_executor():
-    from src.knowledge_base import KnowledgeBase
-    from src.tools.executor import ToolExecutor
-
-    kb = KnowledgeBase(data_dir="data/frameworks")
-    kb.load()
-    return ToolExecutor(knowledge_base=kb)
-
-
-def test_convert_test_cases_surfaces_validation_failure_in_markdown():
-    ex = _make_executor()
-    ex._llm = _StubLLM("```robot\n" + ROBOT_KEYWORDS_ONLY_NO_TEST_CASES + "\n```")
-    result_md = ex._convert_test_cases(
-        source_code=K6_HEALTH_STATUS_SOURCE,
-        from_framework="K6",
-        to_framework="Robot Framework",
-    )
-    assert "Conversion validation failed" in result_md
-    assert "no runnable test entry" in result_md
-    validation = ex._last_conversion_validation
-    assert validation.is_valid is False
-
-
-def test_convert_test_cases_no_warning_block_when_valid():
-    ex = _make_executor()
-    ex._llm = _StubLLM("```robot\n" + ROBOT_WITH_RUNNABLE_TEST_CASE + "\n```")
-    result_md = ex._convert_test_cases(
-        source_code=K6_HEALTH_STATUS_SOURCE,
-        from_framework="K6",
-        to_framework="Robot Framework",
-    )
-    assert "Conversion validation failed" not in result_md
-    validation = ex._last_conversion_validation
-    assert validation.is_valid is True
+# Note: end-to-end wiring of this validator into the conversion pipeline
+# is now covered by tests/test_conversion_service.py (src/conversion/
+# service.py), which replaced the old ToolExecutor._convert_test_cases
+# path this file used to test here.

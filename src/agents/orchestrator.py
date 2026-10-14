@@ -32,7 +32,7 @@ from src.agents.synthesis_agent import SynthesisAgent
 from src.agents.memory import ConversationMemory
 from src.agents.callbacks import PipelineCallbackHandler, logging_callback
 from src.agents.langgraph_pipeline import build_pipeline
-from src.tools.executor import ToolExecutor
+from src.agents.tool_router import ToolRouter
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +147,7 @@ class AgentOrchestrator:
 
         graph_context = self._graphrag.retrieve_context(user_message)
 
-        tool_executor = ToolExecutor(
+        tool_router = ToolRouter(
             knowledge_graph=self._kg,
             graphrag_engine=self._graphrag,
             knowledge_base=self._kb,
@@ -155,12 +155,11 @@ class AgentOrchestrator:
             case_study_context=case_study,
             weight_profile=weight_profile,
         )
-        tool_executor._llm = self._client  # enable convert_test_cases
 
         pipeline = build_pipeline(
             decision_agent=self._decision_agent,
             tool_selection_agent=self._tool_selection_agent,
-            tool_executor=tool_executor,
+            tool_executor=tool_router,
             synthesis_agent=self._synthesis_agent,
             evaluation_agent=self._evaluation_agent,
             reflection_agent=self._reflection_agent,
@@ -225,7 +224,7 @@ class AgentOrchestrator:
 
         graph_context = self._graphrag.retrieve_context(user_message)
 
-        tool_executor = ToolExecutor(
+        tool_router = ToolRouter(
             knowledge_graph=self._kg,
             graphrag_engine=self._graphrag,
             knowledge_base=self._kb,
@@ -233,12 +232,11 @@ class AgentOrchestrator:
             case_study_context=case_study,
             weight_profile=weight_profile,
         )
-        tool_executor._llm = self._client
 
         pipeline = build_pipeline(
             decision_agent=self._decision_agent,
             tool_selection_agent=self._tool_selection_agent,
-            tool_executor=tool_executor,
+            tool_executor=tool_router,
             synthesis_agent=self._synthesis_agent,
             evaluation_agent=self._evaluation_agent,
             reflection_agent=self._reflection_agent,

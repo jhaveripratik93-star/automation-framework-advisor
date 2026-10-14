@@ -14,11 +14,11 @@ This tool helps you make data-driven decisions about framework migration by:
 
 ### 1. Tool Definition
 
-The tool is integrated into the agent pipeline's tool executor:
+The tool is integrated into the agent pipeline via the coverage feature package:
 - **Tool Name**: `analyze_test_case_coverage`
-- **Location**: `src/tools/executor.py` → `_analyze_test_case_coverage()`
-- **Engine**: `src/tools/coverage_engine.py` → `analyze_coverage()` + `render_coverage_report()`
-- **Called by**: `ToolSelectionAgent` when user asks about test case coverage
+- **Location**: `src/coverage/executor.py` → `CoverageExecutor._analyze_test_case_coverage()`
+- **Engine**: `src/coverage/engine.py` → `analyze_coverage()` + `render_coverage_report()`
+- **Called by**: `ToolRouter` (via `ToolSelectionAgent`) when user asks about test case coverage
 
 ### 2. Input Format
 
@@ -141,7 +141,7 @@ Analyze coverage for Playwright, Selenium, and k6
 
 ### Example 2: Using Sample File
 
-Upload the sample file `data/samples/sample_test_case_analysis.json` and say:
+Upload the sample file `data/samples/sample_test_case_coverage_analysis.json` and say:
 
 ```
 Analyze the test case coverage from the uploaded JSON file
@@ -228,7 +228,7 @@ LLM parses test cases
     ↓
 Calls analyze_test_case_coverage tool
     ↓
-ToolExecutor._analyze_test_case_coverage()
+CoverageExecutor._analyze_test_case_coverage()
     ↓
 For each test case:
     - Map capability to framework features
@@ -252,15 +252,15 @@ LLM presents results in chat
 ### Code Location
 
 **Tool registration:**
-- File: `src/tools/executor.py`
-- Method: `_analyze_test_case_coverage()`
+- File: `src/coverage/executor.py`
+- Method: `CoverageExecutor._analyze_test_case_coverage()`
 
 **Coverage engine:**
-- File: `src/tools/coverage_engine.py`
+- File: `src/coverage/engine.py`
 - Functions: `analyze_coverage()`, `render_coverage_report()`
 
 **Sample Data:**
-- File: `data/samples/sample_test_case_analysis.json`
+- File: `data/samples/sample_test_case_coverage_analysis.json`
 
 ---
 
@@ -375,10 +375,10 @@ Planned improvements:
 ## Related Documentation
 
 - **High-Level Design**: `docs/HLD.md`
-- **Tool Executor**: `src/tools/executor.py` (all 11 tools)
-- **Coverage Engine**: `src/tools/coverage_engine.py`
+- **Tool Router**: `src/agents/tool_router.py` (composes all 10 ToolRouter-backed tools)
+- **Coverage Engine**: `src/coverage/engine.py`
 - **Framework Data**: `data/frameworks/*.yaml`
-- **Sample Input**: `data/samples/sample_test_case_analysis.json`
+- **Sample Input**: `data/samples/sample_test_case_coverage_analysis.json`
 
 ---
 

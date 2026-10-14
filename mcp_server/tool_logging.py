@@ -126,6 +126,29 @@ def _detect_soft_error(result: Any) -> str | None:
     return None
 
 
+def _log_success(tool_name: str, start: float, result: Any) -> None:
+    elapsed_ms = (time.monotonic() - start) * 1000
+    soft_error = _detect_soft_error(result)
+    if soft_error is not None:
+        logger.error(
+            "ToolCall ERROR (soft) '%s' after %.1fms — %s",
+            tool_name, elapsed_ms, soft_error,
+        )
+    else:
+        logger.info(
+            "ToolCall OK '%s' after %.1fms -> %d chars",
+            tool_name, elapsed_ms, _result_size(result),
+        )
+
+
+def _log_exception(tool_name: str, start: float, exc: Exception) -> None:
+    elapsed_ms = (time.monotonic() - start) * 1000
+    logger.error(
+        "ToolCall ERROR (raised) '%s' after %.1fms — %s: %s",
+        tool_name, elapsed_ms, type(exc).__name__, exc,
+    )
+
+
 def log_tool_call(fn: Callable) -> Callable:
     """Decorator: log every call to an MCP tool function uniformly.
 
@@ -133,7 +156,29 @@ def log_tool_call(fn: Callable) -> Callable:
     successful exit (tool name, elapsed ms, result size), and one line on
     exception (tool name, elapsed ms, exception type/message) before
     re-raising — the decorator never swallows or alters tool behavior.
+
+    Supports both sync and async tool functions (FastMCP tools may be
+    either) — the wrapper's sync/async-ness matches the wrapped
+    function's, so `inspect.iscoroutinefunction` checks FastMCP performs
+    on registration still see the right shape.
     """
+    import inspect
+
+    if inspect.iscoroutinefunction(fn):
+        @functools.wraps(fn)
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+            tool_name = fn.__name__
+            logger.info("ToolCall START '%s' args=(%s)", tool_name, _summarize_args(kwargs))
+            start = time.monotonic()
+            try:
+                result = await fn(*args, **kwargs)
+            except Exception as exc:
+                _log_exception(tool_name, start, exc)
+                raise
+            _log_success(tool_name, start, result)
+            return result
+
+        return async_wrapper
 
     @functools.wraps(fn)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -143,25 +188,9 @@ def log_tool_call(fn: Callable) -> Callable:
         try:
             result = fn(*args, **kwargs)
         except Exception as exc:
-            elapsed_ms = (time.monotonic() - start) * 1000
-            logger.error(
-                "ToolCall ERROR (raised) '%s' after %.1fms — %s: %s",
-                tool_name, elapsed_ms, type(exc).__name__, exc,
-            )
+            _log_exception(tool_name, start, exc)
             raise
-        elapsed_ms = (time.monotonic() - start) * 1000
-
-        soft_error = _detect_soft_error(result)
-        if soft_error is not None:
-            logger.error(
-                "ToolCall ERROR (soft) '%s' after %.1fms — %s",
-                tool_name, elapsed_ms, soft_error,
-            )
-        else:
-            logger.info(
-                "ToolCall OK '%s' after %.1fms -> %d chars",
-                tool_name, elapsed_ms, _result_size(result),
-            )
+        _log_success(tool_name, start, result)
         return result
 
     return wrapper

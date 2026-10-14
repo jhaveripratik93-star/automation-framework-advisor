@@ -1,43 +1,24 @@
-"""Tools module for the automation framework migration advisor."""
-from src.tools.executor import ToolExecutor
-from src.tools.formatters import (
-    format_architecture_fit,
-    format_cicd,
-    format_cloud_grids,
-    format_performance,
-    format_maintainability,
-    format_version_info,
-    format_limitations,
-    positive_items,
-    resolve_framework,
-)
-from src.tools.prerequisites import (
-    PREREQ_PATTERNS,
-    match_prereq_pattern,
-    generate_script,
-)
-from src.tools.cicd_generators import (
-    generate_cicd_pipeline,
-    generate_framework_hooks,
-)
+"""Shared cross-cutting infrastructure used by 2+ features.
 
-__all__ = [
-    "ToolExecutor",
-    # Formatters
-    "format_architecture_fit",
-    "format_cicd",
-    "format_cloud_grids",
-    "format_performance",
-    "format_maintainability",
-    "format_version_info",
-    "format_limitations",
-    "positive_items",
-    "resolve_framework",
-    # Prerequisites
-    "PREREQ_PATTERNS",
-    "match_prereq_pattern",
-    "generate_script",
-    # CI/CD
-    "generate_cicd_pipeline",
-    "generate_framework_hooks",
-]
+This package is deliberately NOT feature-owned — everything here is used
+by multiple feature packages and would otherwise be duplicated:
+
+  formatters.py           — framework-field rendering + case-study-relevance
+                            scan, used by src.advisor_tools, src.coverage,
+                            src.prerequisites, src.migration.
+  assertion_counter.py    — cross-framework assertion counting, used by
+                            repo_comparator.py AND src.conversion.
+  conversion_validator.py — "no orphan test" structural check, used by
+                            src.conversion.service.
+  repo_comparator.py      — cross-repo test-case parity engine, used by
+                            its own standalone compare_repos*/_pages
+                            feature AND auto-chained by
+                            src.conversion.parity.
+
+Feature-owned tool implementations have moved out to their own packages:
+  src.advisor_tools   — search/details/compare/recommend/score/categories/
+                        migration-path-lookup (formerly ToolExecutor)
+  src.coverage        — test-case coverage analysis, Excel parsing
+  src.prerequisites   — prerequisite automation + CI/CD hook generation
+  src.conversion      — framework-to-framework code conversion
+"""

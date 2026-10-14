@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.knowledge_base import KnowledgeBase
 from src.graph import load_or_seed_graph
 from src.graph.graphrag_engine import GraphRAGEngine
-from src.tools.executor import ToolExecutor
+from src.agents.tool_router import ToolRouter
 
 
 def main():
@@ -22,7 +22,7 @@ def main():
 
     graph = load_or_seed_graph(kb)
     graphrag = GraphRAGEngine(graph=graph, knowledge_base=kb)
-    tool_executor = ToolExecutor(knowledge_graph=graph, graphrag_engine=graphrag, knowledge_base=kb)
+    tool_executor = ToolRouter(knowledge_graph=graph, graphrag_engine=graphrag, knowledge_base=kb)
 
     test_cases = [
         {"id": "TC001", "description": "Verify user login",            "required_capability": "UI Automation"},

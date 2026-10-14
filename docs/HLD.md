@@ -140,23 +140,29 @@ user query
 | `ReflectionAgent` | `reflection_agent.py` | Critiques draft, triggers re-evaluate if needed |
 | `FormatAgent` | `format_agent.py` | Applies markdown structure by query type |
 
-### 3.5 Tool Executor (`src/tools/executor.py`)
+### 3.5 Tool Router (`src/agents/tool_router.py`)
 
-11 tools registered:
+`ToolRouter` composes 3 feature-owned executors behind one
+`.execute(name, args)` surface the pipeline calls into — the LangGraph
+pipeline and `ToolSelectionAgent` only ever see the merged `.tools` dict,
+never which executor owns what:
 
-| Tool | Description |
-|------|-------------|
-| `search_knowledge_graph` | Token-scored KB search, top 10 results |
-| `get_framework_details` | Full YAML profile for a named framework |
-| `run_framework_comparison` | Side-by-side capability comparison |
-| `recommend_frameworks` | ScoringEngine-ranked recommendations with weight priority header |
-| `find_migration_paths` | MIGRATES_TO relationships with gap analysis |
-| `analyze_test_case_coverage` | Coverage matrix via `coverage_engine` |
-| `analyze_uploaded_content` | Keyword search in uploaded files / case study |
-| `analyze_prerequisites` | Prerequisite automation scripts + CI/CD YAML |
-| `score_frameworks` | Weighted scorecard with active WeightProfile |
-| `convert_test_cases` | Single-file LLM-based framework conversion |
-| `list_frameworks_by_category` | Frameworks grouped by `architecture_fit` classification |
+| Tool | Owning executor | Description |
+|------|------------------|-------------|
+| `search_knowledge_graph` | `src/advisor_tools/` | Token-scored KB search, top 10 results |
+| `get_framework_details` | `src/advisor_tools/` | Full YAML profile for a named framework |
+| `run_framework_comparison` | `src/advisor_tools/` | Side-by-side capability comparison |
+| `recommend_frameworks` | `src/advisor_tools/` | ScoringEngine-ranked recommendations with weight priority header |
+| `find_migration_paths` | `src/advisor_tools/` | MIGRATES_TO relationships with gap analysis |
+| `score_frameworks` | `src/advisor_tools/` | Weighted scorecard with active WeightProfile |
+| `list_frameworks_by_category` | `src/advisor_tools/` | Frameworks grouped by `architecture_fit` classification |
+| `analyze_test_case_coverage` | `src/coverage/` | Coverage matrix via `src/coverage/engine.py` |
+| `analyze_uploaded_content` | `src/coverage/` | Keyword search in uploaded files / case study |
+| `analyze_prerequisites` | `src/prerequisites/` | Prerequisite automation scripts + CI/CD YAML |
+
+(Cross-framework test *code* conversion — `convert_test_code` /
+`check_conversion_consistency` — is a separate feature, `src/conversion/`,
+exposed only via the MCP server, not through `ToolRouter`.)
 
 ### 3.6 Scoring Engine (`src/scoring/`)
 
@@ -275,7 +281,7 @@ TemplateEngine → LLMGenerator → CodeValidator → TestOptimizer → CodeRend
 │ • Case      │────▶│  3. ToolSelectionAgent                   │
 │   study     │     │     (tool name + typed arguments)        │
 │             │     │                                          │
-│ • Discovery │────▶│  4. ToolExecutor (11 tools)              │
+│ • Discovery │────▶│  4. ToolRouter (10 tools)                │
 │   answers   │     │     (KB lookup / graph search / scoring) │
 │             │     │                                          │
 │             │     │  5. SynthesisAgent                       │
