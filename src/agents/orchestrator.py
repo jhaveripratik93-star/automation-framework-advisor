@@ -33,6 +33,7 @@ from src.agents.memory import ConversationMemory
 from src.agents.callbacks import PipelineCallbackHandler, logging_callback
 from src.agents.langgraph_pipeline import build_pipeline
 from src.agents.tool_router import ToolRouter
+from src.coverage.test_case_extraction import extract_test_cases_from_text
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +146,24 @@ class AgentOrchestrator:
 
         self._callback_handler.on_node_start("orchestrator")
 
-        graph_context = self._graphrag.retrieve_context(user_message)
+        # Parse any embedded test-case dataset structurally BEFORE any LLM
+        # call — large uploads/pastes must never be echoed back by the LLM
+        # as a tool-call argument (see src/coverage/test_case_extraction.py
+        # for why: a 250-token tool-call response cap silently truncates
+        # anything beyond ~1 full test case). The LLM only ever sees
+        # `llm_message` (with the bulk JSON replaced by a short
+        # placeholder); the real parsed list travels through state and is
+        # substituted directly into analyze_test_case_coverage's arguments
+        # in execute_tools.
+        extracted_test_cases, llm_message = extract_test_cases_from_text(user_message)
+        if extracted_test_cases:
+            logger.info(
+                "AgentOrchestrator.run: structurally extracted %d test case(s) "
+                "from user_message — bypassing LLM echo",
+                len(extracted_test_cases),
+            )
+
+        graph_context = self._graphrag.retrieve_context(llm_message)
 
         tool_router = ToolRouter(
             knowledge_graph=self._kg,
@@ -170,7 +188,11 @@ class AgentOrchestrator:
         profile_ctx = weight_context or self._build_profile_context()
 
         initial_state: dict[str, Any] = {
-            "user_message": user_message,
+            # Every downstream node (decide/select_tools/evaluate/...) reads
+            # this field — it must be the CLEANED message (bulk JSON
+            # replaced by a short placeholder), never the raw payload, or
+            # every LLM call in the pipeline pays for re-reading it.
+            "user_message": llm_message,
             "graph_context": graph_context,
             "profile_context": profile_ctx,
             "uploaded_docs": uploaded_docs,
@@ -187,13 +209,17 @@ class AgentOrchestrator:
             "weight_profile": weight_profile,
             "user_profile": self._profile,
             "executed_tool_calls": [],
+            "_extracted_test_cases": extracted_test_cases,
         }
 
         result_state = pipeline.invoke(initial_state)
         response = result_state.get("final_response", "")
 
-        # Update conversation memory
-        self._conversation_memory.add_turn("user", user_message)
+        # Update conversation memory with the CLEANED message too — history
+        # is replayed into future turns' prompts, so storing the raw
+        # multi-thousand-char payload here would reintroduce the same
+        # token-budget problem on every subsequent query in the session.
+        self._conversation_memory.add_turn("user", llm_message)
         self._conversation_memory.add_turn("assistant", response)
 
         from src.agents.cache import response_cache
@@ -222,7 +248,15 @@ class AgentOrchestrator:
         """
         logger.info("AgentOrchestrator.run_stream: START query='%.80s'", user_message)
 
-        graph_context = self._graphrag.retrieve_context(user_message)
+        extracted_test_cases, llm_message = extract_test_cases_from_text(user_message)
+        if extracted_test_cases:
+            logger.info(
+                "AgentOrchestrator.run_stream: structurally extracted %d test case(s) "
+                "from user_message — bypassing LLM echo",
+                len(extracted_test_cases),
+            )
+
+        graph_context = self._graphrag.retrieve_context(llm_message)
 
         tool_router = ToolRouter(
             knowledge_graph=self._kg,
@@ -246,7 +280,7 @@ class AgentOrchestrator:
         profile_ctx = weight_context or self._build_profile_context()
 
         initial_state: dict[str, Any] = {
-            "user_message": user_message,
+            "user_message": llm_message,
             "graph_context": graph_context,
             "profile_context": profile_ctx,
             "uploaded_docs": uploaded_docs,
@@ -262,6 +296,8 @@ class AgentOrchestrator:
             "conversation_history": self._conversation_memory.get_history(last_n=10),
             "weight_profile": weight_profile,
             "user_profile": self._profile,
+            "executed_tool_calls": [],
+            "_extracted_test_cases": extracted_test_cases,
         }
 
         final_state = None
@@ -274,6 +310,6 @@ class AgentOrchestrator:
         # Update memory after streaming completes
         if final_state and "final_response" in final_state:
             response = final_state["final_response"]
-            self._conversation_memory.add_turn("user", user_message)
+            self._conversation_memory.add_turn("user", llm_message)
             self._conversation_memory.add_turn("assistant", response)
             logger.info("AgentOrchestrator.run_stream: DONE response_len=%d", len(response))

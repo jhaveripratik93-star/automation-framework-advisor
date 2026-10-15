@@ -36,8 +36,35 @@ this explicitly with a leading `# Library keyword(s) — no standalone
 group()/check() in source; consumed by other suites.` comment so the
 omission is clearly intentional, not a mistake.
 
-When in doubt (the file has ANY check()/expect() call anywhere), treat it
-as SHAPE A.
+SHAPE C — the file's check()/http calls live directly inside the k6 entry
+point `export default function () { ... check(...) ... }`, with NO
+group() wrapper anywhere. This is the single most common k6 script shape
+(a plain load/smoke test with no explicit group() call) — do NOT force
+this into SHAPE A's "extract the name from group()" rule, since there is
+no group() name to extract. Instead:
+  1. Treat the ENTIRE default function as ONE test case.
+  2. Derive a descriptive Test Case name from the HTTP call + check()
+     descriptions (e.g. a login POST with checks "status is 200" /
+     "token present" becomes `Login Returns 200 With Token`). Never name
+     it `Default`, `Main`, or leave it unnamed.
+  3. Inline the steps directly under `*** Test Cases ***` (Setup Session,
+     HTTP call, one assertion per check() entry — see the keyword mapping
+     table below). Only split logic into `*** Keywords ***` first if that
+     same logic is reused by another file in the project, per the
+     KEYWORD CREATION RULES above — don't add an unnecessary indirection
+     for a single-use default function.
+  4. Still document `options.vus` / `options.duration` / any
+     `options.thresholds` in `*** Variables ***` as usual.
+
+DECIDING WHICH SHAPE APPLIES — check in this order:
+  - No check()/group() at all, pure helper exports              -> SHAPE B
+  - Has check()/http calls, wrapped in a named group()          -> SHAPE A
+  - Has check()/http calls, NOT wrapped in any group()          -> SHAPE C
+Never force SHAPE A when no group() name exists — that produces an
+unresolvable "name the test case" step and inconsistent output. If a
+single file contains BOTH group()-wrapped sections AND top-level
+check()s outside any group(), apply SHAPE A per group and SHAPE C for the
+remaining ungrouped logic, in the same file.
 
 CONVERSION DETAILS:
 - Return statements: use the modern `RETURN    ${variable}` syntax
@@ -86,7 +113,7 @@ Each test MUST:
 2. Make the HTTP call and store the result in ${response}
 3. Assert EVERY k6 check() entry with the matching RF keyword above
 
-EXAMPLE — converting this k6 code:
+EXAMPLE (SHAPE A) — converting this k6 code:
 export function getUsers() {
     let result = true;
     group('Get Users Returns 200 With Users Key', function () {
@@ -121,3 +148,46 @@ Get Users
 Get Users Returns 200 With Users Key
     ${result}=    Get Users
     Should Be True    ${result}
+
+EXAMPLE (SHAPE C — no group(), checks live directly in the default
+function) — converting this k6 code:
+export const options = {
+    vus: 10,
+    duration: '30s',
+    thresholds: { http_req_duration: ['p(95)<500'], http_req_failed: ['rate<0.01'] },
+};
+
+export default function () {
+    const res = http.post(
+        'https://api.example.com/auth/login',
+        JSON.stringify({ username: 'admin', password: 'password123' }),
+        { headers: { 'Content-Type': 'application/json' } }
+    );
+    check(res, {
+        'status is 200': (r) => r.status === 200,
+        'token present': (r) => JSON.parse(r.body).token !== undefined,
+    });
+    sleep(1);
+}
+
+MUST produce (ONE test case, inlined — no group() name to extract, no
+Keyword indirection needed for a single-use default function):
+*** Settings ***
+Library    RequestsLibrary
+Library    Collections
+Library    OperatingSystem
+
+*** Variables ***
+${BASE_URL}    https://api.example.com
+${VUS}         10
+${DURATION}    30s
+
+*** Test Cases ***
+Login Returns 200 With Token
+    Create Session    api    ${BASE_URL}
+    ${response}=    POST On Session    api    /auth/login
+    ...    json={"username": "admin", "password": "password123"}
+    Status Should Be    200    ${response}
+    ${json}=    Set Variable    ${response.json()}
+    Dictionary Should Contain Key    ${json}    token
+    Sleep    1s

@@ -16,6 +16,18 @@ def positive_items(field: dict[str, Any]) -> list[tuple[str, Any]]:
     return result
 
 
+def active_capabilities(capabilities: dict[str, Any], limit: int | None = None) -> list[str]:
+    """Return title-cased labels for capabilities that are "on" (True or a
+    meaningful non-empty string), e.g. {"api_testing": True} -> ["Api Testing"].
+
+    Shared by every advisor-tool handler that lists a framework's active
+    capabilities (search, details, comparison) — previously the same
+    list-comprehension was copy-pasted in each one.
+    """
+    labels = [k.replace("_", " ").title() for k, v in positive_items(capabilities)]
+    return labels[:limit] if limit is not None else labels
+
+
 def format_architecture_fit(architecture_fit: dict[str, Any]) -> str:
     """Render architecture_fit with string fit-levels."""
     items = positive_items(architecture_fit)

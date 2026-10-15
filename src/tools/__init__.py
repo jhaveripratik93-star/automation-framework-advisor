@@ -3,6 +3,11 @@
 This package is deliberately NOT feature-owned — everything here is used
 by multiple feature packages and would otherwise be duplicated:
 
+  base_executor.py        — BaseToolExecutor: shared KB-bootstrap +
+                            `.tools` dispatch/error-handling boilerplate,
+                            subclassed by every feature executor below
+                            (AdvisorToolsExecutor, CoverageExecutor,
+                            PrerequisitesExecutor).
   formatters.py           — framework-field rendering + case-study-relevance
                             scan, used by src.advisor_tools, src.coverage,
                             src.prerequisites, src.migration.

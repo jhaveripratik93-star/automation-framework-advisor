@@ -9,10 +9,11 @@ and framework-specific setup hooks.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Callable
 
 from src.prerequisites.cicd_generators import generate_cicd_pipeline, generate_framework_hooks
 from src.prerequisites.patterns import generate_script, match_prereq_pattern
+from src.tools.base_executor import BaseToolExecutor
 
 if TYPE_CHECKING:
     from src.knowledge_base.loader import KnowledgeBase
@@ -20,31 +21,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class PrerequisitesExecutor:
+class PrerequisitesExecutor(BaseToolExecutor):
     """Executes prerequisite-automation tool calls by name."""
 
     def __init__(self, knowledge_base: KnowledgeBase | None = None) -> None:
-        if knowledge_base is None:
-            from src.knowledge_base import KnowledgeBase as _KB
-            knowledge_base = _KB(data_dir="data/frameworks")
-            knowledge_base.load()
-        self.kb = knowledge_base
+        super().__init__(knowledge_base)
 
         self.tools: dict[str, Callable] = {
             "analyze_prerequisites": self._analyze_prerequisites,
         }
-
-    def execute(self, tool_name: str, arguments: dict[str, Any]) -> str:
-        if tool_name not in self.tools:
-            logger.error("PrerequisitesExecutor: unknown tool '%s'", tool_name)
-            return f"Error: unknown tool '{tool_name}'"
-        try:
-            result = self.tools[tool_name](**arguments)
-            logger.info("PrerequisitesExecutor: '%s' -> %d chars", tool_name, len(str(result)))
-            return result
-        except Exception as exc:
-            logger.error("PrerequisitesExecutor: '%s' failed - %s: %s", tool_name, type(exc).__name__, exc)
-            return f"Error executing {tool_name}: {exc}"
 
     def _analyze_prerequisites(
         self, prerequisites: list[dict], target_framework: str | None = None

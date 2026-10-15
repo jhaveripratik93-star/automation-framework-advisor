@@ -7,7 +7,9 @@ capabilities: ``analyze_test_case_coverage`` and ``analyze_uploaded_content``.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Callable
+
+from src.tools.base_executor import BaseToolExecutor
 
 if TYPE_CHECKING:
     from src.knowledge_base.loader import KnowledgeBase
@@ -15,7 +17,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class CoverageExecutor:
+class CoverageExecutor(BaseToolExecutor):
     """Executes coverage-related tool calls by name."""
 
     def __init__(
@@ -24,11 +26,7 @@ class CoverageExecutor:
         uploaded_docs_context: str = "",
         case_study_context: str = "",
     ) -> None:
-        if knowledge_base is None:
-            from src.knowledge_base import KnowledgeBase as _KB
-            knowledge_base = _KB(data_dir="data/frameworks")
-            knowledge_base.load()
-        self.kb = knowledge_base
+        super().__init__(knowledge_base)
         self.uploaded_docs = uploaded_docs_context
         self.case_study = case_study_context
 
@@ -36,18 +34,6 @@ class CoverageExecutor:
             "analyze_test_case_coverage": self._analyze_test_case_coverage,
             "analyze_uploaded_content": self._analyze_uploaded_content,
         }
-
-    def execute(self, tool_name: str, arguments: dict[str, Any]) -> str:
-        if tool_name not in self.tools:
-            logger.error("CoverageExecutor: unknown tool '%s'", tool_name)
-            return f"Error: unknown tool '{tool_name}'"
-        try:
-            result = self.tools[tool_name](**arguments)
-            logger.info("CoverageExecutor: '%s' -> %d chars", tool_name, len(str(result)))
-            return result
-        except Exception as exc:
-            logger.error("CoverageExecutor: '%s' failed - %s: %s", tool_name, type(exc).__name__, exc)
-            return f"Error executing {tool_name}: {exc}"
 
     def _analyze_test_case_coverage(
         self,

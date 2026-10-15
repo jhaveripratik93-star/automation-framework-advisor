@@ -17,7 +17,9 @@ import logging
 from typing import TYPE_CHECKING, Any, Callable
 
 from src.scoring.weights import WeightProfile
+from src.tools.base_executor import BaseToolExecutor
 from src.tools.formatters import (
+    active_capabilities,
     find_case_study_relevance,
     format_architecture_fit,
     format_cicd,
@@ -25,6 +27,7 @@ from src.tools.formatters import (
     format_maintainability,
     format_performance,
     format_version_info,
+    positive_items,
     resolve_framework,
 )
 
@@ -36,7 +39,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class AdvisorToolsExecutor:
+class AdvisorToolsExecutor(BaseToolExecutor):
     """Executes advisor tool calls by name, routing to the appropriate handler."""
 
     def __init__(
@@ -47,11 +50,7 @@ class AdvisorToolsExecutor:
         case_study_context: str = "",
         weight_profile: WeightProfile | None = None,
     ) -> None:
-        if knowledge_base is None:
-            from src.knowledge_base import KnowledgeBase as _KB
-            knowledge_base = _KB(data_dir="data/frameworks")
-            knowledge_base.load()
-        self.kb = knowledge_base
+        super().__init__(knowledge_base)
 
         if knowledge_graph is None:
             from src.graph import load_or_seed_graph
@@ -72,19 +71,7 @@ class AdvisorToolsExecutor:
             "list_frameworks_by_category": self._list_frameworks_by_category,
         }
 
-    # ── Dispatch ──────────────────────────────────────────────────────
-
-    def execute(self, tool_name: str, arguments: dict[str, Any]) -> str:
-        if tool_name not in self.tools:
-            logger.error("AdvisorToolsExecutor: unknown tool '%s'", tool_name)
-            return f"Error: unknown tool '{tool_name}'"
-        try:
-            result = self.tools[tool_name](**arguments)
-            logger.info("AdvisorToolsExecutor: '%s' -> %d chars", tool_name, len(str(result)))
-            return result
-        except Exception as exc:
-            logger.error("AdvisorToolsExecutor: '%s' failed - %s: %s", tool_name, type(exc).__name__, exc)
-            return f"Error executing {tool_name}: {exc}"
+    # ── Dispatch (execute() inherited from BaseToolExecutor) ──────────
 
     # ── Helpers ───────────────────────────────────────────────────────
 
@@ -140,11 +127,7 @@ class AdvisorToolsExecutor:
 
         lines = [f"## Frameworks matching '{query}'\n"]
         for fw in top:
-            caps = [
-                k.replace("_", " ").title()
-                for k, v in fw.capabilities.items()
-                if v is True or (isinstance(v, str) and v not in ("", "false"))
-            ][:5]
+            caps = active_capabilities(fw.capabilities, limit=5)
             lines += [
                 f"### {fw.framework_name}",
                 f"- **Category:** {fw.category}",
@@ -189,9 +172,8 @@ class AdvisorToolsExecutor:
             "**Key Capabilities:**",
         ]
 
-        for k, v in fw.capabilities.items():
-            if v is True or (isinstance(v, str) and v not in ("", "false")):
-                lines.append(f"  - {k.replace('_', ' ').title()}: {v}")
+        for k, v in positive_items(fw.capabilities):
+            lines.append(f"  - {k.replace('_', ' ').title()}: {v}")
 
         cicd = format_cicd(fw.cicd_integration)
         if cicd:
@@ -245,11 +227,7 @@ class AdvisorToolsExecutor:
 
             lines.append(f"### {fw.framework_name}")
 
-            caps = [
-                k.replace("_", " ").title()
-                for k, v in fw.capabilities.items()
-                if v is True or (isinstance(v, str) and v not in ("", "false"))
-            ]
+            caps = active_capabilities(fw.capabilities)
             lines += [
                 f"- **Languages:** {', '.join(fw.languages_supported)}",
                 f"- **License:** {fw.license}",
