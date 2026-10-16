@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Automation Framework Advisor — Product Pitch</title>
+<style>
+  :root{
+    --page:#ffffff;
+    --surface:#f6faf9;
+    --surface-2:#eef6f3;
+    --text:#16231f;
+    --muted:#55706a;
+    --accent:#2d7d6f;
+    --accent-light:#157a66;
+    --accent-strong:#1f5c52;
+    --warm:#e8a94a;
+    --danger:#c23b35;
+    --border:#d7e6e1;
+    --maxw:1180px;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    font-family:'Segoe UI',Inter,system-ui,-apple-system,sans-serif;
+    background:var(--page);
+    color:var(--text);
+    overflow-x:hidden;
+  }
+  a{color:var(--accent-light);}
+
+  /* ───────────────────────── Scroll progress bar ───────────────────────── */
+  #progress{
+    position:fixed; top:0; left:0; height:4px; width:0%;
+    background:linear-gradient(90deg,var(--accent),var(--accent-light),var(--warm));
+    z-index:9999; transition:width .1s ease-out;
+    box-shadow:0 0 12px rgba(69,196,168,.6);
+  }
+
+  /* ───────────────────────── Section nav dots ───────────────────────── */
+  #navdots{
+    position:fixed; right:18px; top:50%; transform:translateY(-50%);
+    display:flex; flex-direction:column; gap:12px; z-index:9000;
+  }
+  #navdots a{
+    width:10px; height:10px; border-radius:50%;
+    background:rgba(0,0,0,.10); display:block;
+    border:1px solid rgba(0,0,0,.18);
+    transition:all .25s ease;
+  }
+  #navdots a.active{background:var(--accent-light); box-shadow:0 0 10px var(--accent-light); transform:scale(1.35);}
+  @media (max-width:860px){ #navdots{display:none;} }
+
+  section{
+    min-height:100vh;
+    display:flex; flex-direction:column; justify-content:center;
+    padding:5rem 1.5rem;
+    position:relative;
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; width:100%;}
+
+  /* ───────────────────────── Reveal-on-scroll ───────────────────────── */
+  .reveal{opacity:0; transform:translateY(28px); transition:opacity .7s ease, transform .7s ease;}
+  .reveal.in{opacity:1; transform:translateY(0);}
+  .reveal.d1{transition-delay:.08s;} .reveal.d2{transition-delay:.16s;}
+  .reveal.d3{transition-delay:.24s;} .reveal.d4{transition-delay:.32s;}
+  .reveal.d5{transition-delay:.4s;}  .reveal.d6{transition-delay:.48s;}
+
+  /* ───────────────────────── Typography ───────────────────────── */
+  .eyebrow{
+    text-transform:uppercase; letter-spacing:.18em; font-size:.72rem;
+    color:var(--accent-light); font-weight:700; margin-bottom:1rem;
+    display:flex; align-items:center; gap:.6rem;
+  }
+  .eyebrow::before{content:''; width:28px; height:2px; background:var(--accent-light); display:inline-block;}
+  h1{font-size:clamp(2.1rem,5vw,3.6rem); line-height:1.08; margin:0 0 1rem; font-weight:800; letter-spacing:-.02em;}
+  h2{font-size:clamp(1.7rem,3.4vw,2.5rem); margin:0 0 1.1rem; font-weight:800; letter-spacing:-.01em;}
+  h3{font-size:1.15rem; margin:0 0 .5rem; font-weight:700;}
+  p.lead{font-size:clamp(1rem,1.6vw,1.25rem); color:var(--muted); max-width:760px; line-height:1.65;}
+  .accent{color:var(--accent-light);}
+
+  /* ───────────────────────── Hero ───────────────────────── */
+  #hero{background:
+      radial-gradient(circle at 15% 20%, rgba(45,125,111,.14), transparent 45%),
+      radial-gradient(circle at 85% 75%, rgba(69,196,168,.10), transparent 50%),
+      var(--page);
+    text-align:left;
+  }
+  .hero-badges{display:flex; gap:.6rem; flex-wrap:wrap; margin-top:1.8rem;}
+  .badge{
+    background:rgba(69,196,168,.1); border:1px solid rgba(69,196,168,.35);
+    color:var(--accent-light); padding:.4rem .9rem; border-radius:999px;
+    font-size:.78rem; font-weight:600;
+  }
+  .hero-cta{margin-top:2.4rem; display:flex; gap:1rem; flex-wrap:wrap;}
+  .btn{
+    padding:.85rem 1.6rem; border-radius:10px; font-weight:700; font-size:.92rem;
+    border:1px solid transparent; cursor:pointer; text-decoration:none; display:inline-flex;
+    align-items:center; gap:.5rem; transition:transform .2s ease, box-shadow .2s ease;
+  }
+  .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-strong)); color:#fff; box-shadow:0 8px 24px rgba(45,125,111,.4);}
+  .btn-primary:hover{transform:translateY(-2px); box-shadow:0 12px 30px rgba(45,125,111,.55);}
+  .btn-ghost{border-color:var(--border); color:var(--text);}
+  .btn-ghost:hover{border-color:var(--accent-light); color:var(--accent-light);}
+
+  .floaty{animation:floaty 5s ease-in-out infinite;}
+  @keyframes floaty{0%,100%{transform:translateY(0);}50%{transform:translateY(-10px);}}
+
+  .scrolldown{
+    position:absolute; bottom:2rem; left:50%; transform:translateX(-50%);
+    display:flex; flex-direction:column; align-items:center; gap:.4rem;
+    color:var(--muted); font-size:.72rem; letter-spacing:.1em; text-transform:uppercase;
+  }
+  .mouse{width:22px; height:36px; border:2px solid var(--muted); border-radius:14px; position:relative;}
+  .mouse::before{
+    content:''; position:absolute; top:6px; left:50%; width:4px; height:8px;
+    background:var(--accent-light); border-radius:2px; transform:translateX(-50%);
+    animation:scrolldot 1.6s ease-in-out infinite;
+  }
+  @keyframes scrolldot{0%{opacity:1; top:6px;}70%{opacity:0; top:18px;}100%{opacity:0; top:6px;}}
+
+  /* ───────────────────────── Section header rows ───────────────────────── */
+  .sec-head{margin-bottom:2.6rem;}
+
+  /* ───────────────────────── Stat strip ───────────────────────── */
+  .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:1.2rem; margin-top:2.5rem;}
+  @media(max-width:760px){.stats{grid-template-columns:repeat(2,1fr);}}
+  .stat{
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:1.4rem 1rem; text-align:center; transition:transform .25s ease, border-color .25s ease;
+  }
+  .stat:hover{transform:translateY(-4px); border-color:var(--accent);}
+  .stat-num{font-size:2.1rem; font-weight:800; color:var(--accent-light);}
+  .stat-label{font-size:.78rem; color:var(--muted); margin-top:.3rem;}
+
+  /* ───────────────────────── Pain → solution ───────────────────────── */
+  .vs-grid{display:grid; grid-template-columns:1fr auto 1fr; gap:1.6rem; align-items:center; margin-top:2rem;}
+  @media(max-width:760px){.vs-grid{grid-template-columns:1fr;}}
+  .vs-col{background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:1.8rem;}
+  .vs-col.pain{border-color:rgba(226,97,90,.4);}
+  .vs-col.win{border-color:rgba(69,196,168,.4);}
+  .vs-col h4{margin:0 0 1rem; font-size:1rem; display:flex; align-items:center; gap:.5rem;}
+  .vs-col ul{margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:.8rem;}
+  .vs-col li{display:flex; gap:.6rem; font-size:.92rem; color:var(--muted); line-height:1.5;}
+  .vs-col.pain li::before{content:'✕'; color:var(--danger); font-weight:800; flex-shrink:0;}
+  .vs-col.win li::before{content:'✓'; color:var(--accent-light); font-weight:800; flex-shrink:0;}
+  .vs-arrow{font-size:2rem; color:var(--accent-light); text-align:center;}
+  @media(max-width:760px){.vs-arrow{transform:rotate(90deg);}}
+
+  /* ───────────────────────── Feature cards ───────────────────────── */
+  .fgrid{display:grid; grid-template-columns:repeat(3,1fr); gap:1.3rem; margin-top:2.2rem;}
+  @media(max-width:980px){.fgrid{grid-template-columns:repeat(2,1fr);}}
+  @media(max-width:620px){.fgrid{grid-template-columns:1fr;}}
+  .fcard{
+    background:var(--surface); border:1px solid var(--border); border-radius:16px;
+    padding:1.6rem; position:relative; overflow:hidden;
+    transition:transform .3s ease, border-color .3s ease, box-shadow .3s ease;
+    display:flex; flex-direction:column; min-height:230px;
+  }
+  .fcard::before{
+    content:''; position:absolute; inset:0; opacity:0; transition:opacity .3s ease;
+    background:radial-gradient(circle at 30% 0%, rgba(69,196,168,.15), transparent 60%);
+  }
+  .fcard:hover{transform:translateY(-6px); border-color:var(--accent); box-shadow:0 16px 34px rgba(0,0,0,.35);}
+  .fcard:hover::before{opacity:1;}
+  .ficon{font-size:1.9rem; margin-bottom:.8rem;}
+  .fcard h3{margin-bottom:.5rem;}
+  .fcard p{color:var(--muted); font-size:.85rem; line-height:1.55; margin:0; flex:1 1 auto;}
+  .ftag{
+    margin-top:1rem; align-self:flex-start; font-size:.68rem; font-weight:700;
+    text-transform:uppercase; letter-spacing:.05em; color:var(--accent-light);
+    background:rgba(69,196,168,.1); border:1px solid rgba(69,196,168,.3);
+    padding:.25rem .6rem; border-radius:999px;
+  }
+
+  /* ───────────────────────── Flow diagram ───────────────────────── */
+  .flow{display:flex; align-items:center; gap:.8rem; flex-wrap:wrap; margin-top:2.4rem; justify-content:center;}
+  .flow-step{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:1rem 1.3rem; font-size:.85rem; font-weight:700; text-align:center; min-width:140px;
+    animation:pulseStep 3.2s ease-in-out infinite;
+  }
+  .flow-step:nth-child(2){animation-delay:.3s;}
+  .flow-step:nth-child(4){animation-delay:.6s;}
+  .flow-step:nth-child(6){animation-delay:.9s;}
+  .flow-step:nth-child(8){animation-delay:1.2s;}
+  @keyframes pulseStep{
+    0%,100%{box-shadow:0 0 0 rgba(69,196,168,0);}
+    50%{box-shadow:0 0 22px rgba(69,196,168,.35); border-color:var(--accent-light);}
+  }
+  .flow-arrow{color:var(--accent-light); font-size:1.3rem; animation:arrowMove 1.6s ease-in-out infinite;}
+  @keyframes arrowMove{0%,100%{transform:translateX(0); opacity:.5;}50%{transform:translateX(4px); opacity:1;}}
+
+  /* ───────────────────────── Timeline (team benefits) ───────────────────────── */
+  .teams{display:grid; grid-template-columns:repeat(4,1fr); gap:1.2rem; margin-top:2.2rem;}
+  @media(max-width:980px){.teams{grid-template-columns:repeat(2,1fr);}}
+  @media(max-width:620px){.teams{grid-template-columns:1fr;}}
+  .team-card{
+    background:linear-gradient(165deg,var(--surface),var(--surface-2));
+    border:1px solid var(--border); border-radius:16px; padding:1.5rem;
+    transition:transform .3s ease;
+  }
+  .team-card:hover{transform:scale(1.03);}
+  .team-card .tnum{font-size:.72rem; color:var(--accent-light); font-weight:800; letter-spacing:.1em;}
+  .team-card h3{margin:.4rem 0 .6rem;}
+  .team-card p{color:var(--muted); font-size:.82rem; line-height:1.5; margin:0;}
+
+  /* ───────────────────────── MCP / Kiro integration ───────────────────────── */
+  .mcp-wrap{
+    background:linear-gradient(135deg, rgba(45,125,111,.14), rgba(69,196,168,.05));
+    border:1px solid rgba(69,196,168,.3); border-radius:20px; padding:2.4rem;
+    margin-top:2.2rem; position:relative; overflow:hidden;
+  }
+  .mcp-glow{
+    position:absolute; width:420px; height:420px; border-radius:50%;
+    background:radial-gradient(circle, rgba(69,196,168,.16), transparent 70%);
+    top:-120px; right:-120px; animation:glowSpin 10s linear infinite;
+  }
+  @keyframes glowSpin{0%{transform:rotate(0deg) scale(1);}50%{transform:rotate(180deg) scale(1.15);}100%{transform:rotate(360deg) scale(1);}}
+  .mcp-row{display:grid; grid-template-columns:1.1fr 1fr; gap:2rem; position:relative; z-index:1;}
+  @media(max-width:860px){.mcp-row{grid-template-columns:1fr;}}
+  pre.code{
+    background:var(--surface-2); border:1px solid var(--border); border-radius:12px;
+    padding:1.2rem 1.3rem; font-family:'Cascadia Code',Consolas,monospace; font-size:.78rem;
+    color:var(--text); overflow-x:auto; line-height:1.6; margin:0;
+  }
+  .code .k{color:#b5650f;} .code .s{color:#157a66;} .code .c{color:var(--muted);}
+  .mcp-steps{display:flex; flex-direction:column; gap:1rem;}
+  .mcp-step{display:flex; gap:.9rem; align-items:flex-start;}
+  .mcp-step .num{
+    flex-shrink:0; width:30px; height:30px; border-radius:50%; background:var(--accent);
+    color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:.85rem;
+  }
+  .mcp-step p{margin:0; color:var(--muted); font-size:.87rem; line-height:1.5;}
+  .mcp-step strong{color:var(--text);}
+
+  .toolpill-wrap{display:flex; flex-wrap:wrap; gap:.5rem; margin-top:1.6rem;}
+  .toolpill{
+    font-size:.72rem; background:rgba(45,125,111,.06); border:1px solid var(--border);
+    padding:.3rem .7rem; border-radius:999px; color:var(--muted); font-family:monospace;
+    transition:all .2s ease;
+  }
+  .toolpill:hover{border-color:var(--accent-light); color:var(--accent-light); transform:translateY(-2px);}
+
+  /* ───────────────────────── ROI / counters ───────────────────────── */
+  .roi-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:1.4rem; margin-top:2.2rem;}
+  @media(max-width:760px){.roi-grid{grid-template-columns:1fr;}}
+  .roi-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:18px;
+    padding:2rem 1.4rem; text-align:center;
+  }
+  .roi-num{font-size:2.6rem; font-weight:800; color:var(--accent-light); display:flex; justify-content:center; align-items:baseline; gap:.2rem;}
+  .roi-label{color:var(--muted); font-size:.85rem; margin-top:.5rem;}
+
+  /* ───────────────────────── Architecture diagram ───────────────────────── */
+  .arch{display:flex; flex-direction:column; gap:1rem; margin-top:2.2rem;}
+  .arch-row{display:flex; gap:1rem; flex-wrap:wrap; justify-content:center;}
+  .arch-box{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:1rem 1.4rem; font-size:.82rem; font-weight:600; text-align:center;
+    min-width:150px; position:relative;
+  }
+  .arch-box.hl{border-color:var(--accent-light); box-shadow:0 0 18px rgba(69,196,168,.25);}
+  .arch-label{text-align:center; font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-bottom:.3rem;}
+
+  /* ───────────────────────── Risk-reduction checklist ───────────────────────── */
+  .checklist{display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-top:2rem;}
+  @media(max-width:700px){.checklist{grid-template-columns:1fr;}}
+  .check-item{
+    display:flex; gap:.8rem; align-items:flex-start; background:var(--surface);
+    border:1px solid var(--border); border-radius:12px; padding:1rem 1.2rem;
+  }
+  .check-item .tick{
+    flex-shrink:0; width:24px; height:24px; border-radius:50%; background:rgba(69,196,168,.15);
+    color:var(--accent-light); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:.8rem;
+  }
+  .check-item p{margin:0; font-size:.85rem; color:var(--muted); line-height:1.5;}
+  .check-item strong{color:var(--text);}
+
+  /* ───────────────────────── CTA / closing ───────────────────────── */
+  #cta{text-align:center; background:
+      radial-gradient(circle at 50% 30%, rgba(69,196,168,.10), transparent 55%), var(--page);}
+  #cta h2{font-size:clamp(2rem,4.5vw,3.2rem);}
+  .cta-grid{display:flex; gap:1.2rem; justify-content:center; margin-top:2.4rem; flex-wrap:wrap;}
+
+  footer{
+    text-align:center; padding:2.4rem 1.5rem; color:var(--muted); font-size:.78rem;
+    border-top:1px solid var(--border);
+  }
+
+  /* table */
+  table.cmp{width:100%; border-collapse:collapse; margin-top:1.6rem; font-size:.85rem;}
+  table.cmp th, table.cmp td{padding:.75rem 1rem; border-bottom:1px solid var(--border); text-align:left;}
+  table.cmp th{color:var(--accent-light); font-size:.75rem; text-transform:uppercase; letter-spacing:.05em;}
+  table.cmp td{color:var(--muted);}
+  table.cmp tr:hover td{color:var(--text); background:rgba(45,125,111,.04);}
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+<nav id="navdots"></nav>
+
+<!-- ════════════════════════════════════════════════════════════════ HERO ════ -->
+<section id="hero">
+  <div class="wrap">
+    <h1 class="reveal in">Automation&nbsp;Framework<br><span class="accent floaty" style="display:inline-block;">Advisor</span></h1>
+    <p class="lead reveal in d1">
+      One AI-powered tool to choose the right test automation framework, migrate existing
+      suites with zero coverage loss, generate new tests from manual cases, and verify
+      every conversion — all before a single meeting is needed to decide.
+    </p>
+    <div class="hero-badges reveal in d2">
+      <span class="badge">🧠 19 Frameworks in Knowledge Base</span>
+      <span class="badge">🔌 20 Callable Tools</span>
+      <span class="badge">🤝 Works Inside Kiro via MCP</span>
+      <span class="badge">⚡ Groq LLM + Self-Growing Graph</span>
+    </div>
+    <div class="hero-cta reveal in d3">
+      <a class="btn btn-primary" href="#problem">See the problem it solves →</a>
+      <a class="btn btn-ghost" href="#kiro">Jump to Kiro / MCP integration</a>
+    </div>
+  </div>
+  <div class="scrolldown"><span>Scroll</span><div class="mouse"></div></div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════ PROBLEM ════ -->
+<section id="problem">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">The problem today</div>
+      <h2>Every team re-solves the same framework decision — alone, slowly, and inconsistently</h2>
+      <p class="lead">Teams pick frameworks on gut feel or a 2017 blog post, migrate suites by hand over weeks, and
+      regularly lose coverage mid-migration without noticing until production.</p>
+    </div>
+
+    <div class="vs-grid">
+      <div class="vs-col pain reveal d1">
+        <h4>❌ Without a shared tool</h4>
+        <ul>
+          <li>Framework choice depends on who's loudest in the room, not what fits the project</li>
+          <li>Migrations are manual, file-by-file, with no systematic parity check</li>
+          <li>Assertions silently get dropped during conversion — discovered in production</li>
+          <li>Every team re-learns the same framework trade-offs from scratch</li>
+          <li>No audit trail of why a framework or migration path was chosen</li>
+        </ul>
+      </div>
+      <div class="vs-arrow reveal d2">→</div>
+      <div class="vs-col win reveal d3">
+        <h4>✅ With Automation Framework Advisor</h4>
+        <ul>
+          <li>Weighted scoring matrix ranks frameworks against YOUR project's real criteria</li>
+          <li>Guided migration roadmap with phased effort estimates</li>
+          <li>Automatic cross-repo assertion-parity verification before sign-off</li>
+          <li>Shared, self-growing knowledge base — every team benefits from every past decision</li>
+          <li>Every recommendation is explainable, scored, and reproducible</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════ WHAT IT IS ════ -->
+<section id="what">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">What it actually is</div>
+      <h2>One knowledge base. One pipeline. Six ways to use it.</h2>
+      <p class="lead">Built as a Streamlit app, a FastAPI service, and an MCP server — the exact same engine
+      powers all three, so a decision made in chat is the same decision available to Kiro.</p>
+    </div>
+    <div class="stats reveal d1">
+      <div class="stat"><div class="stat-num">19</div><div class="stat-label">Frameworks profiled<br>(UI, API, mobile, performance, IaC)</div></div>
+      <div class="stat"><div class="stat-num">10</div><div class="stat-label">Weighted scoring criteria<br>auto-adjusted per project type</div></div>
+      <div class="stat"><div class="stat-num">20</div><div class="stat-label">Callable tools<br>exposed over MCP + REST</div></div>
+      <div class="stat"><div class="stat-num">0</div><div class="stat-label">API keys required<br>to use from Kiro</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════ FEATURES ════ -->
+<section id="features">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">Core capabilities</div>
+      <h2>Six features. One shared brain.</h2>
+      <p class="lead">Every feature below reads from and writes to the same framework knowledge graph —
+      so a comparison you ran in the Advisor chat informs the migration plan, the coverage check, and
+      the generated code, automatically.</p>
+    </div>
+    <div class="fgrid">
+      <div class="fcard reveal d1">
+        <div class="ficon">🧭</div>
+        <h3>Framework Advisor (Chat)</h3>
+        <p>Ask in plain English: "Compare Playwright vs Cypress for a Python microservices team." Get a weighted
+        scorecard, pros/cons, and a top pick — grounded in a persistent knowledge graph, not a generic LLM guess.</p>
+        <span class="ftag">LLM + Scoring Matrix</span>
+      </div>
+      <div class="fcard reveal d2">
+        <div class="ficon">🔄</div>
+        <h3>Framework Migration (Code Studio)</h3>
+        <p>Paste or upload test code — the engine converts it to the target framework using a real
+        compile check (AST / robot.api / node --check), an automatic repair loop, and an assertion-count
+        verification pass. No silent coverage loss.</p>
+        <span class="ftag">Compile-Verified Conversion</span>
+      </div>
+      <div class="fcard reveal d3">
+        <div class="ficon">🔍</div>
+        <h3>Repo Comparator</h3>
+        <p>Point it at two whole repos — old framework vs new. It extracts every test case, matches them by
+        name, and reports exactly which assertions match, which drifted, and which exist in only one side.</p>
+        <span class="ftag">Cross-Repo Parity Report</span>
+      </div>
+      <div class="fcard reveal d4">
+        <div class="ficon">📊</div>
+        <h3>Framework Fit (Coverage)</h3>
+        <p>Upload your real test cases (Excel/JSON/CSV) and get a live test-case × framework capability
+        matrix — which frameworks support 100% of your actual test suite, not a generic feature list.</p>
+        <span class="ftag">Test-Case Coverage Matrix</span>
+      </div>
+      <div class="fcard reveal d5">
+        <div class="ficon">🤖</div>
+        <h3>Test Generator</h3>
+        <p>Turn manual, plain-English test cases into executable Playwright/Selenium/Cypress/Robot code —
+        with a hybrid template + LLM pipeline that gets smarter every time it's used (self-learning templates).</p>
+        <span class="ftag">Manual → Automated</span>
+      </div>
+      <div class="fcard reveal d6">
+        <div class="ficon">🌐</div>
+        <h3>Live Framework Discovery</h3>
+        <p>Scans GitHub for emerging frameworks not yet in the knowledge base and can research + add a
+        named framework on demand — the tool's knowledge never goes stale.</p>
+        <span class="ftag">Self-Updating KB</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════ HOW IT WORKS ════ -->
+<section id="howitworks">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">Under the hood</div>
+      <h2>A query goes through a verified, multi-agent pipeline — not a single LLM call</h2>
+      <p class="lead">This is why answers are consistent and explainable instead of a one-shot LLM guess:
+      decisions are made, tools are selected, results are synthesized, reflected on, and formatted —
+      every step logged.</p>
+    </div>
+    <div class="flow reveal d1">
+      <div class="flow-step">🗣️ User Query</div>
+      <div class="flow-arrow">➜</div>
+      <div class="flow-step">🧠 Decision Agent</div>
+      <div class="flow-arrow">➜</div>
+      <div class="flow-step">🔧 Tool Selection</div>
+      <div class="flow-arrow">➜</div>
+      <div class="flow-step">📚 Knowledge Graph</div>
+      <div class="flow-arrow">➜</div>
+      <div class="flow-step">✅ Synthesis + Reflection</div>
+      <div class="flow-arrow">➜</div>
+      <div class="flow-step">💬 Formatted Answer</div>
+    </div>
+    <p class="lead reveal d2" style="margin-top:2rem;font-size:.95rem;">
+      For code conversion specifically, there's an extra safety net: every converted file is run through
+      the <strong>real compiler/parser</strong> for its target language (Python's own <code>ast</code>,
+      Robot Framework's own parser, Node's own <code>--check</code>), auto-repaired on failure, and then
+      cross-checked for assertion-count parity against the source — so "it compiles" and "it still tests
+      the same things" are both proven, not assumed.
+    </p>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════ TEAMS ════ -->
+<section id="teams">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">Who benefits</div>
+      <h2>Built for every team that owns a test suite — not just QA</h2>
+    </div>
+    <div class="teams">
+      <div class="team-card reveal d1">
+        <div class="tnum">TEAM 01</div>
+        <h3>🧪 QA / Test Automation</h3>
+        <p>Faster framework selection, zero-guesswork migrations, and a repo comparator that catches
+        regressions before code review does.</p>
+      </div>
+      <div class="team-card reveal d2">
+        <div class="tnum">TEAM 02</div>
+        <h3>🏗️ Platform / DevOps</h3>
+        <p>Boilerplate project generation with CI/CD config baked in, and prerequisite automation that
+        turns manual setup steps into pipeline stages.</p>
+      </div>
+      <div class="team-card reveal d3">
+        <div class="tnum">TEAM 03</div>
+        <h3>👔 Engineering Leads</h3>
+        <p>A defensible, scored decision trail for framework choices — no more "we picked X because the
+        last hire liked it." Every recommendation is explainable.</p>
+      </div>
+      <div class="team-card reveal d4">
+        <div class="tnum">TEAM 04</div>
+        <h3>🧑‍💻 Developers in Kiro</h3>
+        <p>All of the above, without leaving the editor — call it directly from chat via MCP while
+        working on any repo, with no API key setup required.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════ KIRO / MCP ════ -->
+<section id="kiro">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">⭐ Headline integration</div>
+      <h2>Already works inside Kiro — zero extra infrastructure</h2>
+      <p class="lead">This isn't a roadmap item. The advisor ships its own
+      <strong class="accent">MCP (Model Context Protocol) server</strong> today, exposing all 20 tools
+      directly to Kiro's chat. Any engineer can call it from any repo they have open, right now.</p>
+    </div>
+
+    <div class="mcp-wrap reveal d1">
+      <div class="mcp-glow"></div>
+      <div class="mcp-row">
+        <div>
+          <h3 style="margin-bottom:1rem;">🔧 One-time setup — one command</h3>
+          <pre class="code"><span class="c"># Registers the server for every Kiro workspace</span>
+<span class="k">python</span> scripts/setup_mcp.py --user
+
+<span class="c"># That's it — reconnect from Kiro's MCP Server view</span>
+<span class="c"># and all 20 tools become available in chat.</span></pre>
+
+          <h3 style="margin:1.6rem 0 1rem;">📄 Or point mcp.json at it directly</h3>
+          <pre class="code">{
+  <span class="s">"mcpServers"</span>: {
+    <span class="s">"automation-framework-advisor"</span>: {
+      <span class="s">"command"</span>: <span class="s">"&lt;python-with-deps&gt;"</span>,
+      <span class="s">"args"</span>: [<span class="s">"&lt;repo&gt;/mcp_server/server.py"</span>],
+      <span class="s">"cwd"</span>: <span class="s">"&lt;repo&gt;"</span>,
+      <span class="s">"disabled"</span>: <span class="k">false</span>
+    }
+  }
+}</pre>
+        </div>
+        <div class="mcp-steps">
+          <div class="mcp-step">
+            <div class="num">1</div>
+            <p><strong>No API key required.</strong> Code conversion prefers true MCP sampling —
+            it asks Kiro's own model to do the work, so there's no external LLM cost to the team.</p>
+          </div>
+          <div class="mcp-step">
+            <div class="num">2</div>
+            <p><strong>Works from any repo, not just this one.</strong> Register at user scope once —
+            then ask Kiro to convert/compare/analyze files in whatever project you currently have open.</p>
+          </div>
+          <div class="mcp-step">
+            <div class="num">3</div>
+            <p><strong>Same engine, same answers.</strong> The MCP tools call the identical scoring
+            engine, knowledge graph, and conversion pipeline as the Streamlit UI — no drift between
+            "chat answer" and "tool answer."</p>
+          </div>
+          <div class="mcp-step">
+            <div class="num">4</div>
+            <p><strong>Fully audited.</strong> Every tool call is logged with arguments, duration, and
+            outcome — so adoption and usage are measurable from day one.</p>
+          </div>
+        </div>
+      </div>
+
+      <h3 style="margin-top:2.2rem;">A sample of the 20 tools Kiro can call directly</h3>
+      <div class="toolpill-wrap">
+        <span class="toolpill">recommend_frameworks</span>
+        <span class="toolpill">compare_frameworks</span>
+        <span class="toolpill">score_frameworks</span>
+        <span class="toolpill">find_migration_paths</span>
+        <span class="toolpill">generate_migration_roadmap</span>
+        <span class="toolpill">convert_test_code</span>
+        <span class="toolpill">check_conversion_consistency</span>
+        <span class="toolpill">compare_repos</span>
+        <span class="toolpill">analyze_test_case_coverage</span>
+        <span class="toolpill">generate_test_code</span>
+        <span class="toolpill">generate_boilerplate_project</span>
+        <span class="toolpill">analyze_prerequisites</span>
+        <span class="toolpill">discover_new_frameworks</span>
+        <span class="toolpill">add_framework_to_kb</span>
+        <span class="toolpill">+ 6 more…</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════ RISK ════ -->
+<section id="risk">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">Why migrations fail (and how this prevents it)</div>
+      <h2>Every known migration failure mode has a specific, automated check</h2>
+    </div>
+    <div class="checklist">
+      <div class="check-item reveal d1">
+        <div class="tick">✓</div>
+        <p><strong>Dropped assertions</strong> — every conversion runs an assertion-count comparison
+        between source and converted code before it's considered done.</p>
+      </div>
+      <div class="check-item reveal d2">
+        <div class="tick">✓</div>
+        <p><strong>Code that "looks right" but doesn't compile</strong> — real compiler/parser checks
+        (ast.parse, robot.api, node --check) catch syntax issues immediately, with auto-repair retries.</p>
+      </div>
+      <div class="check-item reveal d3">
+        <div class="tick">✓</div>
+        <p><strong>Inconsistent LLM output</strong> — a dedicated consistency-check tool runs the same
+        conversion N times and reports a reproducibility score before you trust it at scale.</p>
+      </div>
+      <div class="check-item reveal d4">
+        <div class="tick">✓</div>
+        <p><strong>Orphaned test logic</strong> — structural checks ensure every converted helper/keyword
+        is actually called by a runnable test case, not left dangling.</p>
+      </div>
+      <div class="check-item reveal d5">
+        <div class="tick">✓</div>
+        <p><strong>"We think we migrated everything"</strong> — the Repo Comparator gives a definitive,
+        file-by-file parity report across the whole repo, not a spot check.</p>
+      </div>
+      <div class="check-item reveal d6">
+        <div class="tick">✓</div>
+        <p><strong>Choosing the wrong framework in the first place</strong> — the weighted scoring
+        matrix is tailored to the project's real architecture, team language, and CI/CD setup.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════ CTA ════ -->
+<section id="cta">
+  <div class="wrap">
+    <div class="eyebrow reveal" style="justify-content:center;">Ready when you are</div>
+    <h2 class="reveal d1">One tool. Six teams. Zero new infrastructure.</h2>
+    <p class="lead reveal d2" style="margin:0 auto;">
+      It already runs as a Streamlit app, a REST API, and an MCP server inside Kiro.
+      Rolling it out to another team is a config change, not a project.
+    </p>
+    <div class="cta-grid reveal d3">
+      <a class="btn btn-primary" href="#hero">↑ Back to top</a>
+      <a class="btn btn-ghost" href="#kiro">Review the Kiro / MCP setup</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  Automation Framework Advisor — · Built on a persistent knowledge graph,
+  GraphRAG retrieval, and a verified multi-agent pipeline · Exposed via Streamlit, FastAPI, and MCP.
+</footer>
+
+<script>
+  // Scroll progress bar
+  const progress = document.getElementById('progress');
+  function updateProgress(){
+    const h = document.documentElement;
+    const pct = (h.scrollTop) / (h.scrollHeight - h.clientHeight) * 100;
+    progress.style.width = pct + '%';
+  }
+  document.addEventListener('scroll', updateProgress);
+  updateProgress();
+
+  // Reveal-on-scroll
+  const revealEls = document.querySelectorAll('.reveal');
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{ if(e.isIntersecting) e.target.classList.add('in'); });
+  }, {threshold:.15});
+  revealEls.forEach(el=>io.observe(el));
+
+  // Section nav dots
+  const sections = document.querySelectorAll('section');
+  const navdots = document.getElementById('navdots');
+  sections.forEach(sec=>{
+    const dot = document.createElement('a');
+    dot.href = '#'+sec.id;
+    dot.title = sec.id;
+    navdots.appendChild(dot);
+  });
+  const dotEls = navdots.querySelectorAll('a');
+  const dotObserver = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{
+      if(e.isIntersecting){
+        dotEls.forEach(d=>d.classList.remove('active'));
+        const idx = Array.from(sections).indexOf(e.target);
+        if(dotEls[idx]) dotEls[idx].classList.add('active');
+      }
+    });
+  }, {threshold:.5});
+  sections.forEach(s=>dotObserver.observe(s));
+</script>
+</body>
+</html>

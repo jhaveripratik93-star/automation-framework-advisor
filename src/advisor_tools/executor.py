@@ -38,6 +38,34 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Module-level lazy singleton — scan_category()'s own TTL cache already
+# dedupes repeated GitHub calls, but the FrameworkScanner instance itself
+# (and its httpx.Client) is cheap to share across every AdvisorToolsExecutor
+# built per-request rather than re-constructing one every call.
+#
+# IMPORTANT: the scanner MUST be bound to a real KnowledgeBase, or its
+# _filter_existing() short-circuits to "nothing is filtered" (see
+# FrameworkScanner._filter_existing: `if not self._kb: return frameworks`),
+# which would surface frameworks ALREADY in the KB (e.g. Playwright itself)
+# as if they were new discoveries. We re-bind `._kb` on every call instead
+# of baking a KB in at construction time, since each AdvisorToolsExecutor
+# may be handed its own KnowledgeBase instance.
+_scanner_singleton: Any | None = None
+
+
+def _get_scanner_singleton(kb: Any) -> Any | None:
+    global _scanner_singleton
+    try:
+        from src.discovery.framework_scanner import FrameworkScanner
+        if _scanner_singleton is None:
+            _scanner_singleton = FrameworkScanner(kb=kb, data_dir="data/frameworks")
+        else:
+            _scanner_singleton._kb = kb
+        return _scanner_singleton
+    except Exception as exc:  # noqa: BLE001 — discovery is optional enrichment
+        logger.debug("_get_scanner_singleton: unavailable (%s)", exc)
+        return None
+
 
 class AdvisorToolsExecutor(BaseToolExecutor):
     """Executes advisor tool calls by name, routing to the appropriate handler."""
@@ -80,6 +108,62 @@ class AdvisorToolsExecutor(BaseToolExecutor):
 
     def _find_case_study_relevance(self, subject_terms: list[str], max_excerpts: int = 3) -> str:
         return find_case_study_relevance(self.case_study, subject_terms, max_excerpts)
+
+    def _discovery_nudge(self, use_case_text: str, category_hint: str | None = None) -> str:
+        """Best-effort "are we missing something?" footer for recommendation/
+        comparison output.
+
+        Always mentions how fresh the 19-framework knowledge base is, and —
+        for a use case/category that maps to a known category — runs ONE
+        scoped, short-timeout, cached GitHub search
+        (FrameworkScanner.scan_category) to check for a newer/higher-starred
+        option not yet in the KB. Never raises and never blocks long: any
+        failure (rate limit, timeout, network) just means this footer is
+        skipped, the recommendation itself is unaffected.
+
+        `category_hint` lets a caller that already knows the relevant
+        FRAMEWORK_CATEGORIES id (e.g. _run_framework_comparison, which can
+        classify the frameworks being compared directly) skip the free-text
+        keyword guess, which is unreliable against bare framework names.
+        """
+        try:
+            from src.discovery.framework_scanner import guess_category_from_text
+            from src.knowledge_base.schema import FRAMEWORK_CATEGORIES
+
+            scanner = _get_scanner_singleton(self.kb)
+            age_days = scanner.kb_age_days() if scanner else None
+            age_note = f" (last refreshed {age_days}d ago)" if age_days is not None else ""
+
+            category = category_hint or guess_category_from_text(use_case_text)
+            if not category or not scanner:
+                return (
+                    f"\n*Ranked against the {len(self.kb.list_all())} frameworks "
+                    f"currently in the knowledge base{age_note}.*"
+                )
+
+            discovered = scanner.scan_category(category)
+            if not discovered:
+                return (
+                    f"\n*Ranked against the {len(self.kb.list_all())} frameworks "
+                    f"currently in the knowledge base{age_note} — a live scan of "
+                    f"{FRAMEWORK_CATEGORIES[category]['label']} tools on GitHub found "
+                    f"nothing newer worth adding right now.*"
+                )
+
+            top = sorted(discovered, key=lambda f: -f.stars)[:3]
+            bullets = "\n".join(
+                f"  - **{fw.name}** (⭐{fw.stars}, {fw.language or 'unknown lang'}) — {fw.repo_url}"
+                for fw in top
+            )
+            return (
+                f"\n**💡 Not in the comparison above — found via a live GitHub scan "
+                f"({FRAMEWORK_CATEGORIES[category]['label']}):**\n{bullets}\n"
+                f"Ask me to \"add <name> to the knowledge base\" to research and "
+                f"include it in a future comparison."
+            )
+        except Exception as exc:  # noqa: BLE001 — this footer must never break a recommendation
+            logger.debug("_discovery_nudge: skipped (%s)", exc)
+            return ""
 
     # ── Tool implementations ──────────────────────────────────────────
 
@@ -217,7 +301,11 @@ class AdvisorToolsExecutor(BaseToolExecutor):
           5. Limitations (from fw.limitations, not from capabilities).
           6. Case-study relevance for this specific framework.
         """
+        from collections import Counter
+        from src.knowledge_base.schema import classify_framework_data
+
         lines = [f"## Framework Comparison: {' vs '.join(frameworks)}\n"]
+        resolved_categories: list[str] = []
 
         for name in frameworks:
             fw = self.kb.get(name.lower())
@@ -259,7 +347,23 @@ class AdvisorToolsExecutor(BaseToolExecutor):
             if note:
                 lines.append(note)
 
+            resolved_categories.extend(classify_framework_data(fw))
             lines.append("")
+
+        # Use the most common category across the compared frameworks as the
+        # scoped-scan target — e.g. comparing 3 web UI tools should check for
+        # newer web UI tools, not whatever the first framework happened to be.
+        # On a count tie, `max(set(...))` would pick an arbitrary category due
+        # to set iteration order — break ties deterministically by preferring
+        # whichever tied category appears EARLIEST in resolved_categories
+        # (i.e. closest to the first compared framework's primary category).
+        category_hint: str | None = None
+        if resolved_categories:
+            counts = Counter(resolved_categories)
+            top_count = max(counts.values())
+            tied = {cat for cat, n in counts.items() if n == top_count}
+            category_hint = next(c for c in resolved_categories if c in tied)
+        lines.append(self._discovery_nudge(" ".join(frameworks), category_hint=category_hint))
 
         return "\n".join(lines)
 
@@ -384,6 +488,8 @@ class AdvisorToolsExecutor(BaseToolExecutor):
         note = self._find_case_study_relevance(use_case_lower.split())
         if note:
             lines.append(note)
+
+        lines.append(self._discovery_nudge(use_case))
 
         return "\n".join(lines)
 

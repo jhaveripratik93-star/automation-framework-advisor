@@ -25,6 +25,8 @@ from typing import Any
 import httpx
 import yaml
 
+from src.agents.cache import TTLCache
+
 logger = logging.getLogger(__name__)
 
 # ── Sources to scan for new frameworks ────────────────────────────────
@@ -63,6 +65,64 @@ _MIN_STARS = 500
 _SCAN_INTERVAL_SECONDS = 86400
 
 _HTTP_TIMEOUT = 30.0
+
+# Maps a FRAMEWORK_CATEGORIES id -> the single most relevant query from
+# _SEARCH_QUERIES above. Used by scan_category() for a fast, scoped
+# discovery check (exactly ONE GitHub API call) instead of the full
+# 19-query scan — safe to run inline while answering a chat recommendation,
+# so "are we missing something better than our 19 frameworks?" gets a real
+# answer without the cost of a full catalog crawl.
+_CATEGORY_QUERY_MAP: dict[str, str] = {
+    "web_ui_testing": "e2e testing framework",
+    "api_testing": "API testing framework",
+    "mobile_testing": "mobile testing framework",
+    "performance_testing": "performance testing framework",
+    "infrastructure_as_code": "infrastructure testing",
+    "desktop_testing": "UI testing framework",
+    "unit_testing": "unit testing framework",
+    "bdd_testing": "BDD testing framework",
+    "security_testing": "security testing framework",
+    "visual_testing": "visual testing framework",
+    "chaos_engineering": "chaos engineering testing",
+    "contract_testing": "contract testing",
+}
+
+# How long a scoped category scan's result is cached — short enough to stay
+# fresh, long enough that asking about the same category repeatedly (across
+# users/sessions) doesn't re-hit GitHub every time. Deliberately shorter
+# than the full scan's 24h interval since this only covers one query.
+_CATEGORY_SCAN_TTL_SECONDS = 6 * 3600
+
+# Timeout for the inline, scoped scan — much tighter than the 30s default
+# used by the full background scan, since this blocks a live chat response
+# if GitHub is slow to respond.
+_FAST_SCAN_TIMEOUT = 6.0
+
+_category_scan_cache = TTLCache(ttl_seconds=_CATEGORY_SCAN_TTL_SECONDS, max_entries=50)
+
+
+def guess_category_from_text(text: str) -> str | None:
+    """Best-effort FRAMEWORK_CATEGORIES id guess from free text (e.g. a
+    recommend_frameworks ``use_case`` string), scored by each category's
+    ``topic_keywords``.
+
+    Returns None — rather than a low-confidence guess — when no category
+    has a scoped query defined in _CATEGORY_QUERY_MAP, or when nothing
+    matches at all. Callers should skip the discovery nudge in that case
+    instead of scanning the wrong category.
+    """
+    from src.knowledge_base.schema import FRAMEWORK_CATEGORIES
+
+    text_lower = text.lower()
+    best_cat: str | None = None
+    best_score = 0
+    for cat_id, cat_def in FRAMEWORK_CATEGORIES.items():
+        if cat_id not in _CATEGORY_QUERY_MAP:
+            continue
+        score = sum(1 for kw in cat_def["topic_keywords"] if kw in text_lower)
+        if score > best_score:
+            best_score, best_cat = score, cat_id
+    return best_cat
 
 # Canonical key order for framework YAML files — matches hand-crafted profiles
 # like ansible.yaml, cypress.yaml, playwright.yaml, etc.
@@ -356,6 +416,86 @@ class FrameworkScanner:
     def should_auto_scan(self) -> bool:
         """Check if it's time for an automatic scan."""
         return self._should_scan()
+
+    # ── Scoped, inline category scan (safe to call from the chat path) ─
+
+    def scan_category(self, category: str) -> list[DiscoveredFramework]:
+        """Run exactly ONE GitHub search query, scoped to `category`, and
+        return any results not already in the knowledge base.
+
+        This is the "step 2" scoped scan: unlike scan() (19 queries, 1s
+        sleep between each, ~20s+ total), this makes a single GitHub API
+        request with a short timeout — safe to call inline while answering
+        a chat recommendation instead of only as a background/manual action.
+        Results are cached per-category for _CATEGORY_SCAN_TTL_SECONDS so
+        repeated questions about the same category don't re-hit GitHub.
+
+        Returns [] (never raises) on an unknown category, rate limiting,
+        network failure, or timeout — discovery is always a best-effort
+        enrichment, never something that can break a recommendation.
+        """
+        query = _CATEGORY_QUERY_MAP.get(category)
+        if not query:
+            return []
+
+        cache_key = f"category_scan:{category}"
+        cached = _category_scan_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        headers = {"Accept": "application/vnd.github+json"}
+        if self._github_token:
+            headers["Authorization"] = f"Bearer {self._github_token}"
+
+        results: list[DiscoveredFramework] = []
+        try:
+            resp = self._http.get(
+                _GITHUB_SEARCH_URL,
+                params={
+                    "q": f"{query} stars:>{self._min_stars}",
+                    "sort": "stars",
+                    "order": "desc",
+                    "per_page": 5,
+                },
+                headers=headers,
+                timeout=_FAST_SCAN_TIMEOUT,
+            )
+            if resp.status_code == 200:
+                for item in resp.json().get("items", []):
+                    fw = DiscoveredFramework(
+                        name=self._clean_name(item.get("name", "")),
+                        repo_url=item.get("html_url", ""),
+                        description=item.get("description", "") or "",
+                        stars=item.get("stargazers_count", 0),
+                        language=item.get("language", "") or "",
+                        license=(item.get("license") or {}).get("spdx_id", ""),
+                        topics=item.get("topics", []),
+                        last_updated=item.get("pushed_at", ""),
+                        homepage=item.get("homepage", "") or "",
+                    )
+                    fw.categories = [category]
+                    results.append(fw)
+            else:
+                logger.debug("scan_category(%s): GitHub returned %d", category, resp.status_code)
+        except httpx.HTTPError as exc:
+            logger.debug("scan_category(%s): request failed: %s", category, exc)
+        except Exception as exc:  # noqa: BLE001 — discovery must never break a recommendation
+            logger.debug("scan_category(%s): unexpected error: %s", category, exc)
+
+        new_only = self._filter_existing(results)
+        _category_scan_cache.set(cache_key, new_only)
+        return new_only
+
+    def kb_age_days(self) -> int | None:
+        """Days since the knowledge base's YAML profiles were last modified
+        (most-recently-touched file wins). Returns None if the data
+        directory doesn't exist or has no YAML files."""
+        if not self._data_dir.exists():
+            return None
+        mtimes = [f.stat().st_mtime for f in self._data_dir.glob("*.yaml")]
+        if not mtimes:
+            return None
+        return int((time.time() - max(mtimes)) / 86400)
 
     # ── GitHub search ─────────────────────────────────────────────────
 
