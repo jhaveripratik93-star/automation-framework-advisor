@@ -63,22 +63,28 @@ Conditional routing:
 
 ---
 
-### 4. Tool Executor (`src/tools/executor.py`)
+### 4. Tool Router (`src/agents/tool_router.py`)
+
+`ToolRouter` composes the feature-owned executors (`src.advisor_tools`,
+`src.coverage`, `src.prerequisites`) behind one dispatch surface:
 
 ```
-ToolExecutor: 'search_knowledge_graph' → 650 chars
-ToolExecutor: 'get_framework_details' → 450 chars
-ToolExecutor: 'run_framework_comparison' → 1200 chars
-ToolExecutor: 'recommend_frameworks' → 900 chars
-ToolExecutor: 'find_migration_paths' → 800 chars
-ToolExecutor: 'analyze_test_case_coverage' → 600 chars
-ToolExecutor: 'list_frameworks_by_category' → 400 chars
+ToolRouter: 'search_knowledge_graph' -> 650 chars
+ToolRouter: 'get_framework_details' -> 450 chars
+ToolRouter: 'run_framework_comparison' -> 1200 chars
+ToolRouter: 'recommend_frameworks' -> 900 chars
+ToolRouter: 'find_migration_paths' -> 800 chars
+ToolRouter: 'analyze_test_case_coverage' -> 600 chars
+ToolRouter: 'list_frameworks_by_category' -> 400 chars
 ```
 
 On failure:
 ```
-ToolExecutor: 'tool_name' failed — ExceptionType: error message
+ToolRouter: 'tool_name' failed - ExceptionType: error message
 ```
+
+(Each feature executor also logs under its own name — e.g.
+`CoverageExecutor:`, `PrerequisitesExecutor:` — when called directly.)
 
 ---
 
@@ -168,7 +174,7 @@ Get-Content logs\advisor.log -Wait -Tail 50
 **Windows (cmd — search):**
 ```cmd
 findstr /C:"LangGraph" logs\advisor.log
-findstr /C:"ToolExecutor" logs\advisor.log
+findstr /C:"ToolRouter" logs\advisor.log
 findstr /C:"WARNING" logs\advisor.log
 findstr /C:"ERROR" logs\advisor.log
 ```
@@ -184,7 +190,7 @@ findstr /C:"ERROR" logs\advisor.log
 
 2. **Track tool usage:**
    ```
-   findstr /C:"ToolExecutor:" logs\advisor.log
+   findstr /C:"ToolRouter:" logs\advisor.log
    ```
 
 3. **Find errors and fallbacks:**

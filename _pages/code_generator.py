@@ -222,7 +222,7 @@ def _upload_mode() -> None:
                 st.error(f"Failed to parse JSON: {e}")
         elif uploaded.name.endswith((".xlsx", ".xls")):
             try:
-                from src.tools.excel_parser import parse_test_cases_from_excel
+                from src.coverage.excel_parser import parse_test_cases_from_excel
                 tcs = parse_test_cases_from_excel(uploaded)
                 st.session_state.codegen_test_cases = tcs
                 st.success(f"Loaded {len(tcs)} test cases from Excel")

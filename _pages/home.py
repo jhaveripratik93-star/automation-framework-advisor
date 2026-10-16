@@ -30,7 +30,7 @@ def render() -> None:
             <div class="home-stat-label">Powered by Groq LLM</div>
         </div>
         <div style="text-align:center">
-            <div class="home-stat-value">5</div>
+            <div class="home-stat-value">6</div>
             <div class="home-stat-label">Core Features</div>
         </div>
         <div style="text-align:center">
@@ -40,7 +40,7 @@ def render() -> None:
     </div>
     """, unsafe_allow_html=True)
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown("""
         <div class="feature-card">
@@ -83,6 +83,27 @@ def render() -> None:
     with c3:
         st.markdown("""
         <div class="feature-card">
+            <span class="feature-card-icon">🔍</span>
+            <div class="feature-card-title">Repo Comparator</div>
+            <div class="feature-card-desc">
+                Compare two test repos across different frameworks.
+                Matches test cases by name and reports assertion-count
+                parity so nothing gets silently dropped during migration.
+            </div>
+            <div class="feature-card-tags">
+                <span class="feature-tag">Cross-Repo</span>
+                <span class="feature-tag">Assertion Parity</span>
+                <span class="feature-tag">ZIP Upload</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("Open Repo Comparator →", key="home_go_repo_compare", use_container_width=True):
+            st.session_state.page = "repo_compare"; st.rerun()
+
+    c4, c5, c6 = st.columns(3)
+    with c4:
+        st.markdown("""
+        <div class="feature-card">
             <span class="feature-card-icon">📊</span>
             <div class="feature-card-title">Framework Fit</div>
             <div class="feature-card-desc">
@@ -100,7 +121,7 @@ def render() -> None:
         if st.button("Open Coverage →", key="home_go_coverage", use_container_width=True):
             st.session_state.page = "coverage"; st.rerun()
 
-    with c4:
+    with c5:
         st.markdown("""
         <div class="feature-card">
             <span class="feature-card-icon">🤖</span>
@@ -122,7 +143,7 @@ def render() -> None:
 
     st.markdown("---")
     st.markdown("#### 🚀 Quick Start")
-    qa, qb, qc, qd = st.columns(4)
+    qa, qb, qc = st.columns(3)
     with qa:
         st.markdown("""
         **New to the tool?**
@@ -139,12 +160,20 @@ def render() -> None:
         """)
     with qc:
         st.markdown("""
+        **Verifying a migration?**
+        1. Go to **Repo Comparator**
+        2. Upload the old and new repos (or .zip files)
+        3. Review the assertion-parity report for gaps
+        """)
+    qd, qe, _qf = st.columns(3)
+    with qd:
+        st.markdown("""
         **Verifying coverage?**
         1. Go to **Framework Fit**
         2. Upload your test case Excel sheet
         3. See which frameworks cover 100% of your needs
         """)
-    with qd:
+    with qe:
         st.markdown("""
         **Automating manual tests?**
         1. Go to **Test Generator**

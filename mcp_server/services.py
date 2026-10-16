@@ -110,14 +110,19 @@ def get_graphrag():
 
 
 def get_tool_executor(weight_profile=None, uploaded_docs: str = "", case_study: str = ""):
-    """Build a fresh ToolExecutor bound to the shared KB/graph/GraphRAG singletons.
+    """Build a fresh ToolRouter bound to the shared KB/graph/GraphRAG singletons.
 
     A new instance is created per call (construction is cheap — it just stores
     references) so that per-call context (uploaded docs, case study text,
     scoring weight profile) never leaks between unrelated tool invocations.
+
+    ToolRouter composes the feature-owned executors
+    (src.advisor_tools / src.coverage / src.prerequisites) behind the same
+    ``.execute(tool_name, args)`` surface the old monolithic
+    ``src.tools.executor.ToolExecutor`` used to provide.
     """
-    from src.tools.executor import ToolExecutor
-    executor = ToolExecutor(
+    from src.agents.tool_router import ToolRouter
+    return ToolRouter(
         knowledge_graph=get_graph(),
         graphrag_engine=get_graphrag(),
         knowledge_base=get_kb(),
@@ -125,8 +130,6 @@ def get_tool_executor(weight_profile=None, uploaded_docs: str = "", case_study: 
         case_study_context=case_study,
         weight_profile=weight_profile,
     )
-    executor._llm = get_groq_client()
-    return executor
 
 
 def get_codegen_orchestrator():

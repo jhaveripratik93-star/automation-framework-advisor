@@ -61,6 +61,12 @@ class PipelineState(TypedDict):
     _last_round_results: list[dict[str, Any]]
     executed_tool_calls: list[dict[str, Any]]
     _cache_hit: bool
+    # Test cases parsed structurally out of user_message BEFORE any LLM call
+    # (see src/coverage/test_case_extraction.py) — substituted directly into
+    # analyze_test_case_coverage's arguments in execute_tools, bypassing the
+    # LLM for the bulk payload so large uploads are never truncated by a
+    # tool-call response token cap.
+    _extracted_test_cases: list[dict[str, Any]]
 
     # Injected dependencies (set once, read-only in nodes)
     _llm_client: Any
@@ -110,6 +116,30 @@ def make_select_tools_node(tool_selection_agent, tool_executor):
                 msg = f"[Conversation context]\n" + "\n".join(context_lines) + f"\n\n[Current message] {msg}"
         selection = tool_selection_agent.select(msg, available)
         logger.info("LangGraph[select_tools]: %d tool(s) selected", len(selection.tool_calls))
+
+        # Safety net: if a test-case dataset was structurally extracted
+        # from the raw message, the user's intent is coverage analysis
+        # even if the LLM/heuristic picked something else (the message it
+        # saw is just a short placeholder, with none of the data that
+        # would normally cue "coverage"). Force the tool in rather than
+        # silently discard the extracted dataset.
+        extracted_test_cases = state.get("_extracted_test_cases") or []
+        has_coverage_call = any(
+            tc.tool_name == "analyze_test_case_coverage" for tc in selection.tool_calls
+        )
+        if extracted_test_cases and not has_coverage_call and "analyze_test_case_coverage" in available:
+            from src.agents.tool_selection_agent import ToolCall
+            logger.info(
+                "LangGraph[select_tools]: forcing analyze_test_case_coverage — "
+                "%d structurally-extracted test case(s) would otherwise be dropped",
+                len(extracted_test_cases),
+            )
+            selection.tool_calls.append(ToolCall(
+                tool_name="analyze_test_case_coverage",
+                arguments={"test_cases": []},  # placeholder — execute_tools substitutes the real list
+                reasoning="forced: structurally-extracted test-case dataset present",
+            ))
+
         # Store selection in state for execute_tools to consume
         return {"_pending_tool_calls": selection.tool_calls}
     return select_tools
@@ -118,9 +148,23 @@ def make_select_tools_node(tool_selection_agent, tool_executor):
 def make_execute_tools_node(tool_executor):
     def execute_tools(state: PipelineState) -> dict:
         pending = state.get("_pending_tool_calls", [])
+        extracted_test_cases = state.get("_extracted_test_cases") or []
         round_results = []
         for tc in pending:
-            result_str = tool_executor.execute(tc.tool_name, tc.arguments)
+            arguments = tc.arguments
+            # Structurally-parsed test cases (from a large upload/paste)
+            # always win over whatever the LLM echoed back for this
+            # argument — the LLM was never shown the full payload, so its
+            # own "test_cases" value is at best a truncated guess.
+            if tc.tool_name == "analyze_test_case_coverage" and extracted_test_cases:
+                arguments = dict(arguments)
+                arguments["test_cases"] = extracted_test_cases
+                logger.info(
+                    "LangGraph[execute_tools]: substituting %d structurally-extracted "
+                    "test case(s) into analyze_test_case_coverage (bypassing LLM echo)",
+                    len(extracted_test_cases),
+                )
+            result_str = tool_executor.execute(tc.tool_name, arguments)
             round_results.append({"tool_name": tc.tool_name, "result": result_str})
             logger.info("LangGraph[execute_tools]: tool='%s' result_len=%d", tc.tool_name, len(result_str))
         existing = state.get("tool_results") or []
@@ -266,6 +310,12 @@ def route_after_evaluate(state: PipelineState) -> str:
 
 def route_after_decide(state: PipelineState) -> str:
     action = state.get("action")
+    # A structurally-extracted test-case dataset means the user wants
+    # coverage analysis regardless of how DecisionAgent classified the
+    # (placeholder-bearing) message — never let "rejected"/"clarify"/
+    # "direct" silently discard already-parsed data.
+    if state.get("_extracted_test_cases") and action != "rejected":
+        return "select_tools"
     if action == "tool_call":
         return "select_tools"
     if action in ("rejected", "clarify"):
