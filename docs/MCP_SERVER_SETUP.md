@@ -8,9 +8,11 @@ manual test cases, cross-repo test parity comparison, and live framework
 discovery — as individually callable tools. Any MCP client (Kiro, Claude
 Desktop, etc.) can call these tools directly, without the Streamlit UI.
 
-It's a thin wrapper: all 20 tools delegate to the same `ToolExecutor`,
-`ScoringEngine`, `MigrationPlanner`, `CoverageAnalyzer`,
-`BoilerplateGenerator`, `CodeGenOrchestrator`, `repo_comparator`, and
+It's a thin wrapper: all 20 tools delegate to the same feature-owned
+executors (`src.advisor_tools`, `src.coverage`, `src.prerequisites`,
+composed behind `ToolRouter`), `ScoringEngine`, `MigrationPlanner`,
+`CoverageAnalyzer`, `BoilerplateGenerator`, `CodeGenOrchestrator`,
+`repo_comparator`, `src.conversion` (code conversion), and
 `FrameworkScanner` modules the Streamlit app already uses — so behaviour
 is identical to the UI.
 
@@ -22,20 +24,22 @@ is identical to the UI.
 ### A note on GROQ_API_KEY — it's optional
 
 This server does **not** require a Groq (or any other LLM) API key.
-When no key is configured, the three code-conversion/generation tools
-(`convert_test_code`, `convert_test_project`, `generate_test_code`)
-don't fail — they return a structured brief (framework-specific
-conversion/generation rules + the source material) and ask the calling
-assistant to produce the result directly. Since you're using this from
-Kiro, that means **Kiro's own model does the conversion** — no external
-API call, no key needed.
+`convert_test_code` and `check_conversion_consistency` prefer true MCP
+sampling — they ask your connected client's own model (e.g. Kiro's) to
+do the generation via `sampling/createMessage`, so no server-side API
+call or key is needed. If your client doesn't declare the `sampling`
+capability, they fall back to `GROQ_API_KEY` automatically.
+`generate_test_code` works similarly: without a key configured it
+returns a structured `mode: "manual"` brief (framework-specific
+generation rules + the source material) and asks the calling assistant
+to produce the result directly instead of calling Groq.
 
-Setting `GROQ_API_KEY` only changes those three tools to perform the
-work server-side via Groq instead — useful for headless/CI use where no
-assistant is in the loop, but not needed for interactive Kiro usage.
-Every other tool (recommendations, scoring, migration planning,
-coverage analysis, repo comparison, boilerplate generation) never used
-an API key in the first place.
+Setting `GROQ_API_KEY` only changes the LLM backend those tools use —
+useful for headless/CI use where no MCP client model is in the loop,
+but not needed for interactive Kiro usage. Every other tool
+(recommendations, scoring, migration planning, coverage analysis, repo
+comparison, boilerplate generation) never used an API key in the first
+place.
 
 If you do want to set one anyway: `--groq-key` on the setup script
 below injects it directly into the MCP config, or you can add it to
@@ -77,8 +81,8 @@ python scripts\setup_mcp.py --no-install --python "C:\path\to\your\python.exe"
 # Preview everything (venv creation, pip install, mcp.json) without doing any of it
 python scripts\setup_mcp.py --dry-run
 
-# Optional — only if you want convert_test_code / convert_test_project /
-# generate_test_code to call Groq server-side instead of using Kiro's model
+# Optional — only if you want convert_test_code / check_conversion_consistency /
+# generate_test_code to call Groq server-side instead of using the client's model
 python scripts\setup_mcp.py --groq-key gsk_your_key_here
 ```
 
@@ -183,17 +187,17 @@ Setup:
 3. In chat, point Kiro at the source files directly, e.g.:
 
    > Read all `.robot` files under `../test-folder-1/tests/` and use the
-   > `convert_test_project` tool to convert them from Robot Framework to K6.
+   > `convert_test_code` tool to convert each one from Robot Framework to K6.
    > Write the converted files into `./tests/` here.
 
    Kiro reads the Robot Framework source using its normal file tools
    (from wherever `test-folder-1` lives — a relative path, a second
-   workspace folder, or an absolute path you give it), passes the file
-   contents to `convert_test_project` (which runs inside
-   `automation-framework-advisor`'s process), and writes the K6 output
-   back into `test-folder-2` using its normal file-write tools. The two
-   product repos never need to know the advisor tool exists on disk —
-   only `mcp.json` does.
+   workspace folder, or an absolute path you give it), passes each file's
+   contents to `convert_test_code` (which runs inside
+   `automation-framework-advisor`'s process, one file per call), and
+   writes the K6 output back into `test-folder-2` using its normal
+   file-write tools. The two product repos never need to know the
+   advisor tool exists on disk — only `mcp.json` does.
 
 A few things worth knowing about this pattern:
 
@@ -208,12 +212,12 @@ A few things worth knowing about this pattern:
   its own workspace-level `mcp.json`, that workspace entry wins over your
   user-level one. Use `--name` with the setup script to register under a
   distinct key if you want to avoid any ambiguity.
-- **No GROQ_API_KEY needed for this either**: `convert_test_project`
-  works the same way here as anywhere else — if no key is configured,
-  it hands the conversion rules + source back to Kiro and Kiro writes
-  the K6 output itself.
+- **No GROQ_API_KEY needed for this either**: `convert_test_code` works
+  the same way here as anywhere else — it prefers your client's own
+  model via MCP sampling, falling back to GROQ_API_KEY only if the
+  client doesn't support sampling.
 - **No file-system access needed by the server itself**: tools like
-  `convert_test_project` take file contents as arguments and return
+  `convert_test_code` take file contents as arguments and return
   converted content as output — they don't reach into `test-folder-1` or
   `test-folder-2` on disk. Reading the source and writing the result is
   entirely Kiro's job (via its own file tools), which is why this works
@@ -236,11 +240,13 @@ tools automatically.
 
 ## 5. Tool reference
 
-No tool in this list requires `GROQ_API_KEY`. The three marked
-**manual-mode capable** work either way: with a key configured they
-call Groq server-side and return finished code directly; without one
-(the default) they return a `mode: "manual"` brief for Kiro to act on
-instead.
+No tool in this list requires `GROQ_API_KEY`. `convert_test_code` and
+`check_conversion_consistency` prefer true MCP sampling (your client's
+own model) and only fall back to Groq if the client doesn't support
+sampling. `generate_test_code` is marked **manual-mode capable**: with
+a key configured it runs the hybrid template+LLM pipeline server-side
+and returns finished code directly; without one (the default) it
+returns a `mode: "manual"` brief for Kiro to act on instead.
 
 | Tool | Purpose | Behavior without GROQ_API_KEY |
 |---|---|---|
@@ -257,15 +263,84 @@ instead.
 | `analyze_test_case_coverage` | Map test cases to best-fit framework(s) | n/a |
 | `analyze_prerequisites` | Automate manual setup steps + CI/CD stages | n/a |
 | `generate_boilerplate_project` | Ready-to-run project scaffold | n/a |
-| `convert_test_code` | Convert one test file between frameworks | **Manual-mode capable** — returns conversion rules + source for Kiro to convert |
-| `convert_test_project` | Convert a multi-file test project | **Manual-mode capable** — same, plus deterministic conftest/requirements |
+| `convert_test_code` | Convert one test file between frameworks | Uses MCP sampling (your client's model); falls back to Groq only if the client lacks sampling support |
+| `check_conversion_consistency` | Run the same conversion N times and measure reproducibility | Same LLM backend selection as `convert_test_code` |
 | `generate_test_code` | Generate automated tests from manual test cases | **Manual-mode capable** — returns generation rules + test cases for Kiro to write |
 | `compare_repos` | Cross-repo test parity report (assertion-count diff) | n/a |
 | `compare_repos_csv` | Same as above, returned as CSV | n/a |
 | `discover_new_frameworks` | Scan GitHub for new frameworks not yet in KB | Works fully — profiles are just less rich without an LLM |
 | `add_framework_to_kb` | Research + add a named framework to the KB | Works fully — falls back to a template-based profile; review the returned `completeness` field |
 
-## 6. Troubleshooting
+## 6. Auditing tool calls
+
+Every one of the 20 tools is wrapped with `@log_tool_call`
+(`mcp_server/tool_logging.py`), applied uniformly in `mcp_server/server.py`
+right under each `@mcp.tool()` decorator. This guarantees every
+invocation — regardless of whether the tool happens to route through
+one of the feature executors (`src.advisor_tools`, `src.coverage`,
+`src.prerequisites`, composed by `ToolRouter`) internally or call its
+implementation directly — writes a consistent pair of log lines to
+`logs/mcp_server.log`:
+
+```
+2026-10-12 18:56:46,538 [INFO] mcp_server.tool_calls: ToolCall START 'compare_repos' args=(files_a=list[len=1](...), files_b=list[len=1](...), framework_a='K6', framework_b='Robot Framework')
+2026-10-12 18:56:46,577 [INFO] mcp_server.tool_calls: ToolCall OK 'compare_repos' after 39.0ms -> 6 chars
+```
+
+On an unhandled exception, you get an `ERROR (raised)` line instead of
+`OK`, and the exception still propagates (the decorator only logs — it
+never swallows or alters behavior):
+
+```
+2026-10-12 18:57:36,522 [ERROR] mcp_server.tool_calls: ToolCall ERROR (raised) 'compare_repos' after 97.0ms — TypeError: string indices must be integers, not 'str'
+```
+
+**Soft failures are also caught.** 8 of the 20 tools route through
+`ToolRouter.execute()`, which swallows every exception internally and
+returns it as a plain string (`"Error executing {tool}: {exc}"`) instead
+of raising — so no exception ever reaches the decorator for those tools.
+A few others (`analyze_coverage_gaps`, `generate_test_code`,
+`add_framework_to_kb`) similarly return `{"error": "..."}` dicts on bad
+input. The decorator detects both of these known shapes and logs them as
+`ERROR (soft)` instead of `OK`:
+
+```
+2026-10-13 13:57:28,372 [ERROR] mcp_server.tool_calls: ToolCall ERROR (soft) 'get_framework_details' after 2178.9ms — Error executing get_framework_details: 'NoneType' object has no attribute 'lower'
+```
+
+A single `grep "ToolCall ERROR"` catches both `(raised)` and `(soft)`
+failures — don't rely on `(raised)` alone, since most of this server's
+own error handling returns rather than raises. A legitimate "not found"
+result from a user-mistyped framework name (e.g. `"Framework 'Foo' not
+found in knowledge base."`) is intentionally NOT flagged as an error —
+that's an expected outcome, not a bug.
+
+To verify which tools were actually called in a session (vs. just
+described in chat), grep the log for the logger name:
+
+```powershell
+Select-String -Path logs\mcp_server.log -Pattern "mcp_server.tool_calls:"
+```
+
+Each `ToolCall START` line also summarizes arguments by shape rather than
+dumping them in full — large strings are truncated, lists/dicts show
+length and a short sample — so file contents passed to tools like
+`compare_repos` or `convert_test_project` don't bloat the log or leak
+full source into it.
+
+Before this fix, only tools that happened to call through
+`ToolExecutor.execute()` (the old monolithic executor, since split into
+`ToolRouter` + feature executors) logged their name on invocation. The
+rest — including `compare_repos`, `compare_repos_csv`,
+`generate_migration_roadmap`, `analyze_coverage_gaps`,
+`generate_boilerplate_project`, `discover_new_frameworks`,
+`add_framework_to_kb`, `convert_test_code`, `generate_test_code`,
+`list_frameworks` — called their implementation directly and left no
+trace. This is now fixed at the `@mcp.tool()` decoration layer, so any
+future tool automatically gets the same audit logging as long as it adds
+`@log_tool_call` under `@mcp.tool()`.
+
+## 7. Troubleshooting
 
 - **Server shows as disconnected in Kiro**: check `logs/mcp_server.log`
   for a startup traceback (usually a missing dependency or a bad `cwd`).
@@ -276,11 +351,10 @@ instead.
 - **`setup_mcp.py` fails on `pip install`**: re-run the script after
   fixing the underlying pip error shown in the output — it's just a
   normal `pip install -r requirements.txt` under the hood.
-- **A `convert_test_code` / `convert_test_project` / `generate_test_code`
-  response looks like `{"mode": "manual", ...}` instead of finished
-  code**: that's expected without `GROQ_API_KEY` — it means Kiro should
-  read the `instructions` field and produce the code itself using the
-  attached rules, not that the tool call failed.
+- **A `generate_test_code` response looks like `{"mode": "manual", ...}`
+  instead of finished code**: that's expected without `GROQ_API_KEY` —
+  it means Kiro should read the `instructions` field and produce the
+  code itself using the attached rules, not that the tool call failed.
 - **Changes to `mcp_server/*.py` aren't picked up**: reconnect the server
   from the MCP Server view — it's a long-running process, so edits
   require a restart.

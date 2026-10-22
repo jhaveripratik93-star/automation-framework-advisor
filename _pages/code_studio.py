@@ -1,10 +1,22 @@
-"""Code Studio page — single and multi-file test conversion."""
+"""Code Studio page — single-file test conversion.
+
+Rewritten to use src.conversion.service (the shared conversion pipeline
+also used by the MCP server's convert_test_code tool), instead of the
+old ToolExecutor.execute("convert_test_cases", ...) path.
+
+Scope notes:
+  - CI/CD / GitHub Actions content is never generated or shown here —
+    this page performs code conversion only (see src/conversion's
+    base_system_prompt.md, which explicitly forbids it).
+  - Multi-file/project conversion is not yet re-implemented under the new
+    architecture — only single-file conversion is available for now.
+  - The LLM backend here is always Groq (GROQ_API_KEY in config/.env).
+    True MCP sampling is specific to the MCP server transport — see
+    mcp_server/sampling.py — Streamlit has no MCP client to sample from.
+"""
 from __future__ import annotations
 
-import io
 import logging
-import re as _re
-import zipfile
 from pathlib import Path
 
 import streamlit as st
@@ -16,136 +28,8 @@ logger = logging.getLogger(__name__)
 
 _SUPPORTED_FRAMEWORKS = ["Robot Framework", "Playwright", "Selenium", "K6"]
 
-
-def render() -> None:
-    from services.app_services import get_advisor_stack
-
-    st.markdown("""
-    <div class="page-header">
-        <div class="page-header-left">
-            <div class="breadcrumb"><span>Home</span><span class="breadcrumb-sep">›</span><span>Framework Migration</span></div>
-            <div class="page-title">🔄 Framework Migration</div>
-            <div class="page-subtitle">Convert test suites between frameworks — Python only</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    col1, col2 = st.columns(2)
-    with col1:
-        from_fw = st.selectbox("From framework", _SUPPORTED_FRAMEWORKS, index=0, key="convert_from")
-    with col2:
-        to_options = [f for f in _SUPPORTED_FRAMEWORKS if f != from_fw]
-        to_fw = st.selectbox("To framework", to_options, index=0, key="convert_to")
-
-    if from_fw and to_fw:
-        st.markdown(
-            f'<div class="breadcrumb" style="margin:0.25rem 0 0.75rem;">'
-            f'<span>{from_fw}</span><span class="breadcrumb-sep">→</span>'
-            f'<span style="color:#2d7d6f;font-weight:700;">{to_fw}</span></div>',
-            unsafe_allow_html=True,
-        )
-
-    mode = st.radio(
-        "Conversion mode",
-        ["Single file (paste)", "Multi-file (upload repo)"],
-        horizontal=True,
-        key="converter_mode",
-    )
-    st.markdown("---")
-
-    v = st.session_state.studio_widget_key_v
-
-    if mode == "Single file (paste)":
-        _single_file_mode(from_fw, to_fw, v, get_advisor_stack)
-    else:
-        _multi_file_mode(from_fw, to_fw, v, get_advisor_stack)
-
-
-def _single_file_mode(from_fw, to_fw, v, get_stack) -> None:
-    source_code = st.text_area(
-        "Paste source test code here", height=200,
-        placeholder=f"Paste your {from_fw} test code here…",
-        key=f"convert_source_{v}",
-    )
-    do_convert = st.button("🔄 Convert", key="btn_convert", type="primary")
-
-    # Restore persisted result
-    if st.session_state.get("last_converted_code") and not do_convert:
-        _show_single_result()
-        return
-
-    if do_convert:
-        if not source_code.strip():
-            st.warning("Paste some source test code first.")
-            return
-
-        loading_slot = st.empty()
-        with loading_slot.container():
-            render_thinking(f"Converting {from_fw} → {to_fw}…")
-
-        try:
-            from src.tools.executor import ToolExecutor
-            from services.app_services import get_kb, get_advisor_stack
-            kb = get_kb()
-            _client, _graph, _graphrag, _ = get_stack()
-            executor = ToolExecutor(knowledge_base=kb, knowledge_graph=_graph, graphrag_engine=_graphrag)
-            executor._llm = _client
-
-            full_result = executor.execute("convert_test_cases", {
-                "source_code": source_code,
-                "from_framework": from_fw,
-                "to_framework": to_fw,
-                "language": "python",
-            })
-
-            loading_slot.empty()
-
-            # Split on any CI/CD marker variant the LLM may produce
-            _cicd_re = _re.compile(
-                r"(#\s*={0,3}\s*CI/?CD\s*INTEGRATION[^\n]*)",
-                _re.IGNORECASE,
-            )
-            gap_marker = "### \u26a0\ufe0f Capabilities Requiring"
-
-            cicd_match = _cicd_re.search(full_result)
-            if cicd_match:
-                pre_cicd   = full_result[:cicd_match.start()]
-                cicd_block = full_result[cicd_match.start():]
-            else:
-                pre_cicd   = full_result
-                cicd_block = ""
-
-            gap_split = pre_cicd.split(gap_marker, 1)
-            code_part = gap_split[0]
-            gap_block = (gap_marker + gap_split[1]) if len(gap_split) > 1 else ""
-
-            if gap_marker in cicd_block and not gap_block:
-                cicd_gap   = cicd_block.split(gap_marker, 1)
-                cicd_block = cicd_gap[0]
-                gap_block  = gap_marker + cicd_gap[1]
-
-            # Strip any markdown code fence the LLM may have added despite instructions
-            code_blocks = _re.findall(r"```(?:[a-zA-Z]*)\n(.*?)```", code_part, _re.DOTALL)
-            runnable = code_blocks[0].strip() if code_blocks else code_part.strip()
-
-            # Strip the leading header line added by _convert_test_cases ("## 🔄 Converted…")
-            runnable = _re.sub(r"^##.*?\n", "", runnable).strip()
-
-            st.session_state.last_converted_code    = runnable
-            st.session_state.studio_source_code      = source_code
-            st.session_state.studio_cicd_block       = cicd_block
-            st.session_state.studio_to_fw            = to_fw
-            st.session_state.studio_split_files      = getattr(executor, '_last_split_files', None) or {}
-            st.session_state.studio_assertion_report = getattr(executor, '_last_assertion_report', None)
-            # Render immediately — no rerun needed
-            _show_single_result()
-
-        except Exception as exc:
-            loading_slot.empty()
-            st.error(f"Conversion failed: {exc}")
-            logger.error("Conversion error: %s", exc)
-
-
+# How to run the CONVERTED test suite locally — not CI/CD config, just a
+# plain install+run command the user types in their own terminal.
 _RUN_INSTRUCTIONS: dict[str, tuple[str, str, str]] = {
     "robot framework": (
         "robotframework>=7.0\nrobotframework-seleniumlibrary>=6.0\nrobotframework-requests>=0.9\nSelenium>=4.0\nrequests>=2.31",
@@ -169,57 +53,218 @@ _RUN_INSTRUCTIONS: dict[str, tuple[str, str, str]] = {
     ),
 }
 
+_LANG_DISPLAY = {
+    "python":     ("python",         ".py",    "text/x-python"),
+    "javascript": ("javascript",     ".js",    "text/javascript"),
+    "typescript": ("typescript",     ".ts",    "text/typescript"),
+    "java":       ("java",           ".java",  "text/x-java"),
+    "c#":         ("csharp",         ".cs",    "text/plain"),
+    "ruby":       ("ruby",           ".rb",    "text/x-ruby"),
+    "go":         ("go",             ".go",    "text/x-go"),
+    "robot":      ("robotframework", ".robot", "text/plain"),
+}
+
+
+def render() -> None:
+    st.markdown("""
+    <div class="page-header">
+        <div class="page-header-left">
+            <div class="breadcrumb"><span>Home</span><span class="breadcrumb-sep">›</span><span>Framework Migration</span></div>
+            <div class="page-title">🔄 Framework Migration</div>
+            <div class="page-subtitle">Convert test code between frameworks — code conversion only, no CI/CD content</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        from_fw = st.selectbox("From framework", _SUPPORTED_FRAMEWORKS, index=0, key="convert_from")
+    with col2:
+        to_options = [f for f in _SUPPORTED_FRAMEWORKS if f != from_fw]
+        to_fw = st.selectbox("To framework", to_options, index=0, key="convert_to")
+
+    if from_fw and to_fw:
+        st.markdown(
+            f'<div class="breadcrumb" style="margin:0.25rem 0 0.75rem;">'
+            f'<span>{from_fw}</span><span class="breadcrumb-sep">→</span>'
+            f'<span style="color:#2d7d6f;font-weight:700;">{to_fw}</span></div>',
+            unsafe_allow_html=True,
+        )
+    st.markdown("---")
+
+    v = st.session_state.studio_widget_key_v
+    _single_file_mode(from_fw, to_fw, v)
+
+
+def _single_file_mode(from_fw: str, to_fw: str, v: int) -> None:
+    source_code = st.text_area(
+        "Paste source test code here", height=200,
+        placeholder=f"Paste your {from_fw} test code here…",
+        key=f"convert_source_{v}",
+    )
+    do_convert = st.button("🔄 Convert", key="btn_convert", type="primary")
+
+    if st.session_state.get("studio_result") and not do_convert:
+        _show_result()
+        return
+
+    if do_convert:
+        if not source_code.strip():
+            st.warning("Paste some source test code first.")
+            return
+
+        loading_slot = st.empty()
+        with loading_slot.container():
+            render_thinking(f"Converting {from_fw} → {to_fw}…")
+
+        try:
+            from services.app_services import get_groq_client, get_kb
+            from src.conversion.service import ConversionRequest, convert
+            from src.tools.formatters import resolve_framework
+
+            client = get_groq_client()
+
+            def _llm_call(system_prompt: str, user_prompt: str) -> str:
+                result = client.chat(
+                    messages=[{"role": "user", "content": user_prompt}],
+                    system=system_prompt,
+                    temperature=0.1,
+                )
+                return result.get("content") or result.get("reasoning") or ""
+
+            to_fw_data = resolve_framework(get_kb(), to_fw)
+            result = convert(
+                ConversionRequest(
+                    source_code=source_code,
+                    from_framework=from_fw,
+                    to_framework=to_fw,
+                    llm_call=_llm_call,
+                ),
+                to_fw_data=to_fw_data,
+            )
+
+            loading_slot.empty()
+            st.session_state.studio_result = result
+            st.session_state.studio_to_fw = to_fw
+            st.session_state.studio_source_code = source_code
+            st.session_state.studio_from_fw = from_fw
+            st.session_state.studio_consistency_report = None  # stale — frameworks/source changed
+            _show_result()
+
+        except Exception as exc:
+            loading_slot.empty()
+            st.error(f"Conversion failed: {exc}")
+            logger.error("Conversion error: %s", exc)
+
+    _consistency_check_section()
+
+
+def _consistency_check_section() -> None:
+    """Point 6: run the same conversion N times and report how
+    reproducible/accurate the result is."""
+    result = st.session_state.get("studio_result")
+    if result is None:
+        return
+
+    st.markdown("---")
+    st.markdown("#### 🔁 Consistency check")
+    st.caption(
+        "Runs this exact conversion multiple times and reports how often the "
+        "output compiles, passes structural checks, and agrees on assertion "
+        "count — proving the result is reproducible, not a one-shot fluke."
+    )
+    runs = st.slider("Number of runs", min_value=2, max_value=10, value=5, key="consistency_runs")
+    run_check = st.button("▶ Run consistency check", key="btn_consistency")
+
+    if run_check:
+        source_code = st.session_state.get("studio_source_code", "")
+        from_fw = st.session_state.get("studio_from_fw", "")
+        to_fw = st.session_state.get("studio_to_fw", "")
+        if not source_code:
+            st.warning("Convert a file first, then run the consistency check on it.")
+            return
+
+        loading_slot = st.empty()
+        with loading_slot.container():
+            render_thinking(f"Running {runs} conversion attempts…")
+        try:
+            from services.app_services import get_groq_client, get_kb
+            from src.conversion.consistency import check_consistency
+            from src.tools.formatters import resolve_framework
+
+            client = get_groq_client()
+
+            def _llm_call(system_prompt: str, user_prompt: str) -> str:
+                r = client.chat(
+                    messages=[{"role": "user", "content": user_prompt}],
+                    system=system_prompt,
+                    temperature=0.1,
+                )
+                return r.get("content") or r.get("reasoning") or ""
+
+            to_fw_data = resolve_framework(get_kb(), to_fw)
+            report = check_consistency(
+                source_code=source_code,
+                from_framework=from_fw,
+                to_framework=to_fw,
+                llm_call=_llm_call,
+                runs=runs,
+                to_fw_data=to_fw_data,
+            )
+            loading_slot.empty()
+            st.session_state.studio_consistency_report = report
+        except Exception as exc:
+            loading_slot.empty()
+            st.error(f"Consistency check failed: {exc}")
+            logger.error("Consistency check error: %s", exc)
+            return
+
+    report = st.session_state.get("studio_consistency_report")
+    if report is not None:
+        _render_consistency_report(report)
+
+
+def _render_consistency_report(report) -> None:
+    if report.is_consistent:
+        st.success(
+            f"✅ Consistent across {report.total_runs} run(s): every run compiled, "
+            f"passed structural checks, and agreed on assertion count."
+        )
+    else:
+        st.warning(
+            f"⚠️ Not fully consistent: {report.valid_count}/{report.total_runs} run(s) valid "
+            f"(score {report.consistency_score:.0%}), assertion counts: {report.assertion_counts}"
+        )
+
+    st.markdown(
+        f"**Cross-repo parity equivalent:** {report.parity_equivalent_count}/{report.total_runs} run(s)"
+    )
+
+    with st.expander("Per-run detail", expanded=not report.is_consistent):
+        for r in report.records:
+            icon = "✅" if r.is_valid and r.assertion_count == report.assertion_count_mode else (
+                   "⚠️" if r.is_valid else "❌")
+            st.markdown(
+                f"{icon} **Run {r.run_number}** — valid: {r.is_valid}, "
+                f"assertions: {r.assertion_count}, attempts: {r.attempts_needed}, "
+                f"parity equivalent: {r.is_parity_equivalent}"
+            )
+            if r.errors:
+                st.caption("; ".join(r.errors))
+
+
+def _target_lang_display(target_language: str):
+    return _LANG_DISPLAY.get(target_language, _LANG_DISPLAY["python"])
+
 
 def _get_run_instructions(to_fw_lower: str) -> tuple[str, str, str]:
-    """Return (requirements_txt, run_cmd, install_cmd) for the target framework."""
     for key, val in _RUN_INSTRUCTIONS.items():
         if key in to_fw_lower:
             return val
     return "pytest>=7.0", "pytest tests/ -v", "pip install -r requirements.txt"
 
 
-def _parse_cicd_block(raw: str, to_fw: str) -> dict:
-    """Extract install and run commands from the LLM CI/CD comment block.
-
-    Returns {"install": str, "run": str, "yaml": str} where yaml is the
-    full GitHub Actions step block (comment lines stripped of leading #).
-    """
-    lines = raw.splitlines()
-    install, run, yaml_lines = "", "", []
-
-    for line in lines:
-        # Strip leading comment chars and whitespace
-        clean = _re.sub(r"^\s*#\s?", "", line).strip()
-        # Decode HTML entities (&#39; -> ')
-        clean = clean.replace("&#39;", "'").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
-        if not clean:
-            continue
-        low = clean.lower()
-        if low.startswith("pip install") or low.startswith("pip3 install"):
-            install = clean
-        elif (low.startswith("robot ") or low.startswith("pytest ") or
-              low.startswith("python -m pytest") or low.startswith("python -m robot") or
-              low.startswith("k6 run")):
-            run = clean
-        yaml_lines.append(clean)
-
-    # Fallback run commands per framework
-    if not run:
-        fw_lower = to_fw.lower()
-        if "robot" in fw_lower:
-            run = "robot tests/"
-        elif "playwright" in fw_lower:
-            run = "pytest tests/ --tb=short"
-        elif "selenium" in fw_lower:
-            run = "pytest tests/ --tb=short"
-        elif "k6" in fw_lower:
-            run = "k6 run tests/load_test.js"
-
-    return {"install": install, "run": run, "yaml": "\n".join(yaml_lines)}
-
-
 def _render_assertion_report(report: dict | None) -> None:
-    """Render the assertion parity badge + detail table."""
     if not report:
         return
     status = report.get("status", "pass")
@@ -238,24 +283,7 @@ def _render_assertion_report(report: dict | None) -> None:
         f'</div>',
         unsafe_allow_html=True,
     )
-
-    # Detail table
-    breakdown = report.get("breakdown")
-    if breakdown:
-        with st.expander("📊 Assertion count breakdown", expanded=(status == "fail")):
-            st.markdown(
-                f"| | Count |\n|---|---|\n"
-                f"| Source assertions | **{src_n}** |\n"
-                f"| Converted assertions | **{cvt_n}** |\n"
-                f"| Delta | **{cvt_n - src_n:+d}** |"
-            )
-            if breakdown:
-                rows = "\n".join(
-                    f"| `{r['file']}` | {r['source_assertions']} |"
-                    for r in breakdown
-                )
-                st.markdown(f"\n**Per source file:**\n| File | Assertions |\n|---|---|\n{rows}")
-    else:
+    with st.expander("📊 Assertion count breakdown", expanded=(status == "fail")):
         st.markdown(
             f"| | Count |\n|---|---|\n"
             f"| Source assertions | **{src_n}** |\n"
@@ -264,54 +292,81 @@ def _render_assertion_report(report: dict | None) -> None:
         )
 
 
-def _show_single_result() -> None:
-    to_fw            = st.session_state.get("studio_to_fw", "")
-    cicd_block       = st.session_state.get("studio_cicd_block", "")
-    split_files      = st.session_state.get("studio_split_files", {})
-    runnable         = st.session_state.last_converted_code
-    assertion_report = st.session_state.get("studio_assertion_report")
+def _render_parity_report(parity: dict | None) -> None:
+    """Point 4: cross-repo-comparator parity check — does the converted
+    framework have equivalent validation to the source, per test case?"""
+    if parity is None:
+        return
 
-    code_lang, ext, mime = _target_lang_display(to_fw)
+    if parity.get("is_equivalent"):
+        st.success("✅ Cross-repo parity check: every test case matched with equivalent assertions.")
+        return
+
+    st.warning("⚠️ Cross-repo parity check found mismatches between source and converted code:")
+    with st.expander("Parity mismatch detail", expanded=True):
+        for m in parity.get("mismatches", []):
+            st.markdown(
+                f"- **'{m['display_a']}'** ↔ **'{m['display_b']}'**: "
+                f"{m['assertions_a']} assertion(s) in source vs {m['assertions_b']} in converted code"
+            )
+        for u in parity.get("only_in_a", []):
+            st.markdown(f"- **'{u['display_name']}'** exists in the source but has no matching converted test case")
+        for u in parity.get("only_in_b", []):
+            st.markdown(f"- **'{u['display_name']}'** appears in the converted code with no equivalent in the source")
+
+
+def _render_validation_badge(result) -> None:
+    """Shows compile-check + structural-check outcome with full retry history."""
+    n = len(result.attempts)
+    last = result.attempts[-1]
+
+    if result.is_valid:
+        st.success(
+            f"✅ Converted code compiled and passed structural validation "
+            f"({n} attempt{'s' if n != 1 else ''}, tool: {last.compile_result.tool or 'n/a'})."
+        )
+    else:
+        st.error("⚠️ Converted code still has unresolved issues after retrying:")
+        if last.compile_result.checked and not last.compile_result.ok:
+            st.markdown(f"**Compile errors** (`{last.compile_result.tool}`):")
+            for e in last.compile_result.errors:
+                st.markdown(f"- {e}")
+        if not last.validation.is_valid:
+            for e in last.validation.errors:
+                st.markdown(f"- {e}")
+
+    if n > 1:
+        with st.expander(f"🔁 Retry history ({n} attempts)", expanded=False):
+            for a in result.attempts:
+                ok = (not a.compile_result.checked or a.compile_result.ok) and a.validation.is_valid
+                icon = "✅" if ok else "❌"
+                st.markdown(f"**{icon} Attempt {a.attempt_number}**")
+                if a.compile_result.checked and not a.compile_result.ok:
+                    st.markdown("- Compile: " + "; ".join(a.compile_result.errors))
+                if not a.validation.is_valid:
+                    st.markdown("- Structural: " + "; ".join(a.validation.errors))
+
+
+def _show_result() -> None:
+    result = st.session_state.get("studio_result")
+    to_fw = st.session_state.get("studio_to_fw", "")
+    if result is None:
+        return
+
+    code_lang, ext, mime = _target_lang_display(result.target_language)
     to_fw_lower = (to_fw or "").lower()
     req, run_cmd, install_cmd = _get_run_instructions(to_fw_lower)
 
-    _render_assertion_report(assertion_report)
+    _render_validation_badge(result)
+    _render_assertion_report(result.assertion_report)
+    _render_parity_report(result.parity_report)
 
-    # ── Converted files ───────────────────────────────────────────────
-    if split_files and len(split_files) > 1:
-        st.markdown("### 📂 Converted Project Files")
-        all_dl: dict[str, str] = {}
-        for fpath, fcode in sorted(split_files.items()):
-            icon = "🧪" if "/test" in fpath or fpath.startswith("test") else (
-                   "📄" if "/page" in fpath.lower() else (
-                   "🔧" if "conftest" in fpath else "🛠️"))
-            with st.expander(f"{icon} `{fpath}`", expanded=False):
-                st.code(fcode, language=code_lang)
-                st.download_button(
-                    f"⬇ {Path(fpath).name}", fcode,
-                    file_name=Path(fpath).name, mime=mime,
-                    key=f"dl_split_{fpath.replace('/', '_')}",
-                )
-            all_dl[fpath] = fcode
-        # ZIP of all split files
-        import io as _io, zipfile as _zf
-        buf = _io.BytesIO()
-        with _zf.ZipFile(buf, "w", _zf.ZIP_DEFLATED) as zf:
-            for p, c in all_dl.items():
-                zf.writestr(p, c)
-        buf.seek(0)
-        st.download_button("⬇ Download all files (ZIP)", buf.getvalue(),
-                           file_name=f"converted_{to_fw_lower.replace(' ','_')}.zip",
-                           mime="application/zip", key="btn_dl_split_zip")
-    else:
-        # Single file fallback
-        with st.expander("📄 Converted Test Code", expanded=True):
-            st.code(runnable, language=code_lang)
-            st.download_button("⬇ Download converted file", runnable,
-                               file_name=f"test_converted{ext}", mime=mime,
-                               key="btn_dl_single")
+    with st.expander("📄 Converted Test Code", expanded=True):
+        st.code(result.code, language=code_lang)
+        st.download_button("⬇ Download converted file", result.code,
+                           file_name=f"test_converted{ext}", mime=mime,
+                           key="btn_dl_single")
 
-    # ── Requirements & Execution Guide ────────────────────────────────
     with st.expander("📋 Requirements & Execution Guide", expanded=True):
         col_req, col_run = st.columns(2)
         with col_req:
@@ -321,251 +376,14 @@ def _show_single_result() -> None:
             st.markdown("**Install & Run**")
             st.code(install_cmd + "\n" + run_cmd, language="bash")
 
-
-_LANG_DISPLAY = {
-    "python":     ("python",      ".py",    "text/x-python"),
-    "javascript": ("javascript",  ".js",    "text/javascript"),
-    "typescript": ("typescript",  ".ts",    "text/typescript"),
-    "java":       ("java",        ".java",  "text/x-java"),
-    "c#":         ("csharp",      ".cs",    "text/plain"),
-    "ruby":       ("ruby",        ".rb",    "text/x-ruby"),
-    "go":         ("go",          ".go",    "text/x-go"),
-    "robot":      ("robotframework", ".robot", "text/plain"),
-}
-
-# Map framework name → language key (overrides YAML lookup for known frameworks)
-_FW_LANG_OVERRIDE = {
-    "robot framework": "robot",
-    "playwright":      "python",
-    "selenium":        "python",
-    "k6":              "javascript",
-}
-
-
-def _target_lang_display(to_fw_name: str):
-    """Return (streamlit_lang, ext, mime) for the target framework."""
-    override = _FW_LANG_OVERRIDE.get((to_fw_name or "").lower())
-    if override:
-        return _LANG_DISPLAY[override]
-    try:
-        from services.app_services import get_kb
-        from src.tools.executor import ToolExecutor
-        kb = get_kb()
-        ex = ToolExecutor(knowledge_base=kb)
-        fw = ex._resolve_framework(to_fw_name)
-        lang, _eco = ex._resolve_target_language(fw, to_fw_name)
-        return _LANG_DISPLAY.get(lang, _LANG_DISPLAY["python"])
-    except Exception:
-        return _LANG_DISPLAY["python"]
-
-
-# Source file extensions we convert (everything else in a ZIP is ignored)
-_SOURCE_EXTS = {".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".robot",
-                ".feature", ".yml", ".yaml", ".rb", ".cs", ".k6.js"}
-# Directories to skip when extracting a ZIP repo
-_SKIP_DIRS = {"node_modules", ".git", "__pycache__", ".venv", "venv",
-              "dist", "build", ".idea", ".vscode", "target", "bin", "obj"}
-_MAX_ZIP_FILES = 60  # safety cap to avoid huge repos overwhelming the LLM
-
-
-def _extract_source_files(uploaded_files) -> list[dict]:
-    """Turn uploaded files (including ZIPs) into a flat list of
-    {"filename": relative_path, "content": text} dicts.
-
-    - ZIP archives are expanded, preserving relative paths.
-    - Non-source files, skip-dirs, and binary files are ignored.
-    - Capped at _MAX_ZIP_FILES to keep conversions manageable.
-    """
-    import io
-    import zipfile
-    from pathlib import PurePosixPath
-
-    payload: list[dict] = []
-
-    for uf in uploaded_files:
-        name = uf.name
-        if name.lower().endswith(".zip"):
-            try:
-                data = uf.read()
-                with zipfile.ZipFile(io.BytesIO(data)) as zf:
-                    for info in zf.infolist():
-                        if info.is_dir():
-                            continue
-                        path = info.filename
-                        parts = PurePosixPath(path).parts
-                        # Skip unwanted directories
-                        if any(seg in _SKIP_DIRS for seg in parts):
-                            continue
-                        ext = PurePosixPath(path).suffix.lower()
-                        if ext not in _SOURCE_EXTS:
-                            continue
-                        try:
-                            content = zf.read(info).decode("utf-8", errors="replace")
-                        except Exception:
-                            continue
-                        payload.append({"filename": path, "content": content})
-                        if len(payload) >= _MAX_ZIP_FILES:
-                            st.warning(
-                                f"Reached the {_MAX_ZIP_FILES}-file limit; "
-                                "remaining files in the ZIP were skipped."
-                            )
-                            return payload
-            except zipfile.BadZipFile:
-                st.warning(f"Could not read {name}: not a valid ZIP archive")
+    with st.expander("🧾 Prompt sources used for this conversion", expanded=False):
+        if result.prompt_sources:
+            for s in result.prompt_sources:
+                st.markdown(f"- `{s}`")
         else:
-            try:
-                payload.append({
-                    "filename": name,
-                    "content": uf.read().decode("utf-8", errors="replace"),
-                })
-            except Exception as exc:
-                st.warning(f"Could not read {name}: {exc}")
-
-    return payload
-
-
-def _multi_file_mode(from_fw, to_fw, v, get_stack) -> None:
-    uploaded_files = st.file_uploader(
-        "Upload test files, or a .zip of your whole framework/repo",
-        type=["py", "js", "ts", "java", "robot", "feature", "yml", "yaml", "zip"],
-        accept_multiple_files=True,
-        key=f"multi_convert_files_{v}",
-        help="Upload .py / .robot / .feature files OR a ZIP of your entire repo.",
-    )
-
-    if not uploaded_files and not st.session_state.get("multi_convert_result"):
-        st.markdown("""
-        <div class="empty-state">
-            <span class="empty-state-icon">📂</span>
-            <div class="empty-state-title">Upload your test repository</div>
-            <div class="empty-state-desc">
-                Upload individual test files, or a <b>.zip of your entire framework</b> to
-                preserve the folder structure. Each file is converted with shared cross-file
-                context, and helper scripts are auto-generated for capability gaps.
-            </div>
-            <span class="empty-state-hint">⬆ Use the file uploader above</span>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # Expand any uploaded ZIPs into individual source files (preserving paths)
-    files_payload: list[dict] = []
-    if uploaded_files:
-        files_payload = _extract_source_files(uploaded_files)
+            st.markdown("_No prompt files found — used built-in fallback prompt._")
         st.caption(
-            f"{len(files_payload)} source file(s) ready: "
-            + ", ".join(f["filename"] for f in files_payload[:8])
-            + (" …" if len(files_payload) > 8 else "")
+            "Edit these files under config/conversion_prompts/ to change how "
+            "conversions are generated for your whole team — no code change "
+            "or redeploy needed."
         )
-
-    do_multi = st.button(
-        f"🔄 Convert {len(files_payload)} file(s)",
-        key="btn_multi_convert",
-        disabled=not files_payload,
-        type="primary",
-    )
-
-    # Rate-limit guard: cap the number of files converted per run
-    if files_payload and len(files_payload) > 20:
-        st.warning(
-            f"⚠️ {len(files_payload)} files detected. Only the first 20 will be converted "
-            "to avoid rate limits. Consider uploading a subset of your test files."
-        )
-        files_payload = files_payload[:20]
-
-    if do_multi and files_payload:
-        loading_slot = st.empty()
-        with loading_slot.container():
-            render_thinking(f"Converting {len(files_payload)} file(s): {from_fw} → {to_fw}…")
-
-        try:
-            from src.tools.executor import ToolExecutor
-            from services.app_services import get_kb, get_advisor_stack
-            kb = get_kb()
-            _client, _graph, _graphrag, _ = get_stack()
-            executor = ToolExecutor(knowledge_base=kb, knowledge_graph=_graph, graphrag_engine=_graphrag)
-            executor._llm = _client
-
-            result = executor.convert_multi_file(
-                files=files_payload,
-                from_framework=from_fw,
-                to_framework=to_fw,
-            )
-
-            loading_slot.empty()
-            st.session_state["multi_convert_result"] = result
-            st.session_state["multi_convert_from"] = from_fw
-            st.session_state["multi_convert_to"] = to_fw
-            # Render immediately
-            _show_multi_result(result, to_fw)
-
-        except Exception as exc:
-            loading_slot.empty()
-            st.error(f"Multi-file conversion failed: {exc}")
-            logger.error("Multi-file conversion error: %s", exc)
-        return
-
-    result = st.session_state.get("multi_convert_result")
-    if result:
-        to_label = st.session_state.get("multi_convert_to", to_fw)
-        _show_multi_result(result, to_label)
-
-
-def _show_multi_result(result: dict, to_label: str) -> None:
-    code_lang, ext, mime = _target_lang_display(to_label)
-    to_fw_lower = (to_label or "").lower()
-    req, run_cmd, install_cmd = _get_run_instructions(to_fw_lower)
-
-    st.markdown("---")
-    st.markdown(result["summary"])
-    _render_assertion_report(result.get("assertion_report"))
-    st.markdown("### 📂 Converted Project Files")
-    all_files: dict[str, str] = {}
-
-    if result.get("conftest"):
-        with st.expander("📄 `conftest.py`", expanded=False):
-            st.code(result["conftest"], language="python")
-            st.download_button("⬇ conftest.py", result["conftest"],
-                               file_name="conftest.py", mime="text/x-python", key="dl_conftest")
-        all_files["conftest.py"] = result["conftest"]
-
-    if result.get("requirements"):
-        with st.expander("📄 `requirements.txt`", expanded=False):
-            st.code(result["requirements"], language="text")
-            st.download_button("⬇ requirements.txt", result["requirements"],
-                               file_name="requirements.txt", mime="text/plain", key="dl_requirements")
-        all_files["requirements.txt"] = result["requirements"]
-
-    if result["converted"]:
-        st.markdown("#### 🧪 Converted Test Files")
-        for path, code in sorted(result["converted"].items()):
-            with st.expander(f"📄 `{path}`", expanded=False):
-                st.code(code, language=code_lang)
-                st.download_button(f"⬇ {Path(path).name}", code,
-                                   file_name=Path(path).name, mime=mime,
-                                   key=f"dl_{path.replace('/', '_')}")
-            all_files[path] = code
-
-    # ── Requirements & Execution Guide ────────────────────────────────
-    with st.expander("📋 Requirements & Execution Guide", expanded=True):
-        col_req, col_run = st.columns(2)
-        with col_req:
-            st.markdown("**`requirements.txt`**")
-            st.code(req, language="text")
-        with col_run:
-            st.markdown("**Install & Run**")
-            st.code(install_cmd + "\n" + run_cmd, language="bash")
-
-    st.markdown("---")
-    zip_buf = io.BytesIO()
-    with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for path, code in all_files.items():
-            zf.writestr(path, code)
-    zip_buf.seek(0)
-    folder_name = f"converted_{to_label.lower().replace(' ', '_')}"
-    st.download_button(
-        label=f"⬇ Download all as {folder_name}.zip",
-        data=zip_buf.getvalue(),
-        file_name=f"{folder_name}.zip",
-        mime="application/zip",
-        key="btn_dl_zip",
-    )
