@@ -1059,8 +1059,47 @@ class ToolExecutor:
     - Mandatory Config Export:
         export const options = { vus: 1, duration: '10s' };
     - Default Function Entrypoint:
-        export default function () { ... }
+        export default function (data) { ... }
     - Assertion Pattern: Use `check(res, { 'status is 200': (r) => r.status === 200 });`
+
+    K6 SETUP() CONTEXT ISOLATION (CRITICAL — violating this produces broken code):
+    - setup() runs in a SEPARATE JavaScript context from default(). Global/module-level
+      variables mutated inside setup() are NOT visible inside default(). This is a k6
+      architectural fact, not optional.
+    - ALL data produced in setup() (tokens, session IDs, config) MUST be returned as the
+      setup() return value and received by default(data).
+    - CORRECT pattern:
+        export function setup() {
+          const token = login();          // obtain token
+          return { token };               // return it
+        }
+        export default function (data) {
+          const token = data.token;       // receive from setup
+          const res = http.get(url, { headers: { Authorization: `Bearer ${token}` } });
+        }
+    - WRONG pattern (NEVER do this):
+        let token = '';
+        export function setup() { token = login(); }   // mutation lost!
+        export default function () { /* token is '' here */ }
+
+    AUTH TOKEN PASSING RULES:
+    - If the source framework uses authentication, generate a shared auth helper module
+      (e.g. auth.js) that exports login functions returning the token string.
+    - Helper functions that build authenticated headers MUST accept the token as a
+      parameter (not read from a global), because the caller receives the token from
+      setup(data), not from a module global.
+    - CORRECT: export function authHeaders(token) { return { Authorization: `Bearer ${token}` }; }
+    - WRONG:   export function authHeaders() { return { Authorization: `Bearer ${CONFIG.token}` }; }
+      (CONFIG.token was set in setup — default() can't see it.)
+    - When generating a config module (config.js), use __ENV for initial/default values
+      only. Runtime-obtained values (tokens) flow through setup() → default(data).
+
+    HTTP HEADERS vs QUERY PARAMETERS:
+    - In k6, http.get(url, { headers: {...}, params: {...} })
+    - `headers` = HTTP headers (Authorization, Content-Type, Accept).
+    - `params` = URL query parameters (appended as ?key=value).
+    - Do NOT put query parameters (rows, start, query, token) in the headers object.
+    - Do NOT put non-standard keys (bufferedWriterSize, rows) in headers.
 
     FOR BROWSER (UI) PERFORMANCE TESTS:
     - Import `browser` module: `import { browser } from 'k6/browser';`
@@ -1068,21 +1107,33 @@ class ToolExecutor:
     - Execution: Use `const context = await browser.newContext(); const page = await context.newPage();`.
     - STRICT NEGATIVE RULE: Do NOT import or use `chromium.launch()` or standard Node/Playwright syntax.
 
-    CORRECT K6 API EXAMPLE:
+    CORRECT K6 API EXAMPLE (with setup/auth):
     import http from 'k6/http';
     import { check, sleep } from 'k6';
 
     export const options = {
-    vus: 1,
-    duration: '10s',
+      vus: 1,
+      duration: '10s',
     };
 
-    export default function () {
-    const res = http.get('https://example.com/api/users');
-    check(res, {
+    function login() {
+      const res = http.post('https://example.com/auth/token',
+        'grant_type=password&client_id=my-client&username=user&password=pass',
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+      return res.json('access_token') || '';
+    }
+
+    export function setup() {
+      return { token: login() };
+    }
+
+    export default function (data) {
+      const headers = { Authorization: `Bearer ${data.token}`, Accept: 'application/json' };
+      const res = http.get('https://example.com/api/users', { headers });
+      check(res, {
         'status is 200': (r) => r.status === 200,
-    });
-    sleep(1);
+      });
+      sleep(1);
     }
     """,
 
@@ -1114,6 +1165,72 @@ class ToolExecutor:
 
     # Pair-specific conversion rules: (from_lower, to_lower) → extra instructions
     _FW_PAIR_RULES: dict[tuple[str, str], str] = {
+            ("robot framework", "playwright"): """
+    ROBOT FRAMEWORK → PLAYWRIGHT CONVERSION RULES:
+
+    GENERIC COMPLETENESS PRINCIPLE (applies to every conversion, not just this file):
+    Convert EVERYTHING the source test actually uses — do not convert the test
+    body alone. Walk the dependency chain and port each part that the chosen
+    test(s) reference:
+      - Every `Library` import in *** Settings *** (built-in AND custom Python libraries).
+      - Every `Resource` import, recursively, and the keywords within them that the test calls.
+      - Every `Variables` file / *** Variables *** entry the test or its keywords read.
+      - `Suite Setup`, `Suite Teardown`, `Test Setup`, `Test Teardown` — convert these to
+        pytest fixtures (module/function scope as appropriate), never silently drop them.
+      - Every user keyword transitively called by the test, with its real argument
+        signature and defaults preserved.
+    If a referenced keyword/library cannot be found in the provided context, emit a
+    clearly-named helper stub and a TODO naming exactly what is missing, rather than
+    omitting the behavior.
+
+    PORT CUSTOM PYTHON LIBRARIES FROM THEIR IMPLEMENTATION, NOT GUESSES:
+    When the suite imports a custom library (e.g. a Cassandra/Kafka/DB/HTTP client),
+    read that library's Python source if it is in context and replicate its real
+    construction details in the helper:
+      - Authentication: auth providers, usernames, password/secret FILE paths, tokens,
+        TLS. A client that connects without the source's auth WILL fail against a
+        secured backend. (e.g. cassandra-driver PlainTextAuthProvider reading a mounted
+        secret file; Kafka SASL/SSL; bearer tokens for HTTP.)
+      - Ports, keyspaces/topics/namespaces, load-balancing/retry policies, timeouts.
+      - Expose each as an env override with the SAME default the source used.
+
+    REMOTE / KEYWORD-SERVER LIBRARIES (Robot `Remote` library, XML-RPC keyword servers):
+    The keyword logic lives on the SERVER, not in the suite. The helper is a thin
+    XML-RPC proxy (xmlrpc.client is sufficient — no extra dependency needed).
+      - Keyword names on the wire are NORMALIZED: Robot lowercases and replaces spaces
+        with underscores, keeps a trailing `?`, and keeps the `namespace/` prefix.
+        So Robot `clj.analytics/combined metrics disabled?` is sent as
+        `analytics/combined_metrics_disabled?`. NEVER send the spaced Robot form —
+        the server throws a NullPointerException on an unresolved name.
+      - If the exact registered names are unknown, call the server's
+        `get_keyword_names` once and map to the precise strings (casing matters).
+      - Pass arguments with the same arity the server expects; a zero-arg call to a
+        keyword that needs a host raises an ArityException.
+
+    RUNTIME-RESOLVED CONFIG (service discovery, not env vars):
+    Robot config modules often compute hosts at runtime (e.g.
+    resolve_hostname_to_ip("cassandra")) rather than reading env vars. In-cluster,
+    default the helper to those SAME service names/ports so the test needs zero
+    configuration, with env vars as optional overrides. Do not invent IPs.
+
+    STATEFUL CONNECTION LIFECYCLE (servers that keep a global/persistent session):
+    - Make connect idempotent: disconnect any stale session first, then connect,
+      so a prior failed run does not leave the server "Already connected".
+    - Wrap fixture setup so that if any setup step fails, connections are still
+      released before the error propagates (pytest runs post-yield teardown only
+      when setup reached `yield`).
+    - Faithfully port multi-step connect keywords (e.g. "connect to each host and
+      stay on the first that reports healthy"), not just the first call.
+
+    ASSERTIONS & DATA SEMANTICS:
+    Preserve exact computed values and data shapes (timestamps, week math, numeric
+    results). Map Robot assertions to explicit checks (Should Not Be Empty,
+    Should Be Equal As Numbers, list containment). Playwright's expect() targets
+    DOM/HTTP only — for backend values use a small value-assertion helper, and keep
+    pytest fixtures + pytest-playwright structure. `Pass Execution If` → pytest.skip.
+    When a required backend/driver is unavailable, SKIP with a clear reason rather
+    than letting the test falsely pass.
+""",
             ("k6", "robot framework"): """
     K6 → Robot Framework CONVERSION RULES:
     K6 is an HTTP/load tool. Robot Framework replaces it using RequestsLibrary for HTTP calls.
@@ -1210,7 +1327,13 @@ class ToolExecutor:
             f"1. Output ONLY valid, runnable {to_name} {'keywords and test cases' if target_lang == 'robot' else f'{lang_title} code'} using {to_name}'s native API.\n"
             f"2. Preserve ALL test intent and assertions — every source assertion MUST become a {to_name} assertion {'keyword' if target_lang == 'robot' else 'call'}.\n"
             f"3. Use {eco['runner']} as the test runner/entry point.\n"
-            f"4. Resolve any imports that reference other files in the shared context above.\n"
+            f"4. Convert EVERYTHING the test actually uses, not just the test body: resolve "
+            f"each import, shared resource, variables file, setup/teardown, and every "
+            f"helper/keyword the test transitively calls from the context above. For any "
+            f"custom client library in context, replicate its REAL construction (auth/"
+            f"credentials, ports, hosts, policies) — do not guess. If something referenced "
+            f"is missing from context, emit a clearly-named stub with a TODO rather than "
+            f"dropping the behavior.\n"
             f"5. {'Define reusable steps in a *** Keywords *** section.' if target_lang == 'robot' else f'For any capability {to_name} cannot handle natively, generate a helper in {lang_title} in a `# === HELPER: <name> ===` section.'}\n"
             f"6. Use the CURRENT stable API — do NOT use deprecated or experimental import paths.\n"
             f"7. End with a CI/CD INTEGRATION comment block showing the GitHub Actions step."
