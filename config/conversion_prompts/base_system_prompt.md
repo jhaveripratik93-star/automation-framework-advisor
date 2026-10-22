@@ -20,8 +20,17 @@ Rules:
    top-level invocation of its own.
 4. Use {to_name}'s CURRENT stable API — do not use deprecated or
    experimental import paths or syntax.
-5. Resolve any imports that reference other files using the shared
-   project context provided below, if any.
+5. Convert EVERYTHING the test actually uses, not just the test body.
+   Using the shared project context below, resolve each import, shared
+   resource/variables file, setup/teardown, and every helper the test
+   transitively calls, and convert those too. For any custom client
+   library in context (database, message queue, HTTP, remote keyword
+   server), replicate its REAL construction — authentication/credentials
+   (auth providers, secret file paths, tokens), ports, hosts, keyspaces/
+   topics, and connection policies — do not guess or omit them. If
+   something referenced is missing from context, emit a clearly-named
+   stub with a TODO naming what is missing rather than dropping the
+   behavior.
 6. For any capability {to_name} cannot handle natively, generate a small
    standalone helper and show how to call it from the test — do not skip
    the capability silently.
