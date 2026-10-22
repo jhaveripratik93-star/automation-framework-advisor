@@ -286,6 +286,16 @@ section[data-testid="stSidebar"][aria-expanded="false"] {
     transition: all 0.2s ease;
     text-align: left;
     height: 100%;
+    /* Fixed min-height + flex column layout so every card in the grid
+       renders the same height regardless of description length — the
+       icon/title stay pinned at the top, the description fills the
+       available space, and the tag row always sticks to the bottom.
+       This keeps the "Open →" button (rendered as a separate st.button
+       below each card) aligned at the same vertical position across
+       every column. */
+    min-height: 300px;
+    display: flex;
+    flex-direction: column;
     box-shadow: 0 2px 12px rgba(30,60,55,0.05);
     position: relative;
     overflow: hidden;
@@ -327,12 +337,19 @@ section[data-testid="stSidebar"][aria-expanded="false"] {
     color: #5a7470 !important;
     line-height: 1.55;
     margin-bottom: 1rem;
+    /* Grow to fill leftover vertical space so the tag row below always
+       lands at the same height, even when one card's description is
+       shorter/longer than its neighbours. */
+    flex: 1 1 auto;
 }
 
 .feature-card-tags {
     display: flex;
     flex-wrap: wrap;
     gap: 0.35rem;
+    /* Pin to the bottom of the flex column regardless of how much space
+       the description above actually used. */
+    margin-top: auto;
 }
 
 .feature-tag {

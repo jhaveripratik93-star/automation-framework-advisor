@@ -353,34 +353,18 @@ def _home_sidebar() -> None:
 
 def _studio_sidebar() -> None:
     st.markdown('<div class="sidebar-section">Conversion</div>', unsafe_allow_html=True)
-    st.caption("Select frameworks in the main panel. Upload files or paste code to convert.")
+    st.caption("Select frameworks in the main panel. Paste code to convert.")
 
-    _has_single = bool(st.session_state.get("studio_source_code"))
-    _has_multi  = bool(st.session_state.get("multi_convert_result"))
+    result = st.session_state.get("studio_result")
+    if result is not None:
+        st.markdown("**Converted:** ✓" if result.is_valid else "**Converted:** ⚠️ needs review")
+        st.caption(f"{len(result.code.splitlines())} lines · {len(result.attempts)} attempt(s)")
 
-    if _has_single:
-        st.markdown("**Single file:** converted ✓")
-        st.caption(f"{len(st.session_state.last_converted_code.splitlines())} lines")
-
-    if _has_multi:
-        result = st.session_state.multi_convert_result
-        gaps = result.get("gaps", [])
-        st.markdown('<div class="sidebar-section">Last Result</div>', unsafe_allow_html=True)
-        st.markdown(f"**Files converted:** {len(result.get('converted', {}))}")
-        st.markdown(f"**Helper scripts:** {len(result.get('helpers', {}))}")
-        if gaps:
-            st.warning(f"⚠️ {len(gaps)} capability gap(s)")
-        else:
-            st.success("✓ Full coverage")
-
-    if _has_single or _has_multi:
-        if st.button("🗑 Clear Studio", key="sb_clear_multi", use_container_width=True):
-            for _k in ("last_converted_code", "studio_source_code", "studio_gap_block", "studio_cicd_block"):
-                st.session_state[_k] = ""
-            st.session_state.multi_convert_result = None
+        if st.button("🗑 Clear Studio", key="sb_clear_studio", use_container_width=True):
+            st.session_state.studio_result = None
+            st.session_state.studio_consistency_report = None
+            st.session_state.studio_source_code = ""
             st.session_state.studio_widget_key_v += 1
-            st.session_state.pop("multi_convert_from", None)
-            st.session_state.pop("multi_convert_to", None)
             st.rerun()
 
 

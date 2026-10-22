@@ -164,6 +164,15 @@ _K6_HTTP_CALL  = re.compile(
     r"(?:const|let|var)\s+(\w+)\s*=\s*http\.(?:get|post|put|del|patch|head)\s*\(",
     re.IGNORECASE,
 )
+# check(res, { 'label': fn, ... }) block + its individual label entries —
+# mirrors assertion_counter.py's own K6 check-block regexes, used here to
+# synthesize a display name when there's no describe/group() and no leading
+# comment (the plain `export default function () { check(...) }` shape —
+# see pair_rules/k6__to__robot_framework.md SHAPE C for why this is common).
+_K6_CHECK_BLOCK = re.compile(r"\bcheck\s*\([^,]+,\s*\{([^}]*)\}\s*\)", re.DOTALL)
+_K6_CHECK_ENTRY = re.compile(r"['\"]([^'\"]+)['\"]\s*:", re.DOTALL)
+# First quoted/template-literal URL argument passed to an http.METHOD() call
+_K6_URL_LITERAL = re.compile(r"http\.\w+\s*\(\s*[`'\"]([^`'\"]+)")
 
 # JS/TS: it('...') / test('...')
 _JS_TEST     = re.compile(r"""(?:^|\s)(?:it|test)\s*\(\s*['"`]([^'"`]+)['"`]""", re.MULTILINE)
@@ -255,6 +264,40 @@ def _extract_python(code: str, fname: str, framework: str) -> list[TestCase]:
     return cases
 
 
+def _k6_synth_name(block: str) -> str | None:
+    """Synthesize a display name from check() entries + the HTTP path.
+
+    Used when a k6 code block has no describe/group() and no leading
+    comment to name the test boundary — the plain
+    `export default function () { check(...) }` shape, which is the most
+    common k6 script layout (no group() call at all). Without this, the
+    extractor fell back to the raw filename or a bare variable name,
+    which never lines up with the descriptive name an LLM conversion
+    gives the same logic (e.g. "Login Returns 200 With Token"), causing
+    the cross-repo parity matcher to report a false mismatch even when
+    the conversion itself is correct and assertion counts agree.
+
+    Returns None if the block has no check() call to synthesize from —
+    callers should fall through to their existing fallback in that case.
+    """
+    entries: list[str] = []
+    for check_m in _K6_CHECK_BLOCK.finditer(block):
+        entries.extend(_K6_CHECK_ENTRY.findall(check_m.group(1)))
+    if not entries:
+        return None
+
+    path_word = ""
+    url_m = _K6_URL_LITERAL.search(block)
+    if url_m:
+        segments = [s for s in url_m.group(1).split("/") if s and "{" not in s and "$" not in s]
+        segments = [s for s in segments if s.lower() not in ("api", "v1", "v2", "v3")]
+        if segments:
+            path_word = segments[-1].replace("-", " ").replace("_", " ").title()
+
+    descriptor = " And ".join(e.strip().title() for e in entries[:3])
+    return f"{path_word} {descriptor}".strip()
+
+
 def _extract_k6(code: str, fname: str, framework: str) -> list[TestCase]:
     """Extract K6 test cases.
 
@@ -308,15 +351,19 @@ def _extract_k6(code: str, fname: str, framework: str) -> list[TestCase]:
             if comment_display:
                 display = comment_display
             else:
-                method_m = re.search(
-                    r"http\.(\w+)\s*\(\s*(?:['\"`])([^'\"` ]+)(?:['\"`])",
-                    call_line,
-                )
-                if method_m:
-                    path = re.sub(r"^[^/]*", "", method_m.group(2))
-                    display = f"{method_m.group(1).upper()} {path or method_m.group(2)}"
+                synth = _k6_synth_name(block)
+                if synth:
+                    display = synth
                 else:
-                    display = m.group(1)
+                    method_m = re.search(
+                        r"http\.(\w+)\s*\(\s*(?:['\"`])([^'\"` ]+)(?:['\"`])",
+                        call_line,
+                    )
+                    if method_m:
+                        path = re.sub(r"^[^/]*", "", method_m.group(2))
+                        display = f"{method_m.group(1).upper()} {path or method_m.group(2)}"
+                    else:
+                        display = m.group(1)
 
             cases.append(TestCase(
                 name=_normalise(display),
@@ -327,7 +374,8 @@ def _extract_k6(code: str, fname: str, framework: str) -> list[TestCase]:
             ))
         return cases
 
-    # 3. Single http call — use comment above it or default export name
+    # 3. Single http call — use comment, check()-derived name, default
+    # export name, or filename, in that priority order.
     if not http_matches:
         return cases
     m_http = http_matches[0]
@@ -347,9 +395,13 @@ def _extract_k6(code: str, fname: str, framework: str) -> list[TestCase]:
     if comment_display:
         display = comment_display
     else:
-        m_def = _K6_DEFAULT.search(code)
-        display = (m_def.group(1).strip() if (m_def and m_def.group(1).strip())
-                   else PurePosixPath(fname).stem)
+        synth = _k6_synth_name(code)
+        if synth:
+            display = synth
+        else:
+            m_def = _K6_DEFAULT.search(code)
+            display = (m_def.group(1).strip() if (m_def and m_def.group(1).strip())
+                       else PurePosixPath(fname).stem)
     cases.append(TestCase(
         name=_normalise(display),
         display_name=display,

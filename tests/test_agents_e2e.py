@@ -26,7 +26,7 @@ from src.agents.cache import (
     make_query_cache_key,
 )
 from src.agents.langgraph_pipeline import build_pipeline, _tool_call_cache_key
-from src.tools.executor import ToolExecutor
+from src.agents.tool_router import ToolRouter
 from src.scoring.weights import WeightProfile
 
 
@@ -582,8 +582,7 @@ def test_tool_call_cache_key_semantic():
 
 def _make_pipeline(client):
     """Build a full pipeline wired to the given mock LLM."""
-    executor = ToolExecutor()
-    executor._llm = client
+    executor = ToolRouter()
     return build_pipeline(
         decision_agent=DecisionAgent(client),
         tool_selection_agent=ToolSelectionAgent(client),

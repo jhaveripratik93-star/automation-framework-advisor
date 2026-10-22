@@ -14,17 +14,14 @@ _DEFAULTS: dict = {
     "case_study_urls": [],
     # Weights — populated after KB is available; see init()
     "weight_profile": None,
-    # Code Studio
+    # Code Studio (src/conversion/service.py-backed)
     "playground_code": "",
-    "last_converted_code": "",
-    "studio_source_code": "",
-    "studio_from_fw": "",
+    "studio_result": None,
     "studio_to_fw": "",
-    "studio_mode": "Single file (paste)",
-    "studio_gap_block": "",
-    "studio_cicd_block": "",
+    "studio_from_fw": "",
+    "studio_source_code": "",
+    "studio_consistency_report": None,
     "studio_widget_key_v": 0,
-    "multi_convert_result": None,
     # Repo Comparator
     "rc_report":   None,
     "rc_fw_a_lbl": "",

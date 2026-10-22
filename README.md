@@ -29,6 +29,9 @@ export GROQ_API_KEY="your_api_key_here"
 # Option 2: The key is already hardcoded in the app as fallback
 
 # Option 1: Run the Streamlit UI (recommended for interactive use)
+
+.\.venv\Scripts\streamlit.exe run streamlit_app.py
+# or
 streamlit run streamlit_app.py 
 # or 
 python -m streamlit run streamlit_app.py
@@ -50,13 +53,25 @@ python run.py
 ├── data/
 │   ├── frameworks/          # YAML knowledge base (framework profiles)
 │   ├── samples/             # Sample input/output for testing
+│   ├── codegen/             # Learned code-generation templates
 │   └── templates/           # Cookiecutter project templates
+├── config/
+│   └── conversion_prompts/  # Editable prompts for the code-conversion feature
+├── mcp_server/              # MCP server exposing the advisor's tools to Kiro
 ├── src/
 │   ├── discovery/           # Interactive requirements gathering
 │   ├── scoring/             # Weighted evaluation engine
 │   ├── migration/           # Migration planner + coverage analyzer
 │   ├── generator/           # Boilerplate project generator
 │   ├── knowledge_base/      # Framework data loader
+│   ├── advisor_tools/       # Framework recommendation/comparison tools
+│   ├── coverage/            # Test case coverage analysis tools
+│   ├── prerequisites/       # Prerequisite/CI-CD automation tools
+│   ├── conversion/          # Cross-framework test code conversion
+│   ├── codegen/             # Manual-test-case-to-code generation
+│   ├── agents/              # LangGraph pipeline + ToolRouter
+│   ├── graph/               # Knowledge graph + GraphRAG engine
+│   ├── tools/               # Shared cross-feature infra (formatters, repo comparator, etc.)
 │   ├── models.py            # Shared data models
 │   └── main.py              # FastAPI application
 ├── streamlit_app.py         # Streamlit frontend (interactive UI)
