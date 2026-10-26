@@ -8,7 +8,7 @@ _NAV_ITEMS = [
     ("advisor",     "🧭", "Advisor"),
     ("studio",      "🔄", "Framework Migration"),
     ("codegen",     "🤖", "Test Generator"),
-    ("coverage",    "🎯", "Framework Fit"),
+    ("coverage",    "🎯", "Coverage Analyzer"),
     ("repo_compare","🔍", "Repo Comparator"),
 ]
 

@@ -313,7 +313,7 @@ def analyze_test_case_coverage(
     {framework: {"supported": [tc_id,...], "unsupported": [...], "pct":
     float}}, "matrix": {tc_id: {"description", "capability", "support":
     {framework: level}}}} — the same data backing the Streamlit
-    "Framework Fit" page. Restrict to specific frameworks via the
+    "Coverage Analyzer" page. Restrict to specific frameworks via the
     `frameworks` argument, or leave empty to evaluate every framework in
     the knowledge base."""
     from src.coverage.engine import analyze_coverage, build_display_coverage

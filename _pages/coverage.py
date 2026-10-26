@@ -1,4 +1,12 @@
-"""Framework Fit page — progressive disclosure UI."""
+"""Coverage Analyzer page — progressive disclosure UI.
+
+Renamed from "Framework Fit" (user feedback: not self-explanatory) to
+"Coverage Analyzer" — matches the existing internal naming used
+everywhere else for this feature (this module, st.session_state.coverage_*,
+src/coverage/, the analyze_test_case_coverage MCP tool) and says plainly
+what it does: analyze how much of your test-case list each framework's
+capabilities would cover.
+"""
 from __future__ import annotations
 
 import logging
@@ -36,7 +44,7 @@ def _normalise(records: list[dict]) -> list[dict]:
         for r in records
     ]
 
-# ── Tab: Framework Fit ────────────────────────────────────────────
+# ── Coverage Analyzer helpers ──────────────────────────────────────
 def _unwrap_test_cases(data) -> list[dict]:
     """Extract the flat list of test-case dicts from various JSON envelope shapes.
 
@@ -86,14 +94,27 @@ def render() -> None:
     st.markdown("""
     <div class="page-header">
         <div class="page-header-left">
-            <div class="breadcrumb"><span>Home</span><span class="breadcrumb-sep">›</span><span>Framework Fit</span></div>
-            <div class="page-title">🎯 Framework Fit</div>
-            <div class="page-subtitle">Map test cases to framework capabilities and find the best fit</div>
+            <div class="breadcrumb"><span>Home</span><span class="breadcrumb-sep">›</span><span>Coverage Analyzer</span></div>
+            <div class="page-title">🎯 Coverage Analyzer</div>
+            <div class="page-subtitle">Upload your test cases and see how much of them each framework's capabilities actually cover</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
     tcs = st.session_state.excel_test_cases
+
+    if not tcs:
+        st.markdown("""
+        <div class="empty-state">
+            <span class="empty-state-icon">🎯</span>
+            <div class="empty-state-title">Upload test cases to see coverage</div>
+            <div class="empty-state-desc">
+                Upload a sheet of your manual/legacy test cases below (Excel, JSON, or CSV).
+                The tool matches each one to framework capabilities and ranks every
+                framework by what percentage of your test cases it can actually cover.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
     # Framework selector
     from services.app_services import get_kb
@@ -140,9 +161,13 @@ def render() -> None:
 
     # Upload section
     with st.expander("📥 Upload Test Cases", expanded=not bool(tcs)):
-        st.markdown(
-            "Expected fields: `Test ID` · `Description` · `Required Capability` · `Steps` · `Expected Result`"
-        )
+        st.markdown("""
+        <div class="hint-callout">
+            <span>📋</span>
+            <span>Expected fields: <code>Test ID</code> · <code>Description</code> ·
+            <code>Required Capability</code> · <code>Steps</code> · <code>Expected Result</code></span>
+        </div>
+        """, unsafe_allow_html=True)
         tab_xl, tab_json, tab_csv = st.tabs(["📊 Excel", "📋 JSON", "📄 CSV"])
 
         with tab_xl:
@@ -337,7 +362,12 @@ def _render_results(display: dict) -> None:
                 )
 
     # ── 2. Top frameworks summary ─────────────────────────────────────
-    st.markdown("### Top Frameworks")
+    st.markdown("""
+    <div class="section-header">
+        <span class="section-header-title">📊 Top Frameworks</span>
+        <span class="section-header-sub">— ranked by % of your test cases covered</span>
+    </div>
+    """, unsafe_allow_html=True)
     summary_rows = []
     for rank, fw in enumerate(fw_names, 1):
         scores = fw_scores[fw]
