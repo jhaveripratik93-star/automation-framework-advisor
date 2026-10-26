@@ -9,6 +9,12 @@ def render() -> None:
     kb = get_kb()
     fw_count = len(kb.list_all())
 
+    _top_l, _top_r = st.columns([5, 1])
+    with _top_r:
+        if st.button("⚙️ Settings", key="home_open_settings", use_container_width=True):
+            from ui.settings_dialog import render_settings_dialog
+            render_settings_dialog()
+
     st.markdown(f"""
     <div class="home-hero">
         <div class="home-hero-title">Automation Framework Advisor</div>

@@ -118,11 +118,11 @@ def _single_file_mode(from_fw: str, to_fw: str, v: int) -> None:
             render_thinking(f"Converting {from_fw} → {to_fw}…")
 
         try:
-            from services.app_services import get_groq_client, get_kb
+            from services.app_services import get_llm_client, get_kb
             from src.conversion.service import ConversionRequest, convert
             from src.tools.formatters import resolve_framework
 
-            client = get_groq_client()
+            client = get_llm_client()
 
             def _llm_call(system_prompt: str, user_prompt: str) -> str:
                 result = client.chat(
@@ -188,11 +188,11 @@ def _consistency_check_section() -> None:
         with loading_slot.container():
             render_thinking(f"Running {runs} conversion attempts…")
         try:
-            from services.app_services import get_groq_client, get_kb
+            from services.app_services import get_llm_client, get_kb
             from src.conversion.consistency import check_consistency
             from src.tools.formatters import resolve_framework
 
-            client = get_groq_client()
+            client = get_llm_client()
 
             def _llm_call(system_prompt: str, user_prompt: str) -> str:
                 r = client.chat(

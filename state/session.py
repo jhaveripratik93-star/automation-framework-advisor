@@ -7,6 +7,8 @@ import streamlit as st
 _DEFAULTS: dict = {
     # Navigation
     "page": "home",
+    # Active LLM provider — "groq" | "gemini" — see ui/settings_dialog.py
+    "llm_provider": "groq",
     # Advisor
     "messages": [],
     "uploaded_docs_context": "",

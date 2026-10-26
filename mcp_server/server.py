@@ -108,10 +108,15 @@ def search_knowledge_graph(query: str, entity_types: list[str] | None = None) ->
 @mcp.tool()
 @log_tool_call
 def get_framework_details(framework_name: str) -> str:
-    """Get the full profile of one framework: vendor/version, languages,
-    license, architecture fit, capabilities, CI/CD integration, cloud grid
-    support, performance characteristics, maintainability tooling, and
-    known limitations."""
+    """Get the full profile of ONE named framework: vendor/version,
+    languages, license, architecture fit, capabilities, CI/CD integration,
+    cloud grid support, performance characteristics, maintainability
+    tooling, and known limitations.
+
+    Use this when the user asks about a single framework by name, e.g.
+    "tell me about Playwright", "what license does Karate use", "is
+    Cypress good for mobile". For 2+ frameworks side by side, use
+    compare_frameworks instead."""
     executor = svc.get_tool_executor()
     return executor.execute("get_framework_details", {"framework_name": framework_name})
 
@@ -121,7 +126,13 @@ def get_framework_details(framework_name: str) -> str:
 def compare_frameworks(frameworks: list[str], focus_criteria: list[str] | None = None) -> str:
     """Produce a side-by-side comparison of 2+ named frameworks (languages,
     license, architecture fit, capabilities, CI/CD, cloud grids,
-    performance, maintainability, limitations)."""
+    performance, maintainability, limitations).
+
+    Use this for "X vs Y" style questions, e.g. "Playwright vs Cypress",
+    "compare Selenium, Playwright and WebdriverIO". For a ranked
+    recommendation given a use case rather than a fixed list of names, use
+    recommend_frameworks or score_frameworks instead; for just one
+    framework, use get_framework_details."""
     executor = svc.get_tool_executor()
     return executor.execute(
         "run_framework_comparison",
@@ -290,6 +301,14 @@ def analyze_test_case_coverage(
     at least 'id' (or 'description') and 'required_capability' (free
     text, e.g. "api automation", "visual regression", "mobile gestures").
 
+    Use this when the user asks which framework(s) best fit a LIST of
+    their own manual/legacy test cases ("which framework covers these test
+    cases", "framework fit for this test suite"). It scores frameworks
+    against capability requirements, not assertions — for comparing
+    assertion counts between an already-converted source/target test file
+    pair, use compare_repos instead; for converting the code itself, use
+    convert_test_code.
+
     Returns {"fw_names": [...ranked best-first...], "fw_scores":
     {framework: {"supported": [tc_id,...], "unsupported": [...], "pct":
     float}}, "matrix": {tc_id: {"description", "capability", "support":
@@ -310,9 +329,13 @@ def analyze_prerequisites(prerequisites: list[dict[str, Any]], target_framework:
     """Analyze manual test prerequisites/setup steps (e.g. database seeding,
     environment config, service startup, mocking) and suggest automation
     scripts, CI/CD pipeline stages, and framework-specific setup hooks
-    (conftest.py, etc.) for the given target framework. Each prerequisite
-    dict should include 'name', 'description', and optionally
-    'manual_steps'."""
+    (conftest.py, etc.) for the given target framework.
+
+    Use this when a user describes manual setup/precondition steps for
+    their tests and asks how to automate them, e.g. "how do I automate
+    seeding the database before each test" or "what setup hooks does
+    Playwright need for this precondition". Each prerequisite dict should
+    include 'name', 'description', and optionally 'manual_steps'."""
     executor = svc.get_tool_executor()
     return executor.execute(
         "analyze_prerequisites",
@@ -364,9 +387,22 @@ async def convert_test_code(
 ) -> dict[str, Any]:
     """Convert a single test file's source code from one framework to
     another (e.g. Selenium -> Playwright, K6 -> Robot Framework),
-    preserving every assertion. This tool performs ONLY code conversion —
-    it never generates or suggests CI/CD pipeline config, GitHub Actions
-    workflows, or deployment YAML.
+    preserving every assertion. This is the tool to use when asked to
+    "convert this test to X" or "port this Robot/Selenium file to
+    Playwright" — it does the conversion AND validates it in one call (see
+    `parity_report` below), so prefer it over manually comparing files.
+    This tool performs ONLY code conversion — it never generates or
+    suggests CI/CD pipeline config, GitHub Actions workflows, or
+    deployment YAML.
+
+    Related tools: use check_conversion_consistency instead if you need to
+    verify the conversion is reproducible across repeated runs, not just
+    valid once. Use compare_repos/compare_repos_csv instead if the source
+    and already-converted files live as separate, already-written repos/
+    directories you want to diff for assertion parity — convert_test_code
+    already runs that same comparison internally when you're converting
+    fresh, so don't call compare_repos again right after a convert_test_code
+    call on the same file.
 
     LLM backend: this tool prefers true MCP sampling — it asks YOUR
     connected client's model (e.g. Kiro's own model) to do the generation
@@ -428,6 +464,11 @@ async def check_conversion_consistency(
     reproducible and accurate the result is — this is the measurement
     tool for proving convert_test_code gives consistent, trustworthy
     output rather than a one-shot lucky result.
+
+    Use this when asked "is this conversion reliable/reproducible" or
+    "run the conversion a few times and check it's stable" — NOT for a
+    single one-off conversion (use convert_test_code for that) and NOT
+    for comparing two already-written files (use compare_repos for that).
 
     Each run goes through the full convert_test_code pipeline
     independently (its own compile check, structural check, cross-repo
@@ -593,6 +634,23 @@ def compare_repos(
     token overlap), and reports assertion-count matches/mismatches plus
     tests that exist in only one repo.
 
+    Use this when asked to "validate/verify that these converted tests
+    still match the original assertions" for files that ALREADY exist on
+    disk as two separate sets (e.g. a legacy Robot Framework directory vs.
+    a hand-written or previously-converted Playwright directory). If the
+    conversion itself hasn't happened yet, use convert_test_code instead —
+    it performs this same parity check automatically as its last step, so
+    there's no need to call compare_repos again right after it for the
+    same file.
+
+    Note: assertion counting here only looks within a matched test case's
+    OWN body text, not assertions defined in separately-called helper
+    keywords/functions in a different part of the source — if both
+    frameworks factor their checks into shared helpers, the count may
+    read misleadingly low (even 0 vs 0) despite real, deeper assertion
+    parity. For a helper-aware/expanded count, prefer convert_test_code's
+    `assertion_report`, which resolves keyword/function calls recursively.
+
     files_a / files_b: list of {"filename": "path.ext", "content": "..."}
     dicts (equivalent to unzipping each repo's test directory).
     framework_a / framework_b: one of Robot Framework, Playwright,
@@ -661,7 +719,12 @@ def discover_new_frameworks(force: bool = False) -> dict[str, Any]:
     not yet present in the knowledge base. By default this is throttled to
     once per 24h; pass force=True to scan immediately. Returns newly
     discovered frameworks (name, description, stars, language, repo URL,
-    license) grouped by category, plus a flat list."""
+    license) grouped by category, plus a flat list.
+
+    Use this when asked things like "are there any new/trending test
+    frameworks we're missing" or "what's out there besides what's in the
+    knowledge base already". To actually add one of the results to the
+    knowledge base afterwards, use add_framework_to_kb."""
     from src.knowledge_base.schema import FRAMEWORK_CATEGORIES
 
     scanner = svc.get_scanner()
@@ -696,11 +759,17 @@ def add_framework_to_kb(name: str) -> dict[str, Any]:
     """Research a named framework (via web search, and an LLM if
     GROQ_API_KEY is configured) and add it to the local YAML knowledge
     base as a new profile, making it available to all other tools
-    afterwards. GROQ_API_KEY is OPTIONAL — without it, the profile is
-    built from a template with sensible defaults instead of LLM-written
-    descriptions; expect to review it manually (the returned
-    `completeness` field flags any gaps). Returns the written profile
-    path, the generated profile data, and the completeness check."""
+    afterwards.
+
+    Use this when asked to add, research, or onboard a specific framework
+    that isn't already in the knowledge base (e.g. "add Playwright-java to
+    the knowledge base", "research Codeception for us") — including a
+    framework surfaced by discover_new_frameworks. GROQ_API_KEY is
+    OPTIONAL — without it, the profile is built from a template with
+    sensible defaults instead of LLM-written descriptions; expect to
+    review it manually (the returned `completeness` field flags any
+    gaps). Returns the written profile path, the generated profile data,
+    and the completeness check."""
     from src.knowledge_base.schema import FrameworkData
 
     scanner = svc.get_scanner()

@@ -280,7 +280,7 @@ def _generate(fw_label: str) -> None:
         CodeGenOrchestrator, CodeGenRequest, ManualTestCase,
         TestStep, TargetFramework, CodeGenOptions,
     )
-    from services.app_services import get_groq_client
+    from services.app_services import get_llm_client
 
     fw_value  = _TARGET_FRAMEWORKS[fw_label]
     framework = TargetFramework(fw_value)
@@ -319,7 +319,7 @@ def _generate(fw_label: str) -> None:
     progress = st.progress(0, text="Starting generation…")
     status   = st.empty()
     try:
-        client = get_groq_client()
+        client = get_llm_client()
         selector_map = st.session_state.get("codegen_selector_map", {})
         request = CodeGenRequest(
             test_cases=manual_tests,
