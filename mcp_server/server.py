@@ -467,7 +467,27 @@ def analyze_test_for_conversion(
     MANUAL test-case dicts onto framework capabilities (not on-disk files);
     use analyze_prerequisites for manual setup/precondition steps; and use
     convert_test_code to actually GENERATE converted code — this tool only
-    analyzes readiness, it does not convert."""
+    analyzes readiness, it does not convert. To do the whole read -> analyze
+    -> convert pipeline in one call, use convert_test_from_path."""
+    return _analyze_for_conversion(path, test_case_name, source_root)
+
+
+def _analyze_for_conversion(
+    path: str, test_case_name: str = "", source_root: str = ""
+) -> dict[str, Any]:
+    """Shared read + conversion-readiness analysis used by both
+    analyze_test_for_conversion (analysis-only tool) and
+    convert_test_from_path (the read -> analyze -> convert tool), so the
+    analyze+filter logic lives in exactly one place.
+
+    Runs the offline static analyzer (real robot.api parser, no LLM) via
+    analyze_path, then applies the optional case-insensitive substring
+    test-case-name filter. Returns the analyzer dict with two extra fields —
+    ``test_case_name`` (echoed) and ``matched_test_cases`` (count after
+    filtering) — or the analyzer's ``{"error": ...}`` dict unchanged on a
+    bad path / missing robotframework. When ``test_case_name`` is given but
+    nothing matches, returns a non-error dict with matched_test_cases 0, an
+    empty ``files`` list, and a ``report`` naming what was searched."""
     from src.analysis.robot_dependency_analyzer import (
         analyze_path,
         filter_result_by_test_case,
@@ -567,6 +587,247 @@ async def convert_test_code(
     payload["llm_mode"] = llm_mode
     payload["report"] = result.render_report()
     return payload
+
+
+def _convert_from_path_core(
+    path: str,
+    to_framework: str,
+    test_case_name: str = "",
+    from_framework: str = "Robot Framework",
+    source_root: str = "",
+    *,
+    llm_call: Any,
+    llm_mode: str,
+) -> dict[str, Any]:
+    """Synchronous core of convert_test_from_path — all the non-LLM-transport
+    logic (analysis chaining, per-file disk read, per-file conversion loop,
+    result assembly, markdown report), taking an already-built ``llm_call``
+    so it is unit-testable with a scripted stub and runnable from a worker
+    thread (the sampling ``llm_call`` only works inside one).
+
+    Order: (a) analyze via _analyze_for_conversion — pass an ``error`` dict
+    through unchanged; (b) if a name filter matched nothing, return a
+    non-error empty dict without converting; (c) read each matched file's
+    source TEXT from disk and convert it through the SAME src.conversion
+    path convert_test_code uses, capturing per-file errors so one bad file
+    does not abort the run; (d) return a dict combining the readiness
+    analysis block and the per-file conversion results plus a summary
+    markdown report."""
+    from src.conversion.service import ConversionRequest, convert
+
+    analysis = _analyze_for_conversion(path, test_case_name, source_root)
+    if "error" in analysis:
+        return analysis
+
+    resolved_path = analysis.get("input_path", path)
+
+    if test_case_name and analysis.get("matched_test_cases", 0) == 0:
+        return {
+            "input_path": resolved_path,
+            "test_case_name": test_case_name,
+            "from_framework": from_framework,
+            "to_framework": to_framework,
+            "llm_mode": llm_mode,
+            "analysis": analysis,
+            "files": [],
+            "report": (
+                f"# Read → Analyze → Convert\n\n"
+                f"No test case matched name `{test_case_name}` under path "
+                f"`{resolved_path}` — nothing to convert."
+            ),
+        }
+
+    # Unique, order-preserving list of matched source files (skip parse errors).
+    source_paths: list[str] = []
+    for fd in analysis.get("files", []):
+        if fd.get("error"):
+            continue
+        fp = fd.get("file_path")
+        if fp and fp not in source_paths:
+            source_paths.append(fp)
+
+    file_results: list[dict[str, Any]] = []
+    for fp in source_paths:
+        try:
+            try:
+                text = Path(fp).read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                text = Path(fp).read_text(encoding="utf-8", errors="replace")
+            result = convert(ConversionRequest(
+                source_code=text,
+                from_framework=from_framework,
+                to_framework=to_framework,
+                llm_call=llm_call,
+            ))
+            file_results.append({
+                "file_path": fp,
+                "code": result.code,
+                "target_language": result.target_language,
+                "is_valid": result.is_valid,
+                "assertion_report": result.assertion_report,
+                "parity_report": result.parity_report,
+                "report": result.render_report(),
+            })
+        except Exception as exc:  # noqa: BLE001 — one bad file must not abort the run
+            file_results.append({"file_path": fp, "error": str(exc)})
+
+    return {
+        "input_path": resolved_path,
+        "test_case_name": test_case_name,
+        "from_framework": from_framework,
+        "to_framework": to_framework,
+        "llm_mode": llm_mode,
+        "analysis": analysis,
+        "files": file_results,
+        "report": _render_convert_from_path_report(
+            resolved_path, test_case_name, from_framework, to_framework,
+            analysis, file_results,
+        ),
+    }
+
+
+def _render_convert_from_path_report(
+    resolved_path: str,
+    test_case_name: str,
+    from_framework: str,
+    to_framework: str,
+    analysis: dict[str, Any],
+    file_results: list[dict[str, Any]],
+) -> str:
+    """Top-level markdown summary: what was analyzed, what the conversion
+    needed (blockers / custom libs), and the per-file conversion outcome."""
+    lines: list[str] = ["# Read → Analyze → Convert", ""]
+    lines.append(f"- Input path: `{resolved_path}`")
+    if test_case_name:
+        lines.append(f"- Test case filter: `{test_case_name}`")
+    lines.append(f"- Conversion: {from_framework} → {to_framework}")
+    lines.append(f"- Files analyzed: {analysis.get('total_files', 0)}")
+    lines.append(f"- Test cases matched: {analysis.get('matched_test_cases', 0)}")
+
+    rc = analysis.get("readiness_counts", {})
+    if rc:
+        lines.append(
+            f"- Readiness: {rc.get('self_contained', 0)} self-contained, "
+            f"{rc.get('needs_custom_libs', 0)} needs custom libs, "
+            f"{rc.get('blocked', 0)} blocked"
+        )
+
+    # Surface conversion needs (custom libs / blockers) discovered in analysis.
+    custom_libs: set[str] = set()
+    blockers: list[str] = []
+    for fd in analysis.get("files", []):
+        for tc in fd.get("test_cases", []):
+            deps = tc.get("dependencies", {})
+            for lib in deps.get("custom_libraries", []):
+                custom_libs.add(lib)
+            for b in deps.get("blockers", []):
+                blockers.append(b)
+    if custom_libs:
+        lines.append(f"- Custom libraries to port: {', '.join(sorted(custom_libs))}")
+    if blockers:
+        lines.append("- Blockers found during analysis:")
+        for b in blockers:
+            lines.append(f"  - {b}")
+
+    lines.append("")
+    lines.append(f"## Conversion outcome ({len(file_results)} file(s))")
+    for fr in file_results:
+        lines.append("")
+        lines.append(f"### `{fr['file_path']}`")
+        if fr.get("error"):
+            lines.append(f"- ⚠️ Conversion failed: {fr['error']}")
+            continue
+        status = "✅ valid" if fr.get("is_valid") else "⚠️ has issues"
+        lines.append(f"- Result: {status} ({fr.get('target_language', '')})")
+        parity = fr.get("parity_report")
+        if parity is not None:
+            if parity.get("is_equivalent"):
+                lines.append("- Parity: every test case matched with equivalent assertions.")
+            else:
+                lines.append("- Parity: assertion mismatches detected (see parity_report).")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+@log_tool_call
+async def convert_test_from_path(
+    path: str,
+    to_framework: str,
+    test_case_name: str = "",
+    from_framework: str = "Robot Framework",
+    source_root: str = "",
+    ctx: Context = None,
+) -> dict[str, Any]:
+    """One-call read -> analyze -> convert: read Robot Framework test(s) from
+    a LOCAL filesystem path, run the conversion-readiness/dependency analysis
+    to understand what a conversion must port, then ACTUALLY convert the
+    matched file(s) to the target framework and return the converted code.
+
+    This is the end-to-end pipeline tool. It chains two capabilities that
+    also exist standalone: analyze_test_for_conversion (read + analyze a
+    local path, NO conversion) and convert_test_code (convert raw source
+    TEXT you already hold in the conversation). Use convert_test_from_path
+    when the test lives on the local disk and you want it read, understood,
+    and converted in a single step — you do not have to read the file or
+    paste its source first.
+
+    Like convert_test_code, this performs ONLY code conversion — it never
+    generates or returns CI/CD pipeline config, GitHub Actions workflows, or
+    deployment YAML.
+
+    Args:
+      path: Absolute path on the LOCAL filesystem to a `.robot` file OR a
+        directory of them. Directories are walked recursively (skipping
+        node_modules/.git/__pycache__/.venv/venv/dist/build/.idea/.vscode/
+        target) and every matched `.robot` file is converted — one per entry
+        in the returned `files` list.
+      to_framework: REQUIRED target framework to convert TO, e.g.
+        "Playwright", "Cypress", "Selenium".
+      test_case_name: Optional. When non-empty, scope the work to files that
+        contain a test case whose name CONTAINS this value, matched
+        case-insensitively as a SUBSTRING (same semantics as
+        analyze_test_for_conversion). Files with no matching test case are
+        skipped. When nothing matches, the tool returns a non-error dict
+        (empty `files`, a report saying nothing matched) and does NOT convert.
+      from_framework: Source framework the local files are written in.
+        Defaults to "Robot Framework" (these local suites are Robot) but is
+        overridable.
+      source_root: Optional root directory for resolving dotted `Library`
+        module paths during analysis; passed straight through to the analyzer.
+
+    LLM backend: conversion prefers true MCP sampling (your connected
+    client's own model) and falls back to GROQ_API_KEY automatically — same
+    behavior as convert_test_code. The `llm_mode` field reports which ran.
+
+    Returns a JSON-serializable dict combining BOTH phases:
+      input_path (resolved), test_case_name (echoed), from_framework,
+      to_framework, llm_mode ("sampling" or "groq"), `analysis` (the full
+      readiness block from the analyze phase, including its own markdown
+      under analysis["report"] and per-test-case blockers/custom libraries),
+      `files` (a per-file list where each successful entry has file_path,
+      `code` (converted), target_language, is_valid, assertion_report,
+      parity_report, and a per-file conversion `report`; a failed file yields
+      {"file_path", "error"} so one bad file does not abort the run), and a
+      top-level markdown `report` summarizing what was analyzed, what the
+      conversion needed, and the per-file conversion outcome."""
+    import anyio
+
+    from mcp_server.sampling import make_llm_call
+
+    llm_call, llm_mode = make_llm_call(ctx)
+
+    def _run():
+        return _convert_from_path_core(
+            path,
+            to_framework,
+            test_case_name,
+            from_framework,
+            source_root,
+            llm_call=llm_call,
+            llm_mode=llm_mode,
+        )
+
+    return await anyio.to_thread.run_sync(_run)
 
 
 @mcp.tool()
