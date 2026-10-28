@@ -373,6 +373,124 @@ def generate_boilerplate_project(
     }
 
 
+@mcp.tool()
+@log_tool_call
+def analyze_test_dependencies(input_path: str, source_root: str = "") -> dict[str, Any]:
+    """Statically analyze Robot Framework test-case dependencies from disk.
+
+    OFFLINE static analysis — no LLM, no network, no code generation. This is
+    the dependency-analysis step that PRECEDES conversion: it tells you, per
+    test case, exactly what a conversion would need to port (custom libraries,
+    resources, keywords, variables) and whether that test case is ready to
+    convert. Use convert_test_code to actually generate converted code; use
+    THIS tool first to scope the work and find blockers.
+
+    It reads a `.robot` file (or a directory of them) straight from the
+    filesystem and parses each test case with the REAL Robot Framework parser
+    (robot.api.get_model — never regex). For every `Library` import it resolves
+    the dotted module path (e.g. `clamps.nifi.nifi.Nifi`) to a `.py` file on
+    disk and classifies it builtin / custom / unresolved; `Resource` and
+    `Variables` imports are resolved relative to the suite file.
+
+    Args:
+      input_path: Absolute path to a `.robot` file OR a directory. Directories
+        are walked recursively (skipping node_modules/.git/__pycache__/.venv/
+        venv/dist/build/.idea/.vscode/target), keeping only `.robot` files.
+      source_root: Optional root directory for resolving dotted Library module
+        paths (e.g. the `autotest/` dir that contains `clamps/...`). When empty,
+        the analyzer walks UP from each `.robot` file's own directory to find a
+        root where the dotted path resolves.
+
+    Returns a JSON-serializable dict: input_path, source_root, total_files,
+    total_test_cases, parse_errors, readiness_counts (self_contained /
+    needs_custom_libs / blocked), a `files` list of per-file reports (settings
+    with resolved imports, and per test case: documentation, tags, setup/
+    teardown, ordered steps, de-duped keywords_used with classification +
+    mapped import, a dependencies bundle with blockers, and a
+    conversion_readiness verdict with one-line rationale), and a markdown
+    `report`. On a missing path, a directory with no `.robot` files, or when
+    robotframework is not installed, returns a clear `{"error": ...}` dict
+    instead of raising."""
+    from src.analysis.robot_dependency_analyzer import analyze_path
+    return analyze_path(input_path, source_root=source_root)
+
+
+@mcp.tool()
+@log_tool_call
+def analyze_test_for_conversion(
+    path: str, test_case_name: str = "", source_root: str = ""
+) -> dict[str, Any]:
+    """Read Robot Framework test(s) from a LOCAL-MACHINE path — by file/dir
+    path, by test-case name, or both — and run the conversion-readiness /
+    dependency analysis on the located test case(s).
+
+    This answers "read the file(s) at this path (optionally just the test case
+    named X) and tell me what's needed to convert them". It wraps the same
+    OFFLINE static analysis as analyze_test_dependencies (real
+    robot.api.get_model parser, no LLM, no network, no code generation) and
+    adds an optional test-case-name filter so you can scope the analysis to a
+    single test case living anywhere under the given path.
+
+    Args:
+      path: Absolute path on the LOCAL filesystem to a `.robot` file OR a
+        directory. Directories are walked recursively (skipping
+        node_modules/.git/__pycache__/.venv/venv/dist/build/.idea/.vscode/
+        target), keeping only `.robot` files.
+      test_case_name: Optional. When non-empty, keep only test cases whose
+        name CONTAINS this value, matched case-insensitively as a SUBSTRING
+        (e.g. "typecasting" matches "Verify The TypeCasting Error Messages ...";
+        an exact full name also matches). When empty, every test case under
+        `path` is analyzed (same scope as analyze_test_dependencies).
+      source_root: Optional root directory for resolving dotted `Library`
+        module paths (e.g. the `autotest/` dir that contains `clamps/...`).
+        Passed straight through to the analyzer; when empty the analyzer walks
+        UP from each `.robot` file's directory to find a resolving root.
+
+    Returns a JSON-serializable dict mirroring analyze_test_dependencies'
+    schema plus two filter fields: input_path, source_root, `test_case_name`
+    (echoed back), total_files, total_test_cases, `matched_test_cases` (count
+    after filtering; equals total_test_cases when no name filter is given),
+    parse_errors, readiness_counts (self_contained / needs_custom_libs /
+    blocked), a `files` list of per-file reports (each surviving test case
+    keeps its documentation, tags, setup/teardown, ordered steps, de-duped
+    keywords_used with classification + mapped import, a dependencies bundle
+    with blockers, and a conversion_readiness verdict + rationale), and a
+    markdown `report` summarizing what a conversion must port. When
+    `test_case_name` is given but matches nothing, returns a non-error dict
+    with matched_test_cases 0, an empty `files` list, and a `report` naming
+    what was searched. On a missing path, a non-`.robot` file, a directory
+    with no `.robot` files, or when robotframework is not installed, returns a
+    clear `{"error": ...}` dict instead of raising.
+
+    Related tools: use analyze_test_dependencies to scope a whole suite/
+    directory with no name filter; use analyze_test_case_coverage to map
+    MANUAL test-case dicts onto framework capabilities (not on-disk files);
+    use analyze_prerequisites for manual setup/precondition steps; and use
+    convert_test_code to actually GENERATE converted code — this tool only
+    analyzes readiness, it does not convert."""
+    from src.analysis.robot_dependency_analyzer import (
+        analyze_path,
+        filter_result_by_test_case,
+    )
+
+    result = analyze_path(path, source_root=source_root)
+    if "error" in result:
+        return result
+
+    filtered = filter_result_by_test_case(result, test_case_name)
+    matched = filtered.get("total_test_cases", 0)
+    filtered["test_case_name"] = test_case_name
+    filtered["matched_test_cases"] = matched
+
+    if test_case_name and matched == 0:
+        filtered["report"] = (
+            f"# Robot Framework Dependency Analysis\n\n"
+            f"No test case matched name `{test_case_name}` under path "
+            f"`{result.get('input_path', path)}`."
+        )
+    return filtered
+
+
 # ════════════════════════════════════════════════════════════════════
 # 4. Test-code conversion (cross-framework migration of actual code)
 # ════════════════════════════════════════════════════════════════════
