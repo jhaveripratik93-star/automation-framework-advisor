@@ -16,7 +16,10 @@ Scope notes:
 """
 from __future__ import annotations
 
+import io
 import logging
+import re
+import zipfile
 from pathlib import Path
 
 import streamlit as st
@@ -147,6 +150,74 @@ def _convert_matched_files(analysis: dict, from_fw: str, to_fw: str, llm_call, t
     return file_results
 
 
+# Single source of truth for the generated bundle's root folder / download name.
+_PROJECT_ROOT = "converted_project"
+
+
+def _safe_test_filename(file_path: str, ext: str, used: set[str]) -> str:
+    """Pure (Streamlit-free) safe, unique test filename for a converted file.
+
+    Derives ``test_<stem><ext>`` from the SOURCE path's stem, replacing any
+    character outside ``[A-Za-z0-9_-]`` with ``_``. On collision with a name
+    already in ``used`` (two sources sharing a stem), appends ``_1``, ``_2`` …
+    until unique. ``used`` is mutated with the returned name.
+    """
+    stem = Path(file_path).stem or "test"
+    safe_stem = re.sub(r"[^A-Za-z0-9_-]", "_", stem)
+    base = f"test_{safe_stem}"
+    candidate = f"{base}{ext}"
+    i = 1
+    while candidate in used:
+        candidate = f"{base}_{i}{ext}"
+        i += 1
+    used.add(candidate)
+    return candidate
+
+
+def _build_project_zip(file_results: list[dict], to_fw: str) -> bytes:
+    """Pure (Streamlit-free) builder of a runnable project ZIP (bytes).
+
+    Produces an in-memory ZIP with this layout under a single project root:
+      - ``converted_project/tests/<test file per successfully converted entry>``
+        — one file per ``file_results`` entry that carries a ``"result"``;
+        extension comes from ``_LANG_DISPLAY`` via ``_target_lang_display`` and
+        the filename from ``_safe_test_filename`` (de-duplicated on collision).
+      - ``converted_project/requirements.txt`` — the requirements string from
+        ``_get_run_instructions(to_fw.lower())[0]`` verbatim.
+      - ``converted_project/README.md`` — install + run commands from
+        ``_get_run_instructions`` plus a one-line code-only note.
+
+    Code conversion only: NO CI/CD, GitHub Actions, or deployment content is
+    ever written. Entries without a ``"result"`` (errored files) are skipped.
+    Returns the ZIP bytes.
+    """
+    req, run_cmd, install_cmd = _get_run_instructions((to_fw or "").lower())
+
+    readme = (
+        f"# Converted Test Project ({to_fw})\n\n"
+        "This bundle contains converted test code only — no pipeline or "
+        "deployment configuration is generated.\n\n"
+        "## Install\n\n"
+        f"```bash\n{install_cmd}\n```\n\n"
+        "## Run\n\n"
+        f"```bash\n{run_cmd}\n```\n"
+    )
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        used: set[str] = set()
+        for fr in file_results:
+            result = fr.get("result")
+            if result is None:
+                continue
+            _, ext, _ = _target_lang_display(result.target_language)
+            name = _safe_test_filename(fr.get("file_path", "test"), ext, used)
+            zf.writestr(f"{_PROJECT_ROOT}/tests/{name}", result.code)
+        zf.writestr(f"{_PROJECT_ROOT}/requirements.txt", req)
+        zf.writestr(f"{_PROJECT_ROOT}/README.md", readme)
+    return buf.getvalue()
+
+
 def render() -> None:
     st.markdown("""
     <div class="page-header">
@@ -272,8 +343,29 @@ def _path_mode(from_fw: str, to_fw: str) -> None:
     )
     do_run = st.button("🔍 Read & Analyze → Convert", key="btn_path_convert", type="primary")
 
+    # A download button (ZIP / single file) triggers a Streamlit rerun on which
+    # do_run is False. Persist the last run's outcome in session_state and
+    # re-render it here so the whole result view (analysis + every per-file
+    # result + download buttons) survives that rerun instead of vanishing —
+    # mirroring how paste mode persists/re-renders studio_result. Only a fresh
+    # "Read & Analyze → Convert" click recomputes (see below, where we clear).
     if not do_run:
+        if st.session_state.get("studio_path_file_results") is not None:
+            _render_path_results(
+                st.session_state.get("studio_path_analysis") or {},
+                st.session_state.get("studio_path_file_results") or [],
+                st.session_state.get("studio_path_from_fw", from_fw),
+                st.session_state.get("studio_path_to_fw", to_fw),
+            )
         return
+
+    # Fresh run: drop any previously persisted path results so changed inputs
+    # recompute cleanly and a stale view is never re-rendered.
+    st.session_state.studio_path_file_results = None
+    st.session_state.studio_path_analysis = None
+    st.session_state.studio_path_to_fw = None
+    st.session_state.studio_path_from_fw = None
+    st.session_state.studio_consistency_report = None  # stale — new run/inputs
 
     if not path.strip():
         st.warning("Enter a local file or directory path first.")
@@ -293,19 +385,10 @@ def _path_mode(from_fw: str, to_fw: str) -> None:
         )
         return
 
-    # Render the ANALYSIS first — this is the "understand the conversion needs" view.
-    rc = analysis.get("readiness_counts", {})
-    st.caption(
-        f"Matched {analysis.get('total_test_cases', 0)} test case(s) across "
-        f"{analysis.get('total_files', 0)} file(s) — "
-        f"{rc.get('self_contained', 0)} self-contained, "
-        f"{rc.get('needs_custom_libs', 0)} needs custom libs, "
-        f"{rc.get('blocked', 0)} blocked."
-    )
-    with st.expander("🔎 Conversion analysis", expanded=True):
-        st.markdown(analysis.get("report", "_No analysis report._"))
-
     if analysis.get("total_test_cases", 0) == 0:
+        # Still render the analysis so the user sees what was searched.
+        with st.expander("🔎 Conversion analysis", expanded=True):
+            st.markdown(analysis.get("report", "_No analysis report._"))
         st.info("No test cases found to convert under this path.")
         return
 
@@ -333,6 +416,32 @@ def _path_mode(from_fw: str, to_fw: str) -> None:
         st.info("No convertible files were found under this path.")
         return
 
+    # Persist the just-computed outcome so a download-button rerun re-renders it.
+    st.session_state.studio_path_file_results = file_results
+    st.session_state.studio_path_analysis = analysis
+    st.session_state.studio_path_to_fw = to_fw
+    st.session_state.studio_path_from_fw = from_fw
+
+    _render_path_results(analysis, file_results, from_fw, to_fw)
+
+
+def _render_path_results(analysis: dict, file_results: list[dict], from_fw: str, to_fw: str) -> None:
+    """Render the path-mode outcome: matched-count caption, the conversion
+    analysis, every per-file result, and the project-ZIP download. Called both
+    right after a fresh run and on a later rerun (e.g. a download-button click)
+    with the persisted values, so the full view survives the rerun."""
+    # Render the ANALYSIS first — this is the "understand the conversion needs" view.
+    rc = analysis.get("readiness_counts", {})
+    st.caption(
+        f"Matched {analysis.get('total_test_cases', 0)} test case(s) across "
+        f"{analysis.get('total_files', 0)} file(s) — "
+        f"{rc.get('self_contained', 0)} self-contained, "
+        f"{rc.get('needs_custom_libs', 0)} needs custom libs, "
+        f"{rc.get('blocked', 0)} blocked."
+    )
+    with st.expander("🔎 Conversion analysis", expanded=True):
+        st.markdown(analysis.get("report", "_No analysis report._"))
+
     successes = [fr for fr in file_results if "result" in fr]
 
     # Exactly one successful file → render through the EXISTING single-result
@@ -343,9 +452,9 @@ def _path_mode(from_fw: str, to_fw: str) -> None:
         st.session_state.studio_to_fw = to_fw
         st.session_state.studio_from_fw = from_fw
         st.session_state.studio_source_code = _safe_read(fr["file_path"])
-        st.session_state.studio_consistency_report = None
         st.markdown(f"**Converted:** `{fr['file_path']}`")
         _show_result()
+        _render_project_zip_button(file_results, to_fw)
         _consistency_check_section()
         return
 
@@ -358,6 +467,23 @@ def _path_mode(from_fw: str, to_fw: str) -> None:
                 st.error(f"Conversion failed: {fr['error']}")
             else:
                 _show_result(fr["result"], to_fw, key_suffix=f"path_{idx}")
+    _render_project_zip_button(file_results, to_fw)
+
+
+def _render_project_zip_button(file_results: list[dict], to_fw: str) -> None:
+    """Thin st.* wrapper around the pure _build_project_zip helper: offers a
+    runnable project folder (tests/ + requirements.txt + README.md) as a ZIP.
+    Every successfully converted file is bundled under tests/."""
+    if not any("result" in fr for fr in file_results):
+        return
+    zip_bytes = _build_project_zip(file_results, to_fw)
+    st.download_button(
+        "⬇ Download project (.zip)",
+        data=zip_bytes,
+        file_name="converted_project.zip",
+        mime="application/zip",
+        key="btn_dl_project_zip",
+    )
 
 
 def _safe_read(file_path: str) -> str:
