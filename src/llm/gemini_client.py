@@ -42,7 +42,9 @@ load_dotenv(_ENV_PATH, override=True)
 
 _API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 _DEFAULT_MODEL = "gemini-2.0-flash"
-_TIMEOUT = 60.0
+# Large test-file conversions under model load can take a while; 60s was
+# too tight and produced ReadTimeouts. Allow more headroom per attempt.
+_TIMEOUT = 180.0
 
 
 class GeminiClient:
@@ -165,20 +167,44 @@ class GeminiClient:
                 len(messages),
             )
 
+            # Retry on transient failures: 429 (rate limit) and 5xx
+            # (503 UNAVAILABLE / 500 / 502 / 504 — the model endpoint
+            # temporarily overloaded). A permanent error (4xx other than
+            # 429) breaks out immediately and is raised below.
+            _TRANSIENT_STATUS = {429, 500, 502, 503, 504}
             max_retries = 5
+            response = None
             for attempt in range(max_retries):
-                response = httpx.post(
-                    url,
-                    headers={
-                        "x-goog-api-key": api_key,
-                        "Content-Type": "application/json",
-                    },
-                    json=payload,
-                    timeout=_TIMEOUT,
-                )
-                if response.status_code != 429 or attempt == max_retries - 1:
+                last_attempt = attempt == max_retries - 1
+                # Network-level transient failures (read/connect timeouts,
+                # dropped connections) raise instead of returning a status,
+                # so catch them here and retry with backoff just like a 5xx.
+                try:
+                    response = httpx.post(
+                        url,
+                        headers={
+                            "x-goog-api-key": api_key,
+                            "Content-Type": "application/json",
+                        },
+                        json=payload,
+                        timeout=_TIMEOUT,
+                    )
+                except (httpx.TimeoutException, httpx.TransportError) as exc:
+                    if last_attempt:
+                        raise
+                    wait = 5.0 * (attempt + 1)
+                    logger.warning(
+                        "GeminiClient.chat: %s — waiting %.1fs (attempt %d/%d)",
+                        type(exc).__name__, wait, attempt + 1, max_retries,
+                    )
+                    time.sleep(wait)
+                    continue
+
+                if response.status_code not in _TRANSIENT_STATUS or last_attempt:
                     break
-                wait = 30.0  # safe default backoff for Gemini rate limits
+                # 429s can carry a long rate-limit window; 5xx overloads
+                # are usually brief, so back off less for those.
+                wait = 30.0 if response.status_code == 429 else 5.0 * (attempt + 1)
                 retry_after = response.headers.get("retry-after")
                 if retry_after:
                     try:
@@ -186,8 +212,8 @@ class GeminiClient:
                     except ValueError:
                         pass
                 logger.warning(
-                    "GeminiClient.chat: 429 rate limit — waiting %.1fs (attempt %d/%d)",
-                    wait, attempt + 1, max_retries,
+                    "GeminiClient.chat: HTTP %d transient error — waiting %.1fs (attempt %d/%d)",
+                    response.status_code, wait, attempt + 1, max_retries,
                 )
                 time.sleep(wait)
 
