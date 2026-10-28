@@ -211,6 +211,53 @@ def test_scan_dotted_imports_basic():
     assert "pkg" not in found
 
 
+def test_scan_dotted_imports_emits_from_submodules():
+    text = (
+        "from common import rest\n"              # -> common AND common.rest
+        "from pkg import a, b\n"                 # -> pkg.a, pkg.b
+        "import pkg.a, pkg.b as q\n"             # -> pkg.a, pkg.b (both modules)
+        "from thing import *\n"                  # -> only thing
+        "from pkg2 import (one, two)\n"          # parenthesized -> pkg2.one, pkg2.two
+        "from aliased import name as n\n"        # -> aliased.name (alias dropped)
+        "from . import sibling\n"                # relative -> skipped
+        "from .sub import t\n"                   # relative -> skipped
+    )
+    found = _scan_dotted_imports(text)
+    # from X import NAME now yields BOTH the base and the submodule candidate.
+    assert "common" in found
+    assert "common.rest" in found
+    assert "pkg.a" in found
+    assert "pkg.b" in found
+    assert "pkg2.one" in found
+    assert "pkg2.two" in found
+    assert "aliased.name" in found
+    # from X import * cannot know the names -> only the base package.
+    assert "thing" in found
+    assert not any(f.startswith("thing.") for f in found)
+    # relative imports are still skipped entirely.
+    assert "sibling" not in found
+    assert "sub" not in found
+    assert "sub.t" not in found
+
+
+def test_collect_bundles_from_import_submodule(tmp_path):
+    # pkg_a/mod.py does `from pkg_b import thing` — the submodule pkg_b/thing.py
+    # was previously MISSED (only pkg_b was emitted). It must now be bundled.
+    _write(tmp_path / "pkg_a" / "__init__.py", "")
+    _write(tmp_path / "pkg_a" / "mod.py", "from pkg_b import thing\n")
+    _write(tmp_path / "pkg_b" / "__init__.py", "")
+    _write(tmp_path / "pkg_b" / "thing.py", "VALUE = 42\n")
+
+    analysis = _fake_analysis(tmp_path, tmp_path / "pkg_a" / "mod.py", "pkg_a.mod")
+    dest = {d for d, _ in _collect_dependency_files(analysis)}
+
+    assert "pkg_a/mod.py" in dest
+    assert "pkg_a/__init__.py" in dest
+    assert "pkg_b/__init__.py" in dest
+    # the previously-missing submodule imported via `from pkg_b import thing`
+    assert "pkg_b/thing.py" in dest
+
+
 def test_dest_rel_for_resolved_from_source_root(tmp_path):
     src = tmp_path / "clamps" / "nifi" / "nifi.py"
     src.parent.mkdir(parents=True, exist_ok=True)

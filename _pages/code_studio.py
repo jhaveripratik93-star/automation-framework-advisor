@@ -196,33 +196,81 @@ def _safe_test_filename(file_path: str, ext: str, used: set[str]) -> str:
 _MAX_TRANSITIVE_DEPTH = 5
 _MAX_BUNDLE_FILES = 300
 
-# Matches top-level ``import a.b.c`` / ``import a.b.c as x`` and
-# ``from a.b.c import X`` dotted module paths. Relative imports (``from . import``
-# / ``from .pkg import``) start with a dot and are intentionally NOT matched —
-# they cannot be resolved against source_root as an absolute dotted path.
-_IMPORT_RE = re.compile(
-    r"^\s*(?:import\s+(?P<imp>[A-Za-z_][\w.]*)"
-    r"|from\s+(?P<frm>[A-Za-z_][\w.]*)\s+import\b)",
+# Matches a module-level ``import …`` line and captures the rest of its module
+# list; and a module-level ``from X import …`` line and captures ``X`` plus the
+# rest of its imported-name list. Relative imports (``from . import`` /
+# ``from .pkg import``) start with a dot on ``X`` and are intentionally NOT
+# matched — they cannot be resolved against source_root as an absolute dotted
+# path. Only the leading ``import``/``from`` keyword is anchored here; the
+# comma-separated lists are split in Python (see ``_scan_dotted_imports``).
+_IMPORT_LINE_RE = re.compile(r"^\s*import\s+(?P<imp>.+)$", re.MULTILINE)
+_FROM_LINE_RE = re.compile(
+    r"^\s*from\s+(?P<frm>[A-Za-z_][\w.]*)\s+import\s+(?P<names>.+)$",
     re.MULTILINE,
 )
 
+# A single dotted module token at the start of a comma-separated entry, e.g.
+# ``clamps.nifi.nifi`` out of ``clamps.nifi.nifi as n``.
+_DOTTED_TOKEN_RE = re.compile(r"^\s*(?P<dotted>[A-Za-z_][\w.]*)")
+# A single imported name (possibly dotted — rare but legal) at the start of an
+# entry in a ``from X import …`` list, e.g. ``rest`` out of ``rest as r``.
+_NAME_TOKEN_RE = re.compile(r"^\s*(?P<name>[A-Za-z_][\w.]*)")
+
 
 def _scan_dotted_imports(py_text: str) -> list[str]:
-    """Statically extract dotted module names from Python source TEXT.
+    """Statically extract candidate dotted module names from Python source TEXT.
 
-    Scans ``import a.b.c`` / ``from a.b.c import X`` lines (module level), in
-    file order, de-duplicated. Relative (dot-prefixed) imports are skipped —
-    they are not resolvable as absolute dotted paths under a source root. This
-    is pure text analysis: the source is never imported or executed.
+    Scans module-level ``import`` / ``from … import …`` lines in file order,
+    de-duplicated. This is pure text analysis: the source is never imported or
+    executed.
+
+      - ``import M1[, M2, …]`` (each optionally ``as alias``) emits each module
+        ``Mi`` (so ``import pkg.a, pkg.b as q`` yields ``pkg.a`` and ``pkg.b``).
+      - ``from X import n1[, n2, …]`` emits ``X`` AND each candidate submodule
+        ``X.ni`` (so ``from common import rest`` yields both ``common`` and
+        ``common.rest``). Parentheses, ``as alias`` and trailing commas are
+        tolerated. ``from X import *`` emits only ``X`` (the names cannot be
+        known statically).
+      - Relative (dot-prefixed) imports are skipped — they are not resolvable
+        as absolute dotted paths under a source root.
+
+    Emitting the ``X.ni`` submodule candidates is what lets the caller bundle a
+    module imported via ``from X import ni``; the resolver downstream keeps a
+    candidate only when it maps to a real file under source_root, so over-
+    emitted names (functions/classes, stdlib, third-party) are harmless.
     """
     out: list[str] = []
     seen: set[str] = set()
-    for m in _IMPORT_RE.finditer(py_text):
-        dotted = m.group("imp") or m.group("frm")
-        if not dotted or dotted in seen:
+
+    def _emit(dotted: str) -> None:
+        if dotted and dotted not in seen:
+            seen.add(dotted)
+            out.append(dotted)
+
+    for line in py_text.splitlines():
+        m_from = _FROM_LINE_RE.match(line)
+        if m_from is not None:
+            base = m_from.group("frm")
+            _emit(base)
+            names = m_from.group("names").strip()
+            # Strip wrapping parentheses from a single-line parenthesized list.
+            if names.startswith("("):
+                names = names[1:]
+            names = names.rstrip(")")
+            if "*" in names:
+                continue  # from X import *  — only X is knowable statically
+            for entry in names.split(","):
+                tok = _NAME_TOKEN_RE.match(entry)
+                if tok is not None:
+                    _emit(f"{base}.{tok.group('name')}")
             continue
-        seen.add(dotted)
-        out.append(dotted)
+
+        m_imp = _IMPORT_LINE_RE.match(line)
+        if m_imp is not None:
+            for entry in m_imp.group("imp").split(","):
+                tok = _DOTTED_TOKEN_RE.match(entry)
+                if tok is not None:
+                    _emit(tok.group("dotted"))
     return out
 
 
