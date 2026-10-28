@@ -273,3 +273,88 @@ def test_parity_report_in_to_dict_is_json_serializable():
     payload = result.to_dict()
     assert "parity_report" in payload
     json.dumps(payload)
+
+
+# ── Browser-free guard wired into convert() for Playwright targets ──────
+# Proves the deterministic postprocess guard (src/conversion/postprocess.py)
+# runs inside convert() so a REST/API Robot test never ships an unused
+# pytest-playwright browser fixture, regardless of what the LLM returns.
+
+NIFI_ROBOT_SOURCE = """*** Settings ***
+Library      clamps.nifi.nifi.Nifi  WITH NAME  Nifi
+Force Tags   nifi
+
+*** Test Cases ***
+Can Get Flow Status
+    ${status}=  Nifi.get_flow_status
+    Should Contain  ${status}  controllerStatus
+
+Can Get Flow About Dialog Information
+    ${about_dialog}=  Nifi.get_flow_about
+    Should Contain  ${about_dialog}  about
+"""
+
+# What a non-deterministic LLM wrongly produced: every test gets page: Page
+# though no test ever touches a browser.
+BROWSER_FIXTURED_PYTEST = """from playwright.sync_api import Page
+import pytest
+from clamps.nifi.nifi import Nifi
+
+
+@pytest.fixture
+def nifi() -> Nifi:
+    return Nifi()
+
+
+@pytest.mark.nifi
+def test_can_get_flow_status(page: Page, nifi: Nifi):
+    status = nifi.get_flow_status()
+    assert "controllerStatus" in status
+
+
+@pytest.mark.nifi
+def test_can_get_flow_about(page: Page, nifi: Nifi):
+    about = nifi.get_flow_about()
+    assert "about" in about
+"""
+
+# A genuine UI conversion that really drives a browser.
+REAL_UI_PYTEST = """from playwright.sync_api import Page, expect
+
+
+def test_homepage_loads(page: Page):
+    page.goto("https://example.com")
+    expect(page.get_by_role("heading")).to_be_visible()
+"""
+
+
+def test_convert_playwright_strips_unused_browser_fixture():
+    llm = _ScriptedLLM([BROWSER_FIXTURED_PYTEST])
+    result = convert(ConversionRequest(
+        source_code=NIFI_ROBOT_SOURCE,
+        from_framework="Robot Framework",
+        to_framework="Playwright",
+        llm_call=llm,
+    ))
+    assert result.target_language == "python"
+    # No test signature keeps a page parameter.
+    assert "page: Page" not in result.code
+    assert "def test_can_get_flow_status(nifi: Nifi):" in result.code
+    assert "def test_can_get_flow_about(nifi: Nifi):" in result.code
+    # Browser Page import gone; custom client + assertions preserved.
+    assert "from playwright.sync_api import Page" not in result.code
+    assert "from clamps.nifi.nifi import Nifi" in result.code
+    assert result.code.count("assert ") == BROWSER_FIXTURED_PYTEST.count("assert ")
+
+
+def test_convert_playwright_keeps_real_ui_page_fixture():
+    llm = _ScriptedLLM([REAL_UI_PYTEST])
+    result = convert(ConversionRequest(
+        source_code="*** Test Cases ***\nOpen\n    Log    ui",
+        from_framework="Robot Framework",
+        to_framework="Playwright",
+        llm_call=llm,
+    ))
+    # Genuine browser usage -> guard leaves page intact.
+    assert "def test_homepage_loads(page: Page):" in result.code
+    assert "from playwright.sync_api import Page, expect" in result.code

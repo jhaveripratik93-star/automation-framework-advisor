@@ -21,6 +21,10 @@ Pipeline per conversion:
      ask for a fix (bounded retries) — this is the self-repair loop that
      makes output "compilable and accurate" (point 5) rather than
      one-shot and hope.
+  6b. For Python pytest-playwright targets, run the deterministic
+     browser-fixture guard (src/conversion/postprocess.py) that strips a
+     provably-unused `page: Page` fixture from non-UI tests, so a REST/API
+     Robot test never ships pulling in an unused browser.
   7. Run the cross-repo parity check (src/conversion/parity.py) comparing
      the ORIGINAL source against the FINAL converted code using the same
      repo-comparator engine behind the standalone "Cross-Repo Test
@@ -43,6 +47,7 @@ from typing import Callable, Protocol
 from src.conversion.compilers import CompileResult, compile_check
 from src.conversion.language import resolve_target_language
 from src.conversion.parity import check_parity
+from src.conversion.postprocess import strip_unused_browser_fixture
 from src.conversion.prompts import load_prompt_profile
 from src.tools.assertion_counter import compare as compare_assertions
 from src.tools.conversion_validator import ConversionValidation, validate_single_file_conversion
@@ -248,6 +253,17 @@ def convert(request: ConversionRequest, *, to_fw_data: object | None = None) -> 
 
     final = attempts[-1]
     is_valid = (not final.compile_result.checked or final.compile_result.ok) and final.validation.is_valid
+
+    # Deterministic post-process guard (point: browser-free API tests). For
+    # Python pytest-playwright targets, strip any provably-unused `page: Page`
+    # browser fixture the LLM injected into a non-UI test — see
+    # src/conversion/postprocess.py. This keeps the browser-free guarantee
+    # independent of which LLM backend produced the code. The guard only
+    # removes unused params/imports, so assertion/parity counts are unchanged;
+    # it runs before compare_assertions/check_parity so those reflect the
+    # shipped code.
+    if target_lang == "python" and "playwright" in to_name.lower():
+        code = strip_unused_browser_fixture(code)
 
     assertion_report = compare_assertions(request.source_code, code, from_name, to_name)
 

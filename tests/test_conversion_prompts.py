@@ -37,6 +37,23 @@ def test_render_system_prompt_includes_all_sections():
     assert "ORPHAN KEYWORDS" in rendered  # from syntax_rules
 
 
+def test_robot_to_playwright_profile_has_browser_free_api_rule():
+    """The Robot->Playwright pair file and the Playwright syntax file carry the
+    browser-free API-test rule, and the pair file is one of the loaded sources."""
+    set_prompts_root(None)
+    profile = load_prompt_profile("Robot Framework", "Playwright")
+    assert profile.pair_rules
+    assert any("robot_framework__to__playwright.md" in s for s in profile.sources)
+    assert len(profile.sources) == 3  # base + playwright syntax + pair rules
+
+    rendered = profile.render_system_prompt("Robot Framework", "Playwright").lower()
+    # the conditional-browser rule must be present
+    assert "page: page" in rendered
+    assert "api" in rendered
+    # browser-free guidance mentions not injecting a page for non-UI tests
+    assert "must not" in rendered and "browser" in rendered
+
+
 def test_missing_pair_rules_degrades_gracefully():
     set_prompts_root(None)
     profile = load_prompt_profile("Selenium", "K6")  # no pair file for this combo

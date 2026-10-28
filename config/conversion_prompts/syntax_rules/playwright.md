@@ -1,17 +1,43 @@
 OUTPUT RULES (STRICT):
-1. Output ONLY valid executable Python code using pytest-playwright idioms.
+1. Output ONLY valid executable Python code using pytest / pytest-playwright idioms.
 2. Do NOT wrap the code in markdown code fences.
 3. Do NOT output any explanations or conversational text.
 
+BROWSER FIXTURE — ONLY WHEN THE TEST DRIVES A UI (STRICT):
+- A converted test gets the `page: Page` fixture and the browser imports ONLY
+  when it performs REAL UI work: browser navigation (`page.goto`), element
+  interaction (`click`/`fill`/`type`/`select_option`/`set_input_files`),
+  locator lookups (`page.locator`, `page.get_by_*`), or visual/DOM assertions
+  (`expect(page...)...`).
+- If the source test only performs HTTP/API calls, custom library/keyword
+  calls, data assertions, or infrastructure/k8s operations — with NO browser
+  navigation, NO element interaction, and NO visual/DOM assertion — then the
+  converted pytest test MUST NOT declare a `page` parameter, MUST NOT import
+  the browser `Page` fixture, and MUST NOT do anything that triggers
+  pytest-playwright's browser launch. Injecting an unused `page` forces a
+  Chromium launch at setup and fails the whole test for no reason.
+- For an API-only test that needs an HTTP client, use `requests`/`httpx`, or
+  Playwright's APIRequestContext via
+  `playwright.sync_api.sync_playwright().request` — and ONLY if an HTTP client
+  is actually needed. If the source already drives a custom client (e.g.
+  `Nifi()`), KEEP that custom client instead of introducing browser deps.
+- Keep custom test tags as registered pytest marks; never pull in a browser
+  dependency just to satisfy a tag.
+
 TECHNICAL REQUIREMENTS:
-- Standard imports:
+- Imports for genuine UI tests:
     from playwright.sync_api import Page, expect
-- Structure tests as standalone pytest functions: `def test_<name>(page: Page):`
-- Preferred locator strategy: use user-facing locators (`page.get_by_role`,
-  `page.get_by_label`, `page.get_by_test_id`) over raw CSS/XPath when
-  possible.
-- Assertions: ALWAYS use auto-retrying web-first assertions via `expect()`
-  (e.g., `expect(page.get_by_role("heading")).to_be_visible()`).
-- Do NOT explicitly instantiate browsers or drivers inside tests; rely on
-  the injected `page` fixture.
+  Import `Page`/`expect` ONLY in files that actually drive a browser.
+- Structure tests as standalone pytest functions. A UI test is
+  `def test_<name>(page: Page):`; an API/library-only test is
+  `def test_<name>(<custom_client_or_fixture>):` with NO `page` parameter.
+- Preferred locator strategy (UI tests only): use user-facing locators
+  (`page.get_by_role`, `page.get_by_label`, `page.get_by_test_id`) over raw
+  CSS/XPath when possible.
+- Assertions (UI tests): use auto-retrying web-first assertions via `expect()`
+  (e.g., `expect(page.get_by_role("heading")).to_be_visible()`). For
+  backend/non-DOM values, assert directly on the returned data with plain
+  `assert`.
+- Do NOT explicitly instantiate browsers or drivers inside tests; rely on the
+  injected `page` fixture when a browser is genuinely needed.
 - Do NOT output Robot Framework, Selenium, or raw JavaScript syntax.

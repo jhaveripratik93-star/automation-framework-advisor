@@ -52,6 +52,48 @@ STATEFUL CONNECTION LIFECYCLE (servers that keep a global/persistent session):
   - Faithfully port multi-step connect keywords (e.g. "connect to each host and stay
     on the first that reports healthy"), not just the first call.
 
+BROWSER-FREE API/NON-UI TESTS (do not inject a browser the suite never uses):
+A Robot suite whose test cases only call library or custom-keyword methods
+(e.g. `Nifi.get_flow_status`), make HTTP/API calls, assert on returned data, or
+perform infrastructure/k8s operations — with NO browser navigation, NO element
+interaction, and NO visual/DOM assertion — converts to PLAIN pytest functions.
+Such tests MUST NOT take a `page: Page` parameter, MUST NOT import the browser
+`Page` fixture, and MUST NOT trigger pytest-playwright's browser launch.
+  - Keep the suite's existing custom client (e.g. `Nifi()`); only reach for
+    `requests`/`httpx` or Playwright's APIRequestContext if an HTTP client is
+    genuinely required and the source has none.
+  - Preserve each Robot tag (`Force Tags`, `[Tags]`) as a registered pytest
+    mark — never add a browser dependency to satisfy a tag.
+  - Only test cases that genuinely drive a UI get `page: Page` and the browser
+    imports.
+
+Example — an API-only Robot test case maps to a browser-free pytest test:
+
+    # Robot (library-only, no UI):
+    *** Settings ***
+    Library    clamps.nifi.nifi.Nifi    WITH NAME    Nifi
+    Force Tags    nifi
+
+    *** Test Cases ***
+    Can Get Flow Status
+        ${status}=    Nifi.get_flow_status
+        Should Contain    ${status}    controllerStatus
+
+    # Playwright/pytest — NO page, NO browser import:
+    import pytest
+    from clamps.nifi.nifi import Nifi
+
+
+    @pytest.fixture
+    def nifi() -> Nifi:
+        return Nifi()
+
+
+    @pytest.mark.nifi
+    def test_can_get_flow_status(nifi: Nifi):
+        status = nifi.get_flow_status()
+        assert "controllerStatus" in status
+
 ASSERTIONS, STRUCTURE & DATA SEMANTICS:
   - Preserve exact computed values and data shapes (timestamps, week math, numeric
     results). Map Robot assertions to explicit checks: Should Not Be Empty, Should Be
