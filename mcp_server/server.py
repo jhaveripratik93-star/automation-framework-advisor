@@ -702,7 +702,8 @@ def compare_repos_csv(
     downloadable CSV string (Test Case, File A, File B, Assertions A,
     Assertions B, Delta, Status) — convenient for writing straight to a
     .csv file."""
-    from src.tools.repo_comparator import compare_repos as _compare_repos, to_csv
+    from src.tools.repo_comparator import compare_repos as _compare_repos
+    from src.tools.repo_comparator import to_csv
 
     report = _compare_repos(files_a, files_b, framework_a, framework_b)
     return to_csv(report)

@@ -17,7 +17,6 @@
 """
 from __future__ import annotations
 
-
 # ══════════════════════════════════════════════════════════════════════
 # 1. SCENARIO / SUITE ARCHITECTURE PROMPTS
 #

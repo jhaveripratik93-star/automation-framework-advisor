@@ -5,10 +5,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.knowledge_base import KnowledgeBase
+from src.agents.tool_router import ToolRouter
 from src.graph import load_or_seed_graph
 from src.graph.graphrag_engine import GraphRAGEngine
-from src.agents.tool_router import ToolRouter
+from src.knowledge_base import KnowledgeBase
 
 
 def main():

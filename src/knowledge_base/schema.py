@@ -1,8 +1,9 @@
 """Pydantic models for framework knowledge base entries."""
 
 import logging
-from pydantic import BaseModel, model_validator
 from typing import Any
+
+from pydantic import BaseModel, model_validator
 
 logger = logging.getLogger(__name__)
 

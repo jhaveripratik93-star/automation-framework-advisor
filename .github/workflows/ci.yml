@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-type-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Type check (mypy)
+        # Informational only for now: there is a pre-existing baseline of
+        # type errors scattered across the codebase (see pyproject.toml's
+        # [tool.mypy] note). This step reports them without failing the
+        # build until that baseline is cleared — flip to a hard failure
+        # once it is.
+        run: mypy src || true
+
+      - name: Test (pytest)
+        env:
+          # Intentionally unset: tests must not depend on a real Groq API
+          # key. test_groq_connection.py (a manual live-network smoke
+          # script, not a unit test) is excluded via pyproject.toml's
+          # pytest addopts regardless.
+          GROQ_API_KEY: ""
+        run: pytest

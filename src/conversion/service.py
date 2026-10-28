@@ -38,7 +38,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Callable, Protocol
+from typing import Protocol
 
 from src.conversion.compilers import CompileResult, compile_check
 from src.conversion.language import resolve_target_language

@@ -10,10 +10,11 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.agents.state import AgentState
+    from src.knowledge_base.loader import KnowledgeBase
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +53,13 @@ class FormatAgent:
     - Clean markdown structure
     """
 
-    def __init__(self, llm_client=None) -> None:
+    def __init__(self, llm_client=None, knowledge_base: KnowledgeBase | None = None) -> None:
         self._client = llm_client
+        # Reused for weight-summary scoring instead of reloading every
+        # YAML file on every call (see _build_weight_summary). Falls back
+        # to the process-wide cached default if the caller doesn't have
+        # one handy — see src/bootstrap.py.
+        self._kb = knowledge_base
 
     def format(self, raw_response: str, user_message: str) -> FormatResult:
         """Format the raw response for display.
@@ -133,6 +139,7 @@ class FormatAgent:
                 profile_context=state.get("profile_context", ""),
                 user_message=user_message,
             )
+
         logger.info("FormatAgent.run_node: summary_len=%d", len(summary))
         final = result.formatted + ("\n\n" + summary if summary else "")
         return {"final_response": final}
@@ -176,7 +183,7 @@ class FormatAgent:
         profile_context format: "language=python, team=5, ci_cd=github_actions, ..."
         Falls back to safe defaults for any missing field.
         """
-        from src.models import UserProfile, ArchitectureType, ExperienceLevel
+        from src.models import ArchitectureType, ExperienceLevel, UserProfile
 
         kv: dict[str, str] = {}
         for part in profile_context.split(","):
@@ -228,8 +235,8 @@ class FormatAgent:
             legacy_test_count=legacy_count,
         )
 
-    @staticmethod
     def _build_weight_summary(
+        self,
         weight_profile,
         llm_response: str = "",
         user_profile=None,
@@ -250,11 +257,16 @@ class FormatAgent:
             return ""
         try:
             from src.scoring.engine import ScoringEngine
-            from src.models import UserProfile
-            from src.knowledge_base import KnowledgeBase
 
-            kb = KnowledgeBase(data_dir="data/frameworks")
-            kb.load()
+            # Reuse the KB threaded through at construction time instead of
+            # re-parsing every YAML file from disk on every call. Only falls
+            # back to the process-wide cached default (built once, not on
+            # every response) when no KB was supplied — e.g. in isolated
+            # unit tests that construct FormatAgent without one.
+            kb = self._kb
+            if kb is None:
+                from src.bootstrap import get_default_kb
+                kb = get_default_kb()
 
             all_frameworks = kb.list_all()
 

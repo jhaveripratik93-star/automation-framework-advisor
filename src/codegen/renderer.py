@@ -20,7 +20,6 @@ from src.codegen.models import (
     FixtureSpec,
     GeneratedFile,
     GeneratedTestSuite,
-    GenerationSource,
     HelperSpec,
     ManualTestCase,
     OptimizationResult,

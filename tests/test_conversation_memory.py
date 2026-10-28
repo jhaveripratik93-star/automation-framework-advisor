@@ -2,17 +2,17 @@
 
 Run with:  python tests/test_conversation_memory.py
 """
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.agents.decision_agent import DecisionAgent
-from src.agents.tool_selection_agent import ToolSelectionAgent
-from src.agents.synthesis_agent import SynthesisAgent
 from src.agents.evaluation_agent import EvaluationAgent
+from src.agents.memory import AgentMemory, ConversationMemory
 from src.agents.reflection_agent import ReflectionAgent
-from src.agents.memory import ConversationMemory, AgentMemory
-
+from src.agents.synthesis_agent import SynthesisAgent
+from src.agents.tool_selection_agent import ToolSelectionAgent
 
 # ══════════════════════════════════════════════════════════════════════════
 # Mock LLM

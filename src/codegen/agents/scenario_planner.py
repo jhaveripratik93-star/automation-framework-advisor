@@ -1,16 +1,13 @@
 """Scenario Planner Agent — analyses the full test case before any code is written."""
 from __future__ import annotations
 
-import json
 import logging
-import re
 from typing import TYPE_CHECKING, Any
 
 from src.codegen.agent_config import (
     ACTION_KEYWORDS,
     FRAMEWORK_CONTEXT,
     PIPELINE_SETTINGS,
-    SCENARIO_PLANNER_SYSTEM,
     SCENARIO_PLANNER_USER_TEMPLATE,
 )
 

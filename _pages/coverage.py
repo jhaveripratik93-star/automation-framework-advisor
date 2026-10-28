@@ -228,8 +228,8 @@ def render() -> None:
 
 def _parse_and_analyse(upload_file, upload_type: str, kb) -> None:
     import json as _json
+
     from src.coverage.excel_parser import parse_excel_test_cases
-    from src.coverage.engine import analyze_coverage, render_coverage_report, build_display_coverage
 
     with st.spinner("Analysing coverage…"):
         try:
@@ -243,7 +243,8 @@ def _parse_and_analyse(upload_file, upload_type: str, kb) -> None:
                     raise ValueError("JSON must be an array of objects")
                 test_cases = _normalise(records)
             elif upload_type == "csv":
-                import csv, io as _io
+                import csv
+                import io as _io
                 reader = csv.DictReader(_io.StringIO(raw.decode("utf-8")))
                 test_cases = _normalise(list(reader))
             else:
@@ -266,7 +267,9 @@ def _run_analysis(test_cases: list[dict], kb) -> None:
     """Run coverage analysis for the given test cases against the current
     framework selection and store the results in session state."""
     from src.coverage.engine import (
-        analyze_coverage, render_coverage_report, build_display_coverage,
+        analyze_coverage,
+        build_display_coverage,
+        render_coverage_report,
     )
 
     _fw_filter = st.session_state.get("cov_selected_frameworks") or None

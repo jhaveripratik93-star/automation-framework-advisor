@@ -22,7 +22,8 @@ import of ``ToolExecutor`` became an import of ``ToolRouter``.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from src.advisor_tools.executor import AdvisorToolsExecutor
 from src.coverage.executor import CoverageExecutor
@@ -55,14 +56,13 @@ class ToolRouter:
         weight_profile: WeightProfile | None = None,
     ) -> None:
         if knowledge_base is None:
-            from src.knowledge_base import KnowledgeBase as _KB
-            knowledge_base = _KB(data_dir="data/frameworks")
-            knowledge_base.load()
+            from src.bootstrap import build_kb
+            knowledge_base = build_kb()
         self.kb = knowledge_base
 
         if knowledge_graph is None:
-            from src.graph import load_or_seed_graph
-            knowledge_graph = load_or_seed_graph(self.kb)
+            from src.bootstrap import build_graph
+            knowledge_graph = build_graph(self.kb)
         self.kg = knowledge_graph
 
         self.graphrag = graphrag_engine
@@ -95,7 +95,7 @@ class ToolRouter:
         }
 
     def execute(self, tool_name: str, arguments: dict[str, Any]) -> str:
-        from src.agents.cache import tool_cache, make_tool_cache_key, weight_signature
+        from src.agents.cache import make_tool_cache_key, tool_cache, weight_signature
 
         if tool_name not in self.tools:
             logger.error("ToolRouter: unknown tool '%s'", tool_name)

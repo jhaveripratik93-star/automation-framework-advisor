@@ -3,32 +3,30 @@
 Tests the full flow: decision → tool_selection → synthesis → evaluation → reflection → format
 with a mock LLM client, verifying all interfaces and data flow between agents.
 """
-import sys
 import os
+import sys
 
 # Ensure the project root is on the path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.agents.decision_agent import DecisionAgent, DecisionResult
-from src.agents.tool_selection_agent import ToolSelectionAgent, SelectionResult, ToolCall
-from src.agents.synthesis_agent import SynthesisAgent, SynthesisResult
-from src.agents.evaluation_agent import EvaluationAgent, EvaluationResult
-from src.agents.reflection_agent import ReflectionAgent, ReflectionResult, _MAX_REFLECTIONS
-from src.agents.format_agent import FormatAgent, FormatResult
-from src.agents.memory import AgentMemory, ConversationMemory
-from src.agents.retry import llm_retry, tool_retry
-from src.agents.state import AgentState
-from src.agents.callbacks import PipelineCallbackHandler, StreamEvent, logging_callback
 from src.agents.cache import (
     TTLCache,
-    response_cache,
     make_tool_call_cache_key,
-    make_query_cache_key,
+    response_cache,
 )
-from src.agents.langgraph_pipeline import build_pipeline, _tool_call_cache_key
+from src.agents.callbacks import PipelineCallbackHandler, StreamEvent
+from src.agents.decision_agent import DecisionAgent
+from src.agents.evaluation_agent import EvaluationAgent, EvaluationResult
+from src.agents.format_agent import FormatAgent
+from src.agents.langgraph_pipeline import build_pipeline
+from src.agents.memory import AgentMemory, ConversationMemory
+from src.agents.reflection_agent import _MAX_REFLECTIONS, ReflectionAgent, ReflectionResult
+from src.agents.retry import llm_retry, tool_retry
+from src.agents.state import AgentState
+from src.agents.synthesis_agent import SynthesisAgent, SynthesisResult
 from src.agents.tool_router import ToolRouter
+from src.agents.tool_selection_agent import ToolCall, ToolSelectionAgent
 from src.scoring.weights import WeightProfile
-
 
 # ══════════════════════════════════════════════════════════════════════════
 # Mock LLM Client

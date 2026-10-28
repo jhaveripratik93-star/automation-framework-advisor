@@ -17,19 +17,21 @@ logger = logging.getLogger(__name__)
 
 
 # ── KB (lightweight — always needed) ─────────────────────────────────
+# Construction logic (which constructor args, which data_dir) lives in
+# src/bootstrap.py and is shared with mcp_server/services.py — only the
+# caching mechanism (@st.cache_resource here, a lock-guarded singleton
+# there) differs between entry points.
 @st.cache_resource
 def get_kb():
-    from src.knowledge_base import KnowledgeBase
-    kb = KnowledgeBase(data_dir="data/frameworks")
-    kb.load()
-    return kb
+    from src.bootstrap import build_kb
+    return build_kb()
 
 
 # ── Groq client ───────────────────────────────────────────────────────
 @st.cache_resource
 def get_groq_client():
-    from src.llm.groq_client import GroqClient
-    client = GroqClient()
+    from src.bootstrap import build_groq_client
+    client = build_groq_client()
     if not client.is_available:
         logger.warning("Groq: GROQ_API_KEY not set")
     else:
@@ -40,8 +42,8 @@ def get_groq_client():
 # ── Gemini client ─────────────────────────────────────────────────────
 @st.cache_resource
 def get_gemini_client():
-    from src.llm.gemini_client import GeminiClient
-    client = GeminiClient()
+    from src.bootstrap import build_gemini_client
+    client = build_gemini_client()
     if not client.is_available:
         logger.warning("Gemini: GEMINI_API_KEY not set")
     else:
@@ -66,14 +68,13 @@ def get_llm_client():
 @st.cache_resource
 def get_advisor_stack():
     """Initialised only when Advisor page is first opened."""
-    from src.graph import load_or_seed_graph
-    from src.graph.graphrag_engine import GraphRAGEngine
+    from src.bootstrap import build_graph, build_graphrag
     from src.llm.advisor_llm import AdvisorLLM
 
     kb = get_kb()
     client = get_llm_client()
-    graph = load_or_seed_graph(kb)
-    graphrag = GraphRAGEngine(graph=graph, knowledge_base=kb)
+    graph = build_graph(kb)
+    graphrag = build_graphrag(graph, kb)
     advisor = AdvisorLLM(
         llm_client=client,
         graphrag_engine=graphrag,
@@ -87,11 +88,7 @@ def get_advisor_stack():
 @st.cache_resource
 def get_scanner():
     """Initialised only when Framework Discovery is opened."""
-    from src.discovery.framework_scanner import FrameworkScanner
+    from src.bootstrap import build_scanner
     kb = get_kb()
     client = get_llm_client()           # reuse — no duplicate init
-    return FrameworkScanner(
-        kb=kb,
-        llm_client=client if client.is_available else None,
-        data_dir="data/frameworks",
-    )
+    return build_scanner(kb, llm_client=client)

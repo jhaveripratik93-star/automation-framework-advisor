@@ -80,7 +80,7 @@ class CodeGenOrchestrator:
         return self._generate_legacy(request)
 
     @staticmethod
-    def _group_by_category(test_cases: list[ManualTestCase]) -> "dict[str, list[ManualTestCase]]":
+    def _group_by_category(test_cases: list[ManualTestCase]) -> dict[str, list[ManualTestCase]]:
         """Group manual test cases by feature/category.
 
         Grouping key precedence: explicit ``category`` → first ``tag`` →
@@ -101,9 +101,9 @@ class CodeGenOrchestrator:
 
     @staticmethod
     def _split_groups(
-        groups: "dict[str, list[ManualTestCase]]",
+        groups: dict[str, list[ManualTestCase]],
         max_per_file: int,
-    ) -> "dict[str, list[ManualTestCase]]":
+    ) -> dict[str, list[ManualTestCase]]:
         """Split large groups into numbered sub-groups (max_per_file TCs each).
 
         e.g. "Happy Path" with 9 TCs and max=3 → "Happy Path_1", "Happy Path_2", "Happy Path_3"
@@ -150,7 +150,9 @@ class CodeGenOrchestrator:
         project_context is an optional ProjectContext dict from RepoScanner.
         """
         from src.codegen.agent_config import (
-            STEP_GENERATOR_SYSTEM, FRAMEWORK_CONTEXT, PIPELINE_SETTINGS,
+            FRAMEWORK_CONTEXT,
+            PIPELINE_SETTINGS,
+            STEP_GENERATOR_SYSTEM,
         )
         from src.codegen.agents.scenario_planner import _heuristic_scenario
 
@@ -233,9 +235,9 @@ class CodeGenOrchestrator:
         - Large category groups are split into multiple files (max_tests_per_file).
         - A real common/resources file is generated from shared symbols.
         """
+        from src.codegen.agent_config import PIPELINE_SETTINGS
         from src.codegen.pipeline import run_codegen_pipeline
         from src.codegen.renderer import _FRAMEWORK_CONFIG
-        from src.codegen.agent_config import PIPELINE_SETTINGS
 
         start_time = time.time()
         framework = request.target_framework
@@ -374,7 +376,6 @@ class CodeGenOrchestrator:
         run so the per-TC architect node is skipped.
         """
         from src.codegen.agents.suite_architect_agent import run_suite_architect
-        from src.codegen.renderer import _FRAMEWORK_CONFIG
 
         # Build a synthetic state that contains all TCs as a combined text
         all_tc_text = "\n\n".join(

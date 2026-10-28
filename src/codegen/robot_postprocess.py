@@ -302,7 +302,7 @@ def _dedupe_keep_order(lines: list[str]) -> list[str]:
     return out
 
 
-def _parse_keyword_defs(body_lines: list[str]) -> "dict[str, list[str]]":
+def _parse_keyword_defs(body_lines: list[str]) -> dict[str, list[str]]:
     """Parse a *** Keywords *** body into {keyword_name: [definition_lines]}.
 
     A keyword name is a non-indented, non-empty, non-comment line; its body is

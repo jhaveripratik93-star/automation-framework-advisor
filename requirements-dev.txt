@@ -1,0 +1,25 @@
+# Development-only tooling: testing, linting, type-checking, git hooks.
+# Not needed to run the app — only to develop/CI it.
+-r requirements.txt
+
+# Testing
+pytest==9.1.1
+pytest-anyio==0.0.0
+hypothesis==6.168.5
+
+# src/conversion/compilers.py shells out to the REAL Robot Framework
+# parser (robot.api.get_model) to validate converted code — production
+# code degrades gracefully (checked=False) if this isn't installed, but
+# tests/test_conversion_consistency.py and tests/test_conversion_service.py
+# assert on the real compile-check outcome, so it must be present for
+# those to be meaningful (not just silently skipped).
+robotframework==7.1.1
+
+# Linting / formatting
+ruff==0.17.3
+
+# Type checking
+mypy==2.4.0
+
+# Local git hooks (see .pre-commit-config.yaml)
+pre-commit==4.6.1

@@ -1,0 +1,28 @@
+# Install once per clone: pip install -r requirements-dev.txt && pre-commit install
+#
+# Scoped to fast, safe checks only. mypy is deliberately NOT a pre-commit
+# hook — there's a pre-existing type-error baseline (see pyproject.toml's
+# [tool.mypy] note) that would block every commit until it's cleared;
+# it still runs in CI as an informational step.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: check-merge-conflict
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.3
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+      # ruff-format intentionally omitted: adopting it would reformat the
+      # whole codebase in one pass (not yet reviewed/run here) and cause
+      # unrelated diff noise on the next commit to any touched file. Run
+      # `ruff format .` as its own reviewed change first, then add the
+      # `ruff-format` hook here.

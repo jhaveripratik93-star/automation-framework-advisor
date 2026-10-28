@@ -9,7 +9,8 @@ and framework-specific setup hooks.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from src.prerequisites.cicd_generators import generate_cicd_pipeline, generate_framework_hooks
 from src.prerequisites.patterns import generate_script, match_prereq_pattern

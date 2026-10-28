@@ -37,15 +37,18 @@ _scanner: Any = None
 # ── Core singletons ────────────────────────────────────────────────────
 
 def get_kb():
-    """Lazily load the YAML framework knowledge base."""
+    """Lazily load the YAML framework knowledge base.
+
+    Construction logic lives in src.bootstrap (shared with
+    services/app_services.py) — only the caching mechanism (this
+    lock-guarded singleton vs. Streamlit's @st.cache_resource) differs.
+    """
     global _kb
     if _kb is None:
         with _lock:
             if _kb is None:
-                from src.knowledge_base import KnowledgeBase
-                kb = KnowledgeBase(data_dir=str(_ROOT / "data" / "frameworks"))
-                kb.load()
-                _kb = kb
+                from src.bootstrap import build_kb
+                _kb = build_kb(data_dir=str(_ROOT / "data" / "frameworks"))
     return _kb
 
 
@@ -66,8 +69,8 @@ def get_groq_client():
     if _groq_client is None:
         with _lock:
             if _groq_client is None:
-                from src.llm.groq_client import GroqClient
-                client = GroqClient()
+                from src.bootstrap import build_groq_client
+                client = build_groq_client()
                 if not client.is_available:
                     logger.info(
                         "GROQ_API_KEY not set — this is optional. LLM-backed "
@@ -91,8 +94,8 @@ def get_graph():
     if _graph is None:
         with _lock:
             if _graph is None:
-                from src.graph import load_or_seed_graph
-                _graph = load_or_seed_graph(
+                from src.bootstrap import build_graph
+                _graph = build_graph(
                     get_kb(), store_path=str(_ROOT / "data" / "knowledge_graph.json")
                 )
     return _graph
@@ -104,8 +107,8 @@ def get_graphrag():
     if _graphrag is None:
         with _lock:
             if _graphrag is None:
-                from src.graph.graphrag_engine import GraphRAGEngine
-                _graphrag = GraphRAGEngine(graph=get_graph(), knowledge_base=get_kb())
+                from src.bootstrap import build_graphrag
+                _graphrag = build_graphrag(get_graph(), get_kb())
     return _graphrag
 
 
@@ -149,11 +152,10 @@ def get_scanner():
     if _scanner is None:
         with _lock:
             if _scanner is None:
-                from src.discovery.framework_scanner import FrameworkScanner
-                client = get_groq_client()
-                _scanner = FrameworkScanner(
-                    kb=get_kb(),
-                    llm_client=client if client.is_available else None,
+                from src.bootstrap import build_scanner
+                _scanner = build_scanner(
+                    get_kb(),
+                    llm_client=get_groq_client(),
                     data_dir=str(_ROOT / "data" / "frameworks"),
                 )
     return _scanner
@@ -198,7 +200,7 @@ def build_user_profile(
     logged and replaced with sensible defaults rather than raising, so a
     loosely-specified MCP call still produces a usable profile.
     """
-    from src.models import UserProfile, ArchitectureType, ExperienceLevel, BudgetPreference
+    from src.models import ArchitectureType, BudgetPreference, ExperienceLevel, UserProfile
 
     def _enum(enum_cls, value, default):
         try:

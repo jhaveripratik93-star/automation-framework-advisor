@@ -373,8 +373,8 @@ class FrameworkScanner:
 
                 # Update knowledge graph with the new framework
                 try:
-                    from src.knowledge_base.schema import FrameworkData as FD
                     from src.graph import update_graph_with_framework
+                    from src.knowledge_base.schema import FrameworkData as FD
 
                     fw_data = FD(**profile)
                     update_graph_with_framework(fw_data, self._kb)

@@ -4,11 +4,12 @@ import logging
 from typing import Any
 
 from src.models import (
-    UserProfile,
     ArchitectureType,
-    ExperienceLevel,
     BudgetPreference,
+    ExperienceLevel,
+    UserProfile,
 )
+
 from .questions import DISCOVERY_QUESTIONS, Question
 
 logger = logging.getLogger(__name__)
