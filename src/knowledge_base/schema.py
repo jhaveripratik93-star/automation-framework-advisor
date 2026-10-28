@@ -1,7 +1,7 @@
 """Pydantic models for framework knowledge base entries."""
 
 import logging
-from typing import Any
+from typing import Any, get_origin
 
 from pydantic import BaseModel, model_validator
 
@@ -168,16 +168,56 @@ def classify_framework_data(fw_data) -> list[str]:
 
 # Fields that MUST be populated (non-empty) for a framework to be considered complete.
 # These are critical for scoring, recommendations, and migration planning.
+#
+# This is the SINGLE SOURCE OF TRUTH for completeness — both
+# `FrameworkData._get_completeness_issues` (checked after a profile is
+# already loaded) and `FrameworkData.validate_for_addition` (checked on a
+# raw dict before a new profile is written) call `_completeness_issues()`
+# below instead of each hardcoding their own copy of this list. Add a new
+# required field here once and both call sites pick it up automatically.
 REQUIRED_POPULATED_FIELDS = {
     "limitations": "list",          # Must have at least 1 entry
     "performance": "dict",          # Must have at least avg_test_execution_speed
     "maintainability": "dict",      # Must have at least page_object_support
     "cloud_grids": "dict",          # Must have at least 1 entry (or "not_applicable")
+    "versions": "list",             # Must have at least 1 version entry
 }
 
-# Minimum required keys within dict fields
-REQUIRED_PERFORMANCE_KEYS = ["avg_test_execution_speed", "resource_footprint"]
-REQUIRED_MAINTAINABILITY_KEYS = ["page_object_support", "reusable_components", "built_in_reporting"]
+# Minimum required keys within specific dict fields (checked only for the
+# fields listed here — a field in REQUIRED_POPULATED_FIELDS with no entry
+# here is only checked for non-emptiness, not for specific sub-keys).
+REQUIRED_SUBKEYS = {
+    "performance": ["avg_test_execution_speed", "resource_footprint"],
+    "maintainability": ["page_object_support", "reusable_components", "built_in_reporting"],
+}
+# Back-compat aliases (previously separate constants of the same data).
+REQUIRED_PERFORMANCE_KEYS = REQUIRED_SUBKEYS["performance"]
+REQUIRED_MAINTAINABILITY_KEYS = REQUIRED_SUBKEYS["maintainability"]
+
+
+def _completeness_issues(source: "FrameworkData | dict[str, Any]") -> list[str]:
+    """Shared completeness check, used by both `_get_completeness_issues`
+    (instance, post-construction) and `validate_for_addition` (raw dict,
+    pre-construction) — accepts either so there is exactly one place that
+    knows which fields are required and which sub-keys they need.
+    """
+    def _get(field: str) -> Any:
+        if isinstance(source, dict):
+            return source.get(field)
+        return getattr(source, field, None)
+
+    issues: list[str] = []
+    for field, kind in REQUIRED_POPULATED_FIELDS.items():
+        value = _get(field)
+        if not value:
+            issues.append(f"{field} is empty (expected a populated {kind})")
+            continue
+        required_subkeys = REQUIRED_SUBKEYS.get(field)
+        if required_subkeys and isinstance(value, dict):
+            missing = [k for k in required_subkeys if k not in value]
+            if missing:
+                issues.append(f"{field} missing keys: {missing}")
+    return issues
 
 
 class FrameworkData(BaseModel):
@@ -226,39 +266,14 @@ class FrameworkData(BaseModel):
         return self
 
     def _get_completeness_issues(self) -> list[str]:
-        """Return list of completeness issues for this framework."""
-        issues: list[str] = []
+        """Return list of completeness issues for this framework.
 
-        if not self.limitations:
-            issues.append("limitations is empty (should list known constraints)")
-
-        if not self.performance:
-            issues.append("performance is empty (should include speed, footprint)")
-        else:
-            missing_perf = [
-                k for k in REQUIRED_PERFORMANCE_KEYS
-                if k not in self.performance
-            ]
-            if missing_perf:
-                issues.append(f"performance missing keys: {missing_perf}")
-
-        if not self.maintainability:
-            issues.append("maintainability is empty (should include tooling info)")
-        else:
-            missing_maint = [
-                k for k in REQUIRED_MAINTAINABILITY_KEYS
-                if k not in self.maintainability
-            ]
-            if missing_maint:
-                issues.append(f"maintainability missing keys: {missing_maint}")
-
-        if not self.cloud_grids:
-            issues.append("cloud_grids is empty (use 'not_applicable: true' if N/A)")
-
-        if not self.versions:
-            issues.append("versions is empty (should include at least 1 version entry)")
-
-        return issues
+        Delegates to the module-level `_completeness_issues()` — see
+        REQUIRED_POPULATED_FIELDS for the single source of truth on what
+        "complete" means. `validate_for_addition` below checks the same
+        thing on a raw dict before construction.
+        """
+        return _completeness_issues(self)
 
     def is_complete(self) -> bool:
         """Check whether this framework profile has all critical fields populated."""
@@ -269,11 +284,16 @@ class FrameworkData(BaseModel):
         """Validate a framework profile dict is complete enough to be added.
 
         This is a stricter check used when *adding* new frameworks (vs loading
-        existing ones). Returns (is_valid, list_of_issues).
+        existing ones): it additionally requires the bare-minimum fields a
+        FrameworkData instance can't even be constructed without, on top of
+        the same completeness checks `_get_completeness_issues` runs after
+        construction. Returns (is_valid, list_of_issues).
         """
         issues: list[str] = []
 
-        # Check required top-level fields exist and are non-empty
+        # Check required top-level fields exist and are non-empty — these
+        # have no default in the schema, so a missing value here would
+        # fail Pydantic construction entirely, not just completeness.
         required_fields = [
             "framework_name", "vendor", "license", "languages_supported",
             "architecture_fit", "capabilities", "cicd_integration",
@@ -282,47 +302,32 @@ class FrameworkData(BaseModel):
             if field not in data or not data[field]:
                 issues.append(f"Required field '{field}' is missing or empty")
 
-        # Check critical data fields are populated (not just present)
-        if not data.get("limitations"):
-            issues.append(
-                "limitations must not be empty - list at least 3 known constraints"
-            )
-
-        perf = data.get("performance", {})
-        if not isinstance(perf, dict) or not perf:
-            issues.append(
-                "performance must be populated with at least: "
-                "avg_test_execution_speed, resource_footprint"
-            )
-        elif isinstance(perf, dict):
-            missing = [k for k in REQUIRED_PERFORMANCE_KEYS if k not in perf]
-            if missing:
-                issues.append(f"performance missing required keys: {missing}")
-
-        maint = data.get("maintainability", {})
-        if not isinstance(maint, dict) or not maint:
-            issues.append(
-                "maintainability must be populated with at least: "
-                "page_object_support, reusable_components, built_in_reporting"
-            )
-        elif isinstance(maint, dict):
-            missing = [k for k in REQUIRED_MAINTAINABILITY_KEYS if k not in maint]
-            if missing:
-                issues.append(f"maintainability missing required keys: {missing}")
-
-        grids = data.get("cloud_grids", {})
-        if not isinstance(grids, dict) or not grids:
-            issues.append(
-                "cloud_grids must be populated (use {'not_applicable': true} "
-                "for frameworks that don't use cloud grids)"
-            )
-
-        versions = data.get("versions", [])
-        if not isinstance(versions, list) or not versions:
-            issues.append(
-                "versions must include at least 1 version entry with "
-                "version, release_date, notable_features, and breaking_changes"
-            )
+        # Everything else is the same "is this profile rich enough to be
+        # useful" check as an already-loaded framework — single shared
+        # implementation, see REQUIRED_POPULATED_FIELDS.
+        issues.extend(_completeness_issues(data))
 
         return (len(issues) == 0, issues)
+
+    @classmethod
+    def empty_value_for_field(cls, key: str) -> Any:
+        """Type-safe placeholder for a field missing from a raw profile dict.
+
+        Dict/list-typed fields get an empty container — NEVER a bare
+        string. Writing the string "Not Applicable" into a dict/list field
+        (e.g. architecture_fit, capabilities, versions) produces YAML that
+        fails this model's validation on the next `KnowledgeBase.load()`,
+        which handles that by silently dropping the whole framework. Only
+        genuinely str-typed fields get the human-readable "Not Applicable"
+        placeholder; emptiness in dict/list fields is already surfaced via
+        the completeness checks above instead of needing a fake value.
+        """
+        field = cls.model_fields.get(key)
+        if field is not None:
+            origin = get_origin(field.annotation) or field.annotation
+            if origin is dict:
+                return {}
+            if origin is list:
+                return []
+        return "Not Applicable"
 

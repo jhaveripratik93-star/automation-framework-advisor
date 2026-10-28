@@ -348,8 +348,12 @@ class FrameworkScanner:
                 if key in profile:
                     ordered_profile[key] = profile[key]
                 else:
-                    # Add missing keys with "Not Applicable" default
-                    ordered_profile[key] = "Not Applicable"
+                    # Add missing keys with a type-safe default — a dict
+                    # or list field (e.g. architecture_fit, versions)
+                    # filled with the string "Not Applicable" would fail
+                    # FrameworkData validation on the next KnowledgeBase
+                    # load, silently dropping the whole framework.
+                    ordered_profile[key] = FrameworkData.empty_value_for_field(key)
             # Append any extra keys not in the canonical order
             for key, val in profile.items():
                 if key not in ordered_profile:

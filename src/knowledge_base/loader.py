@@ -22,9 +22,19 @@ class KnowledgeBase:
     def __init__(self, data_dir: str = "data/frameworks"):
         self.data_dir = Path(data_dir)
         self.frameworks: dict[str, FrameworkData] = {}
+        # (filename, error message) for every YAML file that failed to
+        # load on the last load() call. A single bad file intentionally
+        # does NOT stop the rest of the knowledge base from loading, but
+        # that resilience used to mean failures were only visible in log
+        # output — now callers (UI pages, MCP tools, the discovery
+        # pipeline) can check this list to find out something is missing
+        # instead of silently serving an incomplete knowledge base.
+        self.load_errors: list[tuple[str, str]] = []
 
     def load(self) -> None:
         """Load all YAML framework profiles from the data directory."""
+        self.load_errors = []
+
         if not self.data_dir.exists():
             logger.warning(f"Data directory not found: {self.data_dir}")
             return
@@ -37,13 +47,27 @@ class KnowledgeBase:
                 self.frameworks[fw.framework_name.lower()] = fw
                 logger.info(f"Loaded framework: {fw.framework_name}")
             except Exception as e:
-                logger.warning(
-                    f"Failed to load {yaml_file.name}: {e}"
+                logger.error(
+                    "Failed to load %s — this framework will NOT be "
+                    "available until the file is fixed: %s",
+                    yaml_file.name, e,
                 )
+                self.load_errors.append((yaml_file.name, str(e)))
 
+        if self.load_errors:
+            logger.error(
+                "Knowledge base loaded with %d file(s) failing validation: %s",
+                len(self.load_errors),
+                [name for name, _ in self.load_errors],
+            )
         logger.info(
             f"Knowledge base loaded: {len(self.frameworks)} frameworks"
         )
+
+    @property
+    def has_load_errors(self) -> bool:
+        """True if any YAML file failed to load on the last load() call."""
+        return bool(self.load_errors)
 
     def get(self, name: str) -> FrameworkData | None:
         """Get a framework by name (case-insensitive, with alias support)."""
