@@ -65,6 +65,88 @@ _LANG_DISPLAY = {
 }
 
 
+def _build_llm_call(client):
+    """Build the transport-agnostic ``(system_prompt, user_prompt) -> str``
+    closure over a Groq client. Single source of the page's LLM wiring —
+    reused by paste mode, path mode and the consistency check so the closure
+    is never duplicated."""
+    def _llm_call(system_prompt: str, user_prompt: str) -> str:
+        result = client.chat(
+            messages=[{"role": "user", "content": user_prompt}],
+            system=system_prompt,
+            temperature=0.1,
+        )
+        return result.get("content") or result.get("reasoning") or ""
+
+    return _llm_call
+
+
+def _analyze_path_for_studio(path: str, test_case_name: str, source_root: str) -> dict:
+    """Pure (Streamlit-free) analyze + filter step for the path flow.
+
+    Calls ``analyze_path`` and, when a ``test_case_name`` is given, narrows the
+    result with ``filter_result_by_test_case`` (case-insensitive substring).
+    Returns the analyzer's ``{"error": ...}`` dict unchanged on a bad path /
+    no .robot files / missing robotframework, so the caller can surface it.
+    """
+    from src.analysis.robot_dependency_analyzer import (
+        analyze_path,
+        filter_result_by_test_case,
+    )
+
+    result = analyze_path(path, source_root=source_root)
+    if "error" in result:
+        return result
+    return filter_result_by_test_case(result, test_case_name)
+
+
+def _convert_matched_files(analysis: dict, from_fw: str, to_fw: str, llm_call, to_fw_data) -> list[dict]:
+    """Pure (Streamlit-free) per-file read + convert loop for the path flow.
+
+    Mirrors the MCP server's path core: collect each unique, non-error
+    ``file_path`` from ``analysis["files"]``, read its source text from disk
+    (UTF-8; ``errors="replace"`` fallback on a decode error), and run it
+    through the SAME ``convert(ConversionRequest(... llm_call=...), to_fw_data=...)``
+    pipeline the paste flow uses. Each file is wrapped in its own try/except so
+    one failing file does not abort the run.
+
+    Returns an ordered list of dicts, one per file: either
+    ``{"file_path": fp, "result": ConversionResult}`` or
+    ``{"file_path": fp, "error": "<message>"}``. ``llm_call`` and ``to_fw_data``
+    are injected so this is unit-testable with a stub llm_call.
+    """
+    from src.conversion.service import ConversionRequest, convert
+
+    file_results: list[dict] = []
+    seen: set[str] = set()
+    for fd in analysis.get("files", []):
+        if fd.get("error"):
+            continue
+        fp = fd.get("file_path")
+        if not fp or fp in seen:
+            continue
+        seen.add(fp)
+        try:
+            try:
+                text = Path(fp).read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                text = Path(fp).read_text(encoding="utf-8", errors="replace")
+            result = convert(
+                ConversionRequest(
+                    source_code=text,
+                    from_framework=from_fw,
+                    to_framework=to_fw,
+                    llm_call=llm_call,
+                ),
+                to_fw_data=to_fw_data,
+            )
+            file_results.append({"file_path": fp, "result": result})
+        except Exception as exc:  # noqa: BLE001 — one bad file must not abort the run
+            file_results.append({"file_path": fp, "error": str(exc)})
+            logger.error("Path-mode conversion failed for %s: %s", fp, exc)
+    return file_results
+
+
 def render() -> None:
     st.markdown("""
     <div class="page-header">
@@ -97,6 +179,20 @@ def render() -> None:
 
 
 def _single_file_mode(from_fw: str, to_fw: str, v: int) -> None:
+    mode = st.radio(
+        "Input mode",
+        ["Paste code", "Read from local path"],
+        horizontal=True,
+        key="studio_input_mode",
+    )
+    if mode == "Read from local path":
+        _path_mode(from_fw, to_fw)
+        return
+
+    _paste_mode(from_fw, to_fw, v)
+
+
+def _paste_mode(from_fw: str, to_fw: str, v: int) -> None:
     source_code = st.text_area(
         "Paste source test code here", height=200,
         placeholder=f"Paste your {from_fw} test code here…",
@@ -123,14 +219,7 @@ def _single_file_mode(from_fw: str, to_fw: str, v: int) -> None:
             from src.tools.formatters import resolve_framework
 
             client = get_llm_client()
-
-            def _llm_call(system_prompt: str, user_prompt: str) -> str:
-                result = client.chat(
-                    messages=[{"role": "user", "content": user_prompt}],
-                    system=system_prompt,
-                    temperature=0.1,
-                )
-                return result.get("content") or result.get("reasoning") or ""
+            _llm_call = _build_llm_call(client)
 
             to_fw_data = resolve_framework(get_kb(), to_fw)
             result = convert(
@@ -157,6 +246,127 @@ def _single_file_mode(from_fw: str, to_fw: str, v: int) -> None:
             logger.error("Conversion error: %s", exc)
 
     _consistency_check_section()
+
+
+def _path_mode(from_fw: str, to_fw: str) -> None:
+    """Read .robot test(s) from a local file/directory, SHOW the conversion
+    analysis (readiness, blockers, custom libs), then convert each matched
+    file through the same pipeline the paste flow uses. Code conversion only —
+    no CI/CD content."""
+    st.caption(
+        f"Source framework is **{from_fw}** (from the selector above); target is **{to_fw}**."
+    )
+    path = st.text_input(
+        "Local path (a .robot file or a directory of them)",
+        key="studio_path_input",
+        placeholder=r"e.g. C:\path\to\tests  or  C:\path\to\suite.robot",
+    )
+    test_case = st.text_input(
+        "Test-case name (optional, case-insensitive substring)",
+        key="studio_path_testcase",
+    )
+    st.caption("Leave the test-case name empty to analyze and convert all test cases under the path.")
+    source_root = st.text_input(
+        "Source root (optional — helps resolve library/resource imports)",
+        key="studio_path_root",
+    )
+    do_run = st.button("🔍 Read & Analyze → Convert", key="btn_path_convert", type="primary")
+
+    if not do_run:
+        return
+
+    if not path.strip():
+        st.warning("Enter a local file or directory path first.")
+        return
+
+    analysis = _analyze_path_for_studio(path.strip(), test_case.strip(), source_root.strip())
+    if "error" in analysis:
+        st.error(analysis["error"])
+        return
+
+    # A test-case name was given but matched nothing — show what was searched,
+    # and do NOT convert.
+    if test_case.strip() and analysis.get("total_test_cases", 0) == 0:
+        st.warning(
+            f"No test case matching '{test_case.strip()}' was found under '{path.strip()}'. "
+            "Nothing to convert — adjust the name or clear it to convert everything."
+        )
+        return
+
+    # Render the ANALYSIS first — this is the "understand the conversion needs" view.
+    rc = analysis.get("readiness_counts", {})
+    st.caption(
+        f"Matched {analysis.get('total_test_cases', 0)} test case(s) across "
+        f"{analysis.get('total_files', 0)} file(s) — "
+        f"{rc.get('self_contained', 0)} self-contained, "
+        f"{rc.get('needs_custom_libs', 0)} needs custom libs, "
+        f"{rc.get('blocked', 0)} blocked."
+    )
+    with st.expander("🔎 Conversion analysis", expanded=True):
+        st.markdown(analysis.get("report", "_No analysis report._"))
+
+    if analysis.get("total_test_cases", 0) == 0:
+        st.info("No test cases found to convert under this path.")
+        return
+
+    loading_slot = st.empty()
+    with loading_slot.container():
+        render_thinking(f"Converting matched {from_fw} test(s) → {to_fw}…")
+
+    try:
+        from services.app_services import get_llm_client, get_kb
+        from src.tools.formatters import resolve_framework
+
+        client = get_llm_client()
+        llm_call = _build_llm_call(client)
+        to_fw_data = resolve_framework(get_kb(), to_fw)
+        file_results = _convert_matched_files(analysis, from_fw, to_fw, llm_call, to_fw_data)
+    except Exception as exc:
+        loading_slot.empty()
+        st.error(f"Conversion failed: {exc}")
+        logger.error("Path-mode conversion error: %s", exc)
+        return
+    finally:
+        loading_slot.empty()
+
+    if not file_results:
+        st.info("No convertible files were found under this path.")
+        return
+
+    successes = [fr for fr in file_results if "result" in fr]
+
+    # Exactly one successful file → render through the EXISTING single-result
+    # path so output (and the consistency check) look identical to paste mode.
+    if len(file_results) == 1 and len(successes) == 1:
+        fr = successes[0]
+        st.session_state.studio_result = fr["result"]
+        st.session_state.studio_to_fw = to_fw
+        st.session_state.studio_from_fw = from_fw
+        st.session_state.studio_source_code = _safe_read(fr["file_path"])
+        st.session_state.studio_consistency_report = None
+        st.markdown(f"**Converted:** `{fr['file_path']}`")
+        _show_result()
+        _consistency_check_section()
+        return
+
+    # Multiple files (or a single file that errored) → one expander each, with
+    # per-file error isolation. Consistency check is single-result only.
+    st.session_state.studio_result = None
+    for idx, fr in enumerate(file_results):
+        with st.expander(f"📄 {fr['file_path']}", expanded=(len(file_results) == 1)):
+            if "error" in fr:
+                st.error(f"Conversion failed: {fr['error']}")
+            else:
+                _show_result(fr["result"], to_fw, key_suffix=f"path_{idx}")
+
+
+def _safe_read(file_path: str) -> str:
+    try:
+        return Path(file_path).read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return Path(file_path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
 
 
 def _consistency_check_section() -> None:
@@ -193,14 +403,7 @@ def _consistency_check_section() -> None:
             from src.tools.formatters import resolve_framework
 
             client = get_llm_client()
-
-            def _llm_call(system_prompt: str, user_prompt: str) -> str:
-                r = client.chat(
-                    messages=[{"role": "user", "content": user_prompt}],
-                    system=system_prompt,
-                    temperature=0.1,
-                )
-                return r.get("content") or r.get("reasoning") or ""
+            _llm_call = _build_llm_call(client)
 
             to_fw_data = resolve_framework(get_kb(), to_fw)
             report = check_consistency(
@@ -347,9 +550,11 @@ def _render_validation_badge(result) -> None:
                     st.markdown("- Structural: " + "; ".join(a.validation.errors))
 
 
-def _show_result() -> None:
-    result = st.session_state.get("studio_result")
-    to_fw = st.session_state.get("studio_to_fw", "")
+def _show_result(result=None, to_fw=None, key_suffix: str = "single") -> None:
+    if result is None:
+        result = st.session_state.get("studio_result")
+    if to_fw is None:
+        to_fw = st.session_state.get("studio_to_fw", "")
     if result is None:
         return
 
@@ -365,7 +570,7 @@ def _show_result() -> None:
         st.code(result.code, language=code_lang)
         st.download_button("⬇ Download converted file", result.code,
                            file_name=f"test_converted{ext}", mime=mime,
-                           key="btn_dl_single")
+                           key=f"btn_dl_{key_suffix}")
 
     with st.expander("📋 Requirements & Execution Guide", expanded=True):
         col_req, col_run = st.columns(2)
