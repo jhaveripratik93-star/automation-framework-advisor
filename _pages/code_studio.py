@@ -19,6 +19,7 @@ from __future__ import annotations
 import io
 import logging
 import re
+import sys
 import zipfile
 from pathlib import Path
 
@@ -467,6 +468,80 @@ def _collect_dependency_files(
     return sorted(dest_map.items())
 
 
+# ──────────────────────────────────────────────────────────────────────
+# Third-party pip requirements discovered from the bundled dependency source.
+# ──────────────────────────────────────────────────────────────────────
+#
+# The bundled dependency .py files import third-party packages (e.g.
+# application_controller.py imports `kubernetes`). Those packages are NOT on
+# disk under source_root, so they are not bundled — they must instead be listed
+# in requirements.txt or the converted project will not run. This scanner reads
+# every bundled .py file's top-level imports and keeps the ones that are
+# neither stdlib nor a bundled project module.
+#
+# A few import names differ from their pip DISTRIBUTION name; map those here.
+# Everything not in the map passes through verbatim (the common case —
+# `kubernetes`, `jsonref`, `requests`, `urllib3`, `httpx` are imported under
+# the same name they are installed under). Default = the import name itself.
+_IMPORT_TO_DISTRIBUTION: dict[str, str] = {
+    "yaml": "PyYAML",
+    "robot": "robotframework",
+}
+
+
+def _distribution_name(import_name: str) -> str:
+    """Map a top-level import name to its pip distribution name, defaulting to
+    the import name verbatim for anything not in ``_IMPORT_TO_DISTRIBUTION``."""
+    return _IMPORT_TO_DISTRIBUTION.get(import_name, import_name)
+
+
+def _collect_third_party_requirements(
+    dependency_files: list[tuple[str, str | None]],
+    source_root: str,
+) -> list[str]:
+    """Scan every bundled dependency ``.py`` file for its top-level imports and
+    return the sorted, de-duplicated pip distribution names of the THIRD-PARTY
+    packages they need. Pure (Streamlit-free) and unit-testable.
+
+    ``dependency_files`` is the ``list[(dest_rel, abs_src | None)]`` produced by
+    ``_collect_dependency_files``. For each entry that is a real ``.py`` file on
+    disk (``abs_src`` is not None; synthesized ``__init__.py`` markers are
+    skipped), its source TEXT is read read-only (never imported/executed) and
+    scanned with ``_scan_dotted_imports``. The LEADING top-level name of each
+    dotted import is classified:
+
+      (a) in ``sys.stdlib_module_names`` (Python 3.10+) -> stdlib, skip;
+      (b) resolves under ``source_root`` via ``_resolve_under_root`` -> a
+          bundled project module, skip (it ships in the ZIP);
+      (c) otherwise -> THIRD-PARTY; map via ``_distribution_name`` and collect.
+
+    Returns distribution names only (no version pins). Returns ``[]`` when there
+    is nothing to scan.
+    """
+    stdlib = getattr(sys, "stdlib_module_names", frozenset())
+    root = Path(source_root) if source_root else None
+
+    found: set[str] = set()
+    for dest_rel, abs_src in dependency_files:
+        if abs_src is None or not dest_rel.endswith(".py"):
+            continue
+        if dest_rel.endswith("__init__.py"):
+            continue
+        try:
+            text = Path(abs_src).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for dotted in _scan_dotted_imports(text):
+            top = dotted.split(".", 1)[0]
+            if not top or top in stdlib:
+                continue
+            if root is not None and _resolve_under_root(top, root) is not None:
+                continue  # bundled project module — ships in the ZIP
+            found.add(_distribution_name(top))
+
+    return sorted(found)
+
+
 def _collect_unresolved_dependencies(analysis: dict | None) -> list[str]:
     """Return dotted names of CUSTOM library imports that did NOT resolve on
     disk (``kind == "unresolved"`` or ``exists is False``), plus unresolved
@@ -498,11 +573,36 @@ def _collect_unresolved_dependencies(analysis: dict | None) -> list[str]:
     return out
 
 
+def _merge_requirements(req: str, third_party: list[str]) -> str:
+    """Merge discovered third-party distribution names into the framework
+    ``requirements.txt`` string. Keeps every existing framework entry verbatim
+    (comments and version pins included) and appends only the third-party names
+    not already present, one per line, de-duplicated case-insensitively. No
+    version is pinned for the appended names — a plain package name is enough.
+    Pure/testable."""
+    if not third_party:
+        return req
+    existing_keys = set()
+    for line in req.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        # key = the bare distribution name, before any version specifier
+        key = re.split(r"[<>=!~\[ ]", stripped, maxsplit=1)[0].strip().lower()
+        if key:
+            existing_keys.add(key)
+    additions = [name for name in third_party if name.lower() not in existing_keys]
+    if not additions:
+        return req
+    return req.rstrip("\n") + "\n" + "\n".join(additions) + "\n"
+
+
 def _build_project_zip(
     file_results: list[dict],
     to_fw: str,
     dependency_files: list[tuple[str, str | None]] | None = None,
     unresolved: list[str] | None = None,
+    third_party: list[str] | None = None,
 ) -> bytes:
     """Pure (Streamlit-free) builder of a runnable project ZIP (bytes).
 
@@ -533,6 +633,8 @@ def _build_project_zip(
     req, run_cmd, install_cmd = _get_run_instructions((to_fw or "").lower())
     dependency_files = dependency_files or []
     unresolved = unresolved or []
+    third_party = third_party or []
+    req = _merge_requirements(req, third_party)
 
     buf = io.BytesIO()
     bundled_sources: list[str] = []
@@ -563,14 +665,17 @@ def _build_project_zip(
                 bundled_sources.append(dest_rel)
 
         if dependency_files:
-            zf.writestr(f"{_PROJECT_ROOT}/conftest.py", _CONFTEST_BODY)
+            marks = _collect_custom_marks(
+                [fr["result"].code for fr in file_results if fr.get("result") is not None]
+            )
+            zf.writestr(f"{_PROJECT_ROOT}/conftest.py", _conftest_with_marks(marks))
 
         zf.writestr(f"{_PROJECT_ROOT}/requirements.txt", req)
         zf.writestr(
             f"{_PROJECT_ROOT}/README.md",
             _build_readme(
                 to_fw, install_cmd, run_cmd,
-                sorted(bundled_sources), unresolved, failed_reads,
+                sorted(bundled_sources), unresolved, failed_reads, third_party,
             ),
         )
     return buf.getvalue()
@@ -591,6 +696,56 @@ _CONFTEST_BODY = (
     "    sys.path.insert(0, _ROOT)\n"
 )
 
+# pytest built-in marks that must NOT be registered (they are already known to
+# pytest; only genuinely custom marks cause PytestUnknownMarkWarning).
+_PYTEST_BUILTIN_MARKS = frozenset(
+    {"skip", "skipif", "xfail", "parametrize", "usefixtures", "filterwarnings"}
+)
+# A `@pytest.mark.<name>` decorator or a `pytest.mark.<name>` reference inside a
+# `pytestmark = [...]` assignment. `<name>` is a plain identifier (no call args).
+_PYTEST_MARK_RE = re.compile(r"pytest\.mark\.([A-Za-z_]\w*)")
+
+
+def _collect_custom_marks(code_blocks: list[str]) -> list[str]:
+    """Pure (Streamlit-free) scan of converted test code for CUSTOM pytest mark
+    names, so they can be registered in the generated conftest and the
+    ``PytestUnknownMarkWarning`` disappears.
+
+    Scans each string for ``pytest.mark.<name>`` (covers both
+    ``@pytest.mark.<name>`` decorators and ``pytestmark = [pytest.mark.<name>]``
+    assignments), excluding pytest's own built-in marks. Returns a sorted,
+    de-duplicated list.
+    """
+    found: set[str] = set()
+    for code in code_blocks:
+        if not code:
+            continue
+        for name in _PYTEST_MARK_RE.findall(code):
+            if name not in _PYTEST_BUILTIN_MARKS:
+                found.add(name)
+    return sorted(found)
+
+
+def _conftest_with_marks(marks: list[str]) -> str:
+    """Return the conftest body, extended with a ``pytest_configure`` that
+    registers each custom mark via ``config.addinivalue_line`` when ``marks`` is
+    non-empty. Pure/testable; NO pipeline or deployment content."""
+    if not marks:
+        return _CONFTEST_BODY
+    lines = [
+        _CONFTEST_BODY,
+        "",
+        "",
+        "def pytest_configure(config):",
+        "    # Register custom marks found in the converted tests so pytest does",
+        "    # not warn about unknown marks (PytestUnknownMarkWarning).",
+    ]
+    for name in marks:
+        lines.append(
+            f'    config.addinivalue_line("markers", "{name}: converted test mark")'
+        )
+    return "\n".join(lines) + "\n"
+
 
 def _build_readme(
     to_fw: str,
@@ -599,14 +754,17 @@ def _build_readme(
     bundled_sources: list[str],
     unresolved: list[str],
     failed_reads: list[str],
+    third_party: list[str] | None = None,
 ) -> str:
     """Build the README markdown for the bundle.
 
-    Lists bundled dependency files and warns that any dependency that could
-    NOT be resolved on disk stays a stub the user must implement. Prose is
-    worded to avoid the substring ``ci`` (the ZIP test forbids that token) —
-    so no "specific"/"decision"/"explicit" style words here.
+    Lists bundled dependency files, the third-party packages detected from the
+    bundled code (added to requirements.txt), and warns that any dependency
+    that could NOT be resolved on disk stays a stub the user must implement.
+    Prose is worded to avoid the substring ``ci`` (the ZIP test forbids that
+    token) — so no "specific"/"decision"/"explicit" style words here.
     """
+    third_party = third_party or []
     lines = [
         f"# Converted Test Project ({to_fw})",
         "",
@@ -632,6 +790,18 @@ def _build_readme(
             "",
         ]
         lines += [f"- `{dep}`" for dep in bundled_sources]
+        lines.append("")
+    if third_party:
+        lines += [
+            "## Third-party packages detected from bundled code",
+            "",
+            "The bundled dependency source imports these third-party packages, "
+            "so they were added to `requirements.txt` (install them with the "
+            "command above). They are not part of the project source, so they "
+            "are not bundled — pip pulls them from PyPI:",
+            "",
+        ]
+        lines += [f"- `{dep}`" for dep in third_party]
         lines.append("")
     remaining = sorted(set(unresolved) | set(failed_reads))
     if remaining:
@@ -912,6 +1082,13 @@ def _render_project_zip_button(
         return
     dependency_files = _collect_dependency_files(analysis) if analysis else []
     unresolved = _collect_unresolved_dependencies(analysis) if analysis else []
+    third_party = (
+        _collect_third_party_requirements(
+            dependency_files, (analysis or {}).get("source_root") or ""
+        )
+        if dependency_files
+        else []
+    )
     if dependency_files:
         source_count = sum(
             1 for dest, _ in dependency_files if not dest.endswith("__init__.py")
@@ -920,13 +1097,20 @@ def _render_project_zip_button(
             f"Bundling {source_count} resolved dependency source file(s) so the "
             "converted tests import real code (run pytest from the project root)."
         )
+    if third_party:
+        st.caption(
+            "Added third-party packages detected in the bundled code to "
+            "requirements.txt: " + ", ".join(f"`{p}`" for p in third_party)
+        )
     if unresolved:
         st.caption(
             "⚠️ Unresolved dependencies remain stubs you must implement: "
             + ", ".join(f"`{u}`" for u in unresolved)
         )
     zip_bytes = _build_project_zip(
-        file_results, to_fw, dependency_files=dependency_files, unresolved=unresolved
+        file_results, to_fw,
+        dependency_files=dependency_files, unresolved=unresolved,
+        third_party=third_party,
     )
     st.download_button(
         "⬇ Download project (.zip)",

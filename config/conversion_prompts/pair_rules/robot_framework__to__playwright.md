@@ -10,8 +10,25 @@ Walk the dependency chain and port each part the chosen test(s) reference:
     pytest fixtures (module/function scope as appropriate); never silently drop them.
   - Every user keyword transitively called by the test, with its real argument
     signature and defaults preserved.
-If a referenced keyword/library is missing from context, emit a clearly-named helper
-stub plus a TODO naming exactly what is missing, rather than omitting the behavior.
+If a referenced keyword/library is TRULY absent from context (no source available and
+not bundled), emit a clearly-named helper stub plus a TODO naming exactly what is
+missing, rather than omitting the behavior.
+
+IMPORT BUNDLED CUSTOM LIBRARIES DIRECTLY — NEVER WRAP THEM IN A TODO-STUB FALLBACK:
+When a test depends on a custom library whose source will be bundled alongside the
+converted test (e.g. `clamps.nifi.nifi.Nifi`, `clamps.infrastructure.k8s.application_controller.ApplicationController`),
+import it DIRECTLY at the top of the file:
+
+    from clamps.nifi.nifi import Nifi
+    from clamps.infrastructure.k8s.application_controller import ApplicationController
+
+Do NOT guard a bundled dependency with a `try: … except ImportError:` that defines a
+local stub class raising `NotImplementedError`. A genuinely missing dependency must
+surface as an honest `ImportError` (so the real cause — e.g. an uninstalled third-party
+package the library needs — is visible), never be silently replaced by a
+`NotImplementedError` TODO stub that makes every test fail for the wrong reason. The
+TODO-stub-plus-helper guidance above applies ONLY to keywords/libraries that are truly
+absent from context — not to a custom library that is bundled with the test.
 
 PORT CUSTOM PYTHON LIBRARIES FROM THEIR IMPLEMENTATION, NOT GUESSES:
 When the suite imports a custom library (Cassandra/Kafka/DB/HTTP client, etc.), read

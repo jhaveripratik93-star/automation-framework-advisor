@@ -5,7 +5,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.conversion.postprocess import strip_unused_browser_fixture
+from src.conversion.postprocess import (
+    rewrite_importerror_stub_fallback,
+    strip_unused_browser_fixture,
+)
 
 
 # (a) unused page removed, other params kept ------------------------------
@@ -209,3 +212,161 @@ def test_nifi_file_all_four_signatures_lose_page():
 def test_unparseable_input_unchanged():
     broken = "def test_x(page: Page:\n    this is not python\n"
     assert strip_unused_browser_fixture(broken) == broken
+
+
+# ──────────────────────────────────────────────────────────────────────
+# rewrite_importerror_stub_fallback — the import-stub guard
+# ──────────────────────────────────────────────────────────────────────
+
+# (a) the user's exact smell: try/except ImportError -> NotImplementedError
+STUB_FALLBACK = (
+    "import pytest\n"
+    "\n"
+    "try:\n"
+    "    from clamps.nifi.nifi import Nifi\n"
+    "except ImportError:\n"
+    "    class Nifi:\n"
+    "        def get_flow_status(self):\n"
+    "            raise NotImplementedError('TODO: Implement clamps.nifi.nifi.Nifi')\n"
+    "\n"
+    "        def get_flow_about(self):\n"
+    "            raise NotImplementedError('TODO: Implement clamps.nifi.nifi.Nifi')\n"
+    "\n"
+    "\n"
+    "def test_can_get_flow_status():\n"
+    "    assert Nifi().get_flow_status()\n"
+)
+
+
+def test_rewrites_stub_fallback_to_direct_import():
+    out = rewrite_importerror_stub_fallback(STUB_FALLBACK)
+    assert "from clamps.nifi.nifi import Nifi" in out
+    # try/except and the stub class are gone
+    assert "try:" not in out
+    assert "except ImportError" not in out
+    assert "class Nifi" not in out
+    assert "NotImplementedError" not in out
+    # the real test body is untouched
+    assert "def test_can_get_flow_status():" in out
+    assert "assert Nifi().get_flow_status()" in out
+
+
+# (b) multi-name import with one stub class per name
+def test_rewrites_multi_name_import_removing_all_stubs():
+    code = (
+        "try:\n"
+        "    from m import A, B\n"
+        "except ImportError:\n"
+        "    class A:\n"
+        "        def go(self):\n"
+        "            raise NotImplementedError('a')\n"
+        "    class B:\n"
+        "        def go(self):\n"
+        "            raise NotImplementedError('b')\n"
+    )
+    out = rewrite_importerror_stub_fallback(code)
+    assert "from m import A, B" in out
+    assert "class A" not in out
+    assert "class B" not in out
+    assert "NotImplementedError" not in out
+
+
+def test_preserves_import_aliases():
+    code = (
+        "try:\n"
+        "    from pkg.mod import Thing as T\n"
+        "except ImportError:\n"
+        "    class T:\n"
+        "        def f(self):\n"
+        "            raise NotImplementedError('x')\n"
+    )
+    out = rewrite_importerror_stub_fallback(code)
+    assert "from pkg.mod import Thing as T" in out
+
+
+# (c) already-direct import is returned unchanged
+def test_direct_import_unchanged():
+    code = (
+        "import pytest\n"
+        "from clamps.nifi.nifi import Nifi\n"
+        "\n"
+        "def test_x():\n"
+        "    assert Nifi()\n"
+    )
+    assert rewrite_importerror_stub_fallback(code) == code
+
+
+# (d) idempotent
+def test_rewrite_idempotent():
+    once = rewrite_importerror_stub_fallback(STUB_FALLBACK)
+    twice = rewrite_importerror_stub_fallback(once)
+    assert once == twice
+
+
+# (e) legitimate try/except whose except body is NOT a stub is left intact
+def test_legit_fallback_import_left_intact():
+    code = (
+        "try:\n"
+        "    from fast_json import loads\n"
+        "except ImportError:\n"
+        "    from json import loads\n"
+    )
+    assert rewrite_importerror_stub_fallback(code) == code
+
+
+def test_legit_flag_fallback_left_intact():
+    code = (
+        "try:\n"
+        "    from foo import Bar\n"
+        "except ImportError:\n"
+        "    Bar = None\n"
+    )
+    assert rewrite_importerror_stub_fallback(code) == code
+
+
+def test_partial_stub_left_intact():
+    # Only A is a stub; B is bound to a real object -> not an unambiguous
+    # stub fallback, so the whole block is preserved.
+    code = (
+        "try:\n"
+        "    from m import A, B\n"
+        "except ImportError:\n"
+        "    class A:\n"
+        "        def go(self):\n"
+        "            raise NotImplementedError('x')\n"
+        "    B = object\n"
+    )
+    assert rewrite_importerror_stub_fallback(code) == code
+
+
+def test_non_importerror_except_left_intact():
+    # Catches a different exception type -> not our pattern.
+    code = (
+        "try:\n"
+        "    from m import A\n"
+        "except Exception:\n"
+        "    class A:\n"
+        "        def go(self):\n"
+        "            raise NotImplementedError('x')\n"
+    )
+    assert rewrite_importerror_stub_fallback(code) == code
+
+
+def test_stub_class_with_real_method_left_intact():
+    # The except-body class does real work (not only NotImplementedError) ->
+    # it is a genuine fallback implementation, leave it alone.
+    code = (
+        "try:\n"
+        "    from m import A\n"
+        "except ImportError:\n"
+        "    class A:\n"
+        "        def go(self):\n"
+        "            return 42\n"
+    )
+    assert rewrite_importerror_stub_fallback(code) == code
+
+
+# (f) un-parseable input returned unchanged
+def test_rewrite_unparseable_input_unchanged():
+    broken = "try:\n    from m import A\nexcept ImportError\n    class A: pass\n"
+    assert rewrite_importerror_stub_fallback(broken) == broken

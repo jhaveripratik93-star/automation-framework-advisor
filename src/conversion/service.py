@@ -47,7 +47,7 @@ from typing import Callable, Protocol
 from src.conversion.compilers import CompileResult, compile_check
 from src.conversion.language import resolve_target_language
 from src.conversion.parity import check_parity
-from src.conversion.postprocess import strip_unused_browser_fixture
+from src.conversion.postprocess import rewrite_importerror_stub_fallback, strip_unused_browser_fixture
 from src.conversion.prompts import load_prompt_profile
 from src.tools.assertion_counter import compare as compare_assertions
 from src.tools.conversion_validator import ConversionValidation, validate_single_file_conversion
@@ -254,16 +254,23 @@ def convert(request: ConversionRequest, *, to_fw_data: object | None = None) -> 
     final = attempts[-1]
     is_valid = (not final.compile_result.checked or final.compile_result.ok) and final.validation.is_valid
 
-    # Deterministic post-process guard (point: browser-free API tests). For
-    # Python pytest-playwright targets, strip any provably-unused `page: Page`
-    # browser fixture the LLM injected into a non-UI test — see
-    # src/conversion/postprocess.py. This keeps the browser-free guarantee
-    # independent of which LLM backend produced the code. The guard only
-    # removes unused params/imports, so assertion/parity counts are unchanged;
-    # it runs before compare_assertions/check_parity so those reflect the
-    # shipped code.
+    # Deterministic post-process guards. For Python pytest-playwright targets,
+    # BOTH guards in src/conversion/postprocess.py run, keeping their guarantees
+    # independent of which LLM backend produced the code:
+    #   1. strip_unused_browser_fixture — removes a provably-unused `page: Page`
+    #      browser fixture the LLM injected into a non-UI test (browser-free
+    #      API/REST tests).
+    #   2. rewrite_importerror_stub_fallback — rewrites a try/except ImportError
+    #      NotImplementedError TODO-stub into a direct import so a bundled
+    #      dependency is imported for real instead of being silently shadowed by
+    #      a stub.
+    # They touch disjoint constructs (signatures/imports vs. try/except import
+    # fallbacks), so order does not matter; both only transform shipped code and
+    # leave assertion/parity counts unchanged. They run before
+    # compare_assertions/check_parity so those reflect the shipped code.
     if target_lang == "python" and "playwright" in to_name.lower():
         code = strip_unused_browser_fixture(code)
+        code = rewrite_importerror_stub_fallback(code)
 
     assertion_report = compare_assertions(request.source_code, code, from_name, to_name)
 

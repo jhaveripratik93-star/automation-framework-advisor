@@ -26,10 +26,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from _pages.code_studio import (
     _analyze_path_for_studio,
     _build_project_zip,
+    _collect_custom_marks,
     _collect_dependency_files,
+    _collect_third_party_requirements,
     _collect_unresolved_dependencies,
+    _conftest_with_marks,
     _convert_matched_files,
     _dest_rel_for_resolved,
+    _merge_requirements,
     _scan_dotted_imports,
 )
 
@@ -387,3 +391,255 @@ def test_unresolved_dependency_reported_and_not_bundled():
     )
     readme = _zip_read_bytes(data, "converted_project/README.md").decode("utf-8")
     assert "missing.pkg.Thing" in readme
+
+
+# --- (f) third-party requirements scanner (synthetic, no LLM, no robot) -----
+
+
+def test_collect_third_party_requirements_classifies_imports(tmp_path):
+    # A bundled file importing a third-party pkg, stdlib, and a bundled project
+    # module. source_root makes the project module resolvable -> excluded.
+    _write(tmp_path / "pkg" / "__init__.py", "")
+    _write(tmp_path / "pkg" / "project_mod.py", "VALUE = 1\n")
+    _write(
+        tmp_path / "pkg" / "dep.py",
+        "import os\n"                       # stdlib -> skip
+        "from kubernetes import client\n"   # third-party -> keep
+        "import requests\n"                 # third-party -> keep
+        "from pkg import project_mod\n",    # bundled project module -> skip
+    )
+
+    dependency_files = [
+        ("pkg/dep.py", str(tmp_path / "pkg" / "dep.py")),
+        ("pkg/project_mod.py", str(tmp_path / "pkg" / "project_mod.py")),
+        ("pkg/__init__.py", str(tmp_path / "pkg" / "__init__.py")),
+    ]
+    result = _collect_third_party_requirements(dependency_files, str(tmp_path))
+    assert result == ["kubernetes", "requests"]
+
+
+def test_collect_third_party_requirements_maps_distribution_names(tmp_path):
+    _write(
+        tmp_path / "dep.py",
+        "import yaml\n"      # import name yaml -> distribution PyYAML
+        "import robot\n"     # import name robot -> distribution robotframework
+        "import httpx\n",    # pass-through
+    )
+    dependency_files = [("dep.py", str(tmp_path / "dep.py"))]
+    result = _collect_third_party_requirements(dependency_files, str(tmp_path))
+    assert "PyYAML" in result
+    assert "robotframework" in result
+    assert "httpx" in result
+    assert "yaml" not in result  # mapped, not the raw import name
+
+
+def test_collect_third_party_requirements_skips_synthesized_and_init(tmp_path):
+    # Synthesized __init__ (abs_src None) and real __init__.py are never scanned.
+    _write(tmp_path / "pkg" / "__init__.py", "import kubernetes\n")
+    dependency_files = [
+        ("pkg/__init__.py", str(tmp_path / "pkg" / "__init__.py")),
+        ("pkg/sub/__init__.py", None),
+    ]
+    assert _collect_third_party_requirements(dependency_files, str(tmp_path)) == []
+
+
+def test_collect_third_party_requirements_sorted_and_deduped(tmp_path):
+    _write(tmp_path / "a.py", "import requests\nimport kubernetes\n")
+    _write(tmp_path / "b.py", "import requests\n")  # duplicate across files
+    dependency_files = [
+        ("a.py", str(tmp_path / "a.py")),
+        ("b.py", str(tmp_path / "b.py")),
+    ]
+    result = _collect_third_party_requirements(dependency_files, str(tmp_path))
+    assert result == ["kubernetes", "requests"]  # sorted, de-duped
+
+
+# --- _merge_requirements -----------------------------------------------------
+
+
+def test_merge_requirements_appends_new_and_keeps_existing():
+    req = "playwright>=1.40.0\npytest-playwright>=0.4.0\npytest>=7.0"
+    merged = _merge_requirements(req, ["kubernetes", "requests"])
+    lines = merged.splitlines()
+    # framework entries kept verbatim (pins preserved)
+    assert "playwright>=1.40.0" in lines
+    assert "pytest>=7.0" in lines
+    # new third-party names appended unpinned
+    assert "kubernetes" in lines
+    assert "requests" in lines
+
+
+def test_merge_requirements_dedupes_case_insensitively():
+    req = "pytest>=7.0\nRequests==2.31.0"
+    merged = _merge_requirements(req, ["requests", "kubernetes"])
+    lines = [l for l in merged.splitlines() if l.strip()]
+    # 'requests' already present (as Requests==…) -> not re-added
+    assert sum(1 for l in lines if l.lower().startswith("requests")) == 1
+    assert "kubernetes" in lines
+
+
+def test_merge_requirements_empty_third_party_noop():
+    req = "pytest>=7.0\n"
+    assert _merge_requirements(req, []) == req
+
+
+# --- (g) REAL-fixture end-to-end: honest imports + third-party reqs ---------
+
+# Stub-converted nifi test that (wrongly) wraps its bundled-dependency imports
+# in try/except ImportError NotImplementedError stubs. Flowed THROUGH convert()
+# so the import-stub postprocess guard rewrites it to direct imports in the ZIP.
+STUB_FALLBACK_NIFI_OUTPUT = """import pytest
+
+try:
+    from clamps.nifi.nifi import Nifi
+except ImportError:
+    class Nifi:
+        def get_flow_status(self):
+            raise NotImplementedError("TODO: Implement clamps.nifi.nifi.Nifi")
+
+try:
+    from clamps.infrastructure.k8s.application_controller import ApplicationController
+except ImportError:
+    class ApplicationController:
+        def restart(self):
+            raise NotImplementedError("TODO: Implement ApplicationController")
+
+
+@pytest.fixture
+def nifi() -> Nifi:
+    return Nifi()
+
+
+@pytest.fixture
+def nifi_controller() -> ApplicationController:
+    return ApplicationController()
+
+
+def test_can_get_flow_status(nifi: Nifi):
+    status = nifi.get_flow_status()
+    assert "controllerStatus" in status
+"""
+
+
+def test_real_nifi_fixture_honest_imports_and_third_party_requirements():
+    if not _robot_available() or not _NIFI_ROBOT.is_file():
+        return
+    analysis = _analyze_path_for_studio(str(_NIFI_ROBOT), "", str(_AUTOTEST_ROOT))
+    assert "error" not in analysis
+
+    # Convert the real fixture with a stub LLM that returns the stub-fallback
+    # test code; the pipeline's import-stub guard must rewrite it.
+    llm = _ScriptedLLM(STUB_FALLBACK_NIFI_OUTPUT)
+    file_results = _convert_matched_files(
+        analysis, "Robot Framework", "Playwright", llm, to_fw_data=None
+    )
+    assert file_results and all("result" in fr for fr in file_results)
+
+    dependency_files = _collect_dependency_files(analysis)
+    unresolved = _collect_unresolved_dependencies(analysis)
+    third_party = _collect_third_party_requirements(
+        dependency_files, analysis.get("source_root") or ""
+    )
+    data = _build_project_zip(
+        file_results, "Playwright",
+        dependency_files=dependency_files, unresolved=unresolved,
+        third_party=third_party,
+    )
+    names = _zip_names(data)
+
+    # (a) converted test imports both symbols DIRECTLY — no stub, no try/except.
+    test_name = next(n for n in names if n.startswith("converted_project/tests/"))
+    test_src = _zip_read_bytes(data, test_name).decode("utf-8")
+    assert "from clamps.nifi.nifi import Nifi" in test_src
+    assert (
+        "from clamps.infrastructure.k8s.application_controller import ApplicationController"
+        in test_src
+    )
+    assert "except ImportError" not in test_src
+    assert "NotImplementedError" not in test_src
+
+    # (b) requirements.txt contains kubernetes (guaranteed in the dep chain),
+    #     plus whatever other real third-party the scan found.
+    req_text = _zip_read_bytes(data, "converted_project/requirements.txt").decode("utf-8")
+    req_names = {l.strip().lower() for l in req_text.splitlines() if l.strip()}
+    assert "kubernetes" in third_party
+    assert "kubernetes" in req_names
+    # the scan picked up real third-party deps of the bundled chain
+    assert third_party, "expected at least one third-party requirement"
+
+    # (c) README lists the detected third-party deps.
+    readme = _zip_read_bytes(data, "converted_project/README.md").decode("utf-8")
+    assert "Third-party packages detected from bundled code" in readme
+    assert "kubernetes" in readme
+
+    # (d) no CI/CD tokens in requirements / README.
+    forbidden = ["github", "ci", "workflow", "actions"]
+    for fname in ("converted_project/requirements.txt", "converted_project/README.md"):
+        text = _zip_read_bytes(data, fname).decode("utf-8").lower()
+        for token in forbidden:
+            assert token not in text, f"{token!r} unexpectedly present in {fname}"
+
+
+# --- (h) custom pytest-mark registration in the generated conftest ---------
+
+
+def test_collect_custom_marks_excludes_builtins():
+    code = (
+        "import pytest\n"
+        "pytestmark = [pytest.mark.nifi]\n"
+        "@pytest.mark.cenx_platform\n"
+        "@pytest.mark.Implements_TEST_13556\n"
+        "@pytest.mark.dont_run\n"
+        "@pytest.mark.skip\n"              # built-in -> excluded
+        "@pytest.mark.parametrize('x', [1])\n"  # built-in -> excluded
+        "def test_x():\n"
+        "    pass\n"
+    )
+    marks = _collect_custom_marks([code])
+    assert marks == [
+        "Implements_TEST_13556",
+        "cenx_platform",
+        "dont_run",
+        "nifi",
+    ]
+
+
+def test_conftest_with_marks_registers_each():
+    body = _conftest_with_marks(["nifi", "dont_run"])
+    assert "def pytest_configure(config):" in body
+    assert 'config.addinivalue_line("markers", "nifi:' in body
+    assert 'config.addinivalue_line("markers", "dont_run:' in body
+
+
+def test_conftest_with_no_marks_is_base_body():
+    from _pages.code_studio import _CONFTEST_BODY
+
+    assert _conftest_with_marks([]) == _CONFTEST_BODY
+
+
+def test_build_project_zip_registers_marks_in_conftest(tmp_path):
+    # A converted test uses a custom mark; the bundled conftest must register it.
+    marked_code = (
+        "import pytest\n"
+        "from clamps.nifi.nifi import Nifi\n"
+        "\n"
+        "@pytest.mark.nifi\n"
+        "def test_x():\n"
+        "    assert Nifi()\n"
+    )
+
+    class _FakeResult:
+        code = marked_code
+        target_language = "python"
+
+    # dependency_files non-empty so conftest.py is written.
+    _write(tmp_path / "clamps" / "nifi" / "nifi.py", "class Nifi: pass\n")
+    dep_files = [("clamps/nifi/nifi.py", str(tmp_path / "clamps" / "nifi" / "nifi.py"))]
+    data = _build_project_zip(
+        [{"file_path": r"C:\x\nifi.robot", "result": _FakeResult()}],
+        "Playwright",
+        dependency_files=dep_files,
+    )
+    conftest = _zip_read_bytes(data, "converted_project/conftest.py").decode("utf-8")
+    assert "def pytest_configure(config):" in conftest
+    assert 'config.addinivalue_line("markers", "nifi:' in conftest

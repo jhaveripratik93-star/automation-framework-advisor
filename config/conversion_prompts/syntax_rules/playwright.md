@@ -24,6 +24,18 @@ BROWSER FIXTURE — ONLY WHEN THE TEST DRIVES A UI (STRICT):
 - Keep custom test tags as registered pytest marks; never pull in a browser
   dependency just to satisfy a tag.
 
+BUNDLED CUSTOM LIBRARY IMPORTS — DIRECT, NO TODO-STUB FALLBACK (STRICT):
+- When a test depends on a custom library whose source will be bundled
+  alongside the converted test (e.g. `clamps.nifi.nifi.Nifi`), import it
+  DIRECTLY at the top of the file:
+      from clamps.nifi.nifi import Nifi
+- Do NOT wrap such an import in a `try: … except ImportError:` that defines a
+  local class raising `NotImplementedError`. A genuinely missing dependency
+  must surface as an honest `ImportError`, never be silently swapped for a
+  `NotImplementedError` TODO stub that makes every test fail for the wrong
+  reason. Emit a TODO stub ONLY for a keyword/library that is truly absent from
+  context, never for a library bundled with the test.
+
 TECHNICAL REQUIREMENTS:
 - Imports for genuine UI tests:
     from playwright.sync_api import Page, expect

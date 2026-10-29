@@ -358,3 +358,53 @@ def test_convert_playwright_keeps_real_ui_page_fixture():
     # Genuine browser usage -> guard leaves page intact.
     assert "def test_homepage_loads(page: Page):" in result.code
     assert "from playwright.sync_api import Page, expect" in result.code
+
+
+# ── BOTH guards wired into convert(): browser-free AND honest imports ───
+# A non-deterministic LLM wrongly produced code that is BOTH browser-fixtured
+# (unused page: Page) AND wrapped its bundled-dependency import in a
+# try/except ImportError NotImplementedError TODO stub. convert() must ship
+# code that is browser-free AND uses a direct import with no stub.
+
+BROWSER_AND_STUB_PYTEST = """from playwright.sync_api import Page
+import pytest
+
+try:
+    from clamps.nifi.nifi import Nifi
+except ImportError:
+    class Nifi:
+        def get_flow_status(self):
+            raise NotImplementedError("TODO: Implement clamps.nifi.nifi.Nifi")
+
+
+@pytest.fixture
+def nifi() -> Nifi:
+    return Nifi()
+
+
+@pytest.mark.nifi
+def test_can_get_flow_status(page: Page, nifi: Nifi):
+    status = nifi.get_flow_status()
+    assert "controllerStatus" in status
+"""
+
+
+def test_convert_playwright_runs_both_postprocess_guards():
+    llm = _ScriptedLLM([BROWSER_AND_STUB_PYTEST])
+    result = convert(ConversionRequest(
+        source_code=NIFI_ROBOT_SOURCE,
+        from_framework="Robot Framework",
+        to_framework="Playwright",
+        llm_call=llm,
+    ))
+    code = result.code
+    # Browser-free: no page param, no browser Page import.
+    assert "page: Page" not in code
+    assert "from playwright.sync_api import Page" not in code
+    assert "def test_can_get_flow_status(nifi: Nifi):" in code
+    # Honest import: direct import, no try/except stub, no NotImplementedError.
+    assert "from clamps.nifi.nifi import Nifi" in code
+    assert "except ImportError" not in code
+    assert "NotImplementedError" not in code
+    # Assertion preserved.
+    assert 'assert "controllerStatus" in status' in code
