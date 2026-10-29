@@ -116,6 +116,61 @@ def test_collect_includes_transitive_dependencies():
     assert "os.py" not in dest_map
 
 
+# --- (b2) package-init imports are followed (the __init__.py scan bug) ------
+
+
+def test_collect_follows_package_init_imports(tmp_path):
+    # The regression in isolation: pkg/__init__.py eagerly imports pkg.sub, and
+    # the ONLY thing the (stub) test imports directly is pkg/deep/leaf.py.
+    # Bundling leaf.py pulls in pkg/__init__.py as a package marker; that init
+    # must now be SCANNED so pkg/sub.py (which it imports) is also bundled.
+    _write(tmp_path / "pkg" / "__init__.py", "from pkg.sub import Thing\n")
+    _write(tmp_path / "pkg" / "sub.py", "class Thing:\n    pass\n")
+    _write(tmp_path / "pkg" / "deep" / "__init__.py", "")
+    _write(tmp_path / "pkg" / "deep" / "leaf.py", "VALUE = 1\n")
+
+    analysis = _fake_analysis(tmp_path, tmp_path / "pkg" / "deep" / "leaf.py", "pkg.deep.leaf")
+    dest = {d for d, _ in _collect_dependency_files(analysis)}
+
+    assert "pkg/deep/leaf.py" in dest
+    assert "pkg/__init__.py" in dest
+    # the package-init import must now be followed:
+    assert "pkg/sub.py" in dest
+
+
+def test_collect_follows_real_clamps_package_init_chain():
+    # Real-fixture proof: clamps/__init__.py imports clamps.cenxrestapi,
+    # clamps.cenxfederatedapi, clamps.databases.solr.solr, clamps.cenxqueryapi.
+    # All resolve as packages/modules on disk and were previously MISSED
+    # because the bundled clamps/__init__.py was never scanned.
+    if not _robot_available() or not _NIFI_ROBOT.is_file():
+        return
+    analysis = _analyze_path_for_studio(str(_NIFI_ROBOT), "", str(_AUTOTEST_ROOT))
+    dest_map = _dest_map(analysis)
+
+    # package inits reached only via scanning clamps/__init__.py:
+    assert "clamps/cenxrestapi/__init__.py" in dest_map
+    assert "clamps/cenxfederatedapi/__init__.py" in dest_map
+    assert "clamps/cenxqueryapi/__init__.py" in dest_map
+    # the exact submodule from the reported ModuleNotFoundError trace:
+    #   from clamps.cenxrestapi import Session  -> clamps/cenxrestapi/session.py
+    assert "clamps/cenxrestapi/session.py" in dest_map
+    assert "clamps/cenxrestapi/customization.py" in dest_map
+    assert "clamps/cenxrestapi/topology.py" in dest_map
+    assert "clamps/cenxrestapi/data.py" in dest_map
+    assert "clamps/cenxrestapi/cenxens.py" in dest_map
+    # recursion continues through the second-level package inits:
+    assert "clamps/cenxqueryapi/cenxqueryapi.py" in dest_map
+    assert "clamps/cenxfederatedapi/entity.py" in dest_map
+    # and the module imported via the dotted submodule path:
+    assert "clamps/databases/solr/solr.py" in dest_map
+
+    # every clamps module these inits resolve to maps to a real file on disk
+    for rel, abs_src in dest_map.items():
+        if rel.startswith("clamps/") and abs_src is not None:
+            assert Path(abs_src).is_file()
+
+
 # --- (c) bound / cycle guard (synthetic temp package) ----------------------
 
 
@@ -433,14 +488,17 @@ def test_collect_third_party_requirements_maps_distribution_names(tmp_path):
     assert "yaml" not in result  # mapped, not the raw import name
 
 
-def test_collect_third_party_requirements_skips_synthesized_and_init(tmp_path):
-    # Synthesized __init__ (abs_src None) and real __init__.py are never scanned.
+def test_collect_third_party_requirements_skips_synthesized_scans_real_init(tmp_path):
+    # Only synthesized __init__ (abs_src None) is skipped. A REAL package
+    # __init__.py IS scanned for third-party imports now, because Python runs
+    # it on any import into the package and its eager third-party imports must
+    # reach requirements.txt.
     _write(tmp_path / "pkg" / "__init__.py", "import kubernetes\n")
     dependency_files = [
         ("pkg/__init__.py", str(tmp_path / "pkg" / "__init__.py")),
-        ("pkg/sub/__init__.py", None),
+        ("pkg/sub/__init__.py", None),  # synthesized -> skipped
     ]
-    assert _collect_third_party_requirements(dependency_files, str(tmp_path)) == []
+    assert _collect_third_party_requirements(dependency_files, str(tmp_path)) == ["kubernetes"]
 
 
 def test_collect_third_party_requirements_sorted_and_deduped(tmp_path):

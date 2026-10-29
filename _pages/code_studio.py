@@ -391,11 +391,26 @@ def _collect_dependency_files(
     # queue of (abs_py_path, dest_rel, depth) to statically scan for imports.
     scan_queue: list[tuple[str, str, int]] = []
 
-    def _add(dest_rel: str, abs_src: str | None) -> None:
+    def _add(dest_rel: str, abs_src: str | None, depth: int) -> None:
         if dest_rel not in dest_map:
             dest_map[dest_rel] = abs_src
             for init_rel, init_src in _iter_init_entries(dest_rel, source_root):
                 dest_map.setdefault(init_rel, init_src)
+                # Package __init__.py files are copied verbatim AND must be
+                # scanned for their own imports: Python runs a package's
+                # __init__.py on any import into that package, so its eager
+                # submodule imports must be bundled too. Enqueue each real
+                # __init__.py into the SAME bounded recursion (same visited-set
+                # cycle guard, depth, and max_files cap). It is enqueued at the
+                # discovering file's depth because it is bundled *because of*
+                # that file; its own imports then recurse at depth + 1.
+                if init_src is None:
+                    continue
+                abs_init = str(Path(init_src).resolve())
+                if abs_init in visited_abs:
+                    continue
+                visited_abs.add(abs_init)
+                scan_queue.append((abs_init, init_rel, depth))
 
     # --- Direct dependencies from the analyzer's resolved paths. ---
     for fd in analysis.get("files", []):
@@ -415,7 +430,7 @@ def _collect_dependency_files(
             if abs_norm in visited_abs:
                 continue
             visited_abs.add(abs_norm)
-            _add(dest, rp)
+            _add(dest, rp, 0)
             if dest.endswith(".py"):
                 scan_queue.append((abs_norm, dest, 0))
         for key in ("resources", "variables"):
@@ -432,7 +447,7 @@ def _collect_dependency_files(
                 if abs_norm in visited_abs:
                     continue
                 visited_abs.add(abs_norm)
-                _add(dest, rp)
+                _add(dest, rp, 0)
                 if dest.endswith(".py"):
                     scan_queue.append((abs_norm, dest, 0))
 
@@ -459,7 +474,7 @@ def _collect_dependency_files(
             if not dest:
                 continue
             visited_abs.add(abs_norm)
-            _add(dest, resolved)
+            _add(dest, resolved, depth + 1)
             if len(dest_map) >= max_files:
                 break
             if dest.endswith(".py"):
@@ -523,9 +538,11 @@ def _collect_third_party_requirements(
 
     found: set[str] = set()
     for dest_rel, abs_src in dependency_files:
+        # Real package __init__.py files ARE scanned for third-party imports
+        # (a package-init import of e.g. `kubernetes` must reach
+        # requirements.txt). Only synthesized-empty markers (abs_src is None)
+        # are skipped.
         if abs_src is None or not dest_rel.endswith(".py"):
-            continue
-        if dest_rel.endswith("__init__.py"):
             continue
         try:
             text = Path(abs_src).read_text(encoding="utf-8", errors="replace")
