@@ -1,8 +1,8 @@
 """Shared data models for the Advisor Agent."""
 
-from pydantic import BaseModel, Field
-from typing import Optional
 from enum import Enum
+
+from pydantic import BaseModel, Field
 
 
 class ArchitectureType(str, Enum):
@@ -48,10 +48,10 @@ class UserProfile(BaseModel):
     secondary_languages: list[str] = []
     team_size: int = Field(ge=1)
     automation_experience: ExperienceLevel
-    current_framework: Optional[str] = None
+    current_framework: str | None = None
     ci_cd_tool: str
     containerized: bool = False
-    cloud_grid: Optional[str] = None
+    cloud_grid: str | None = None
     parallel_required: bool = False
     browsers_required: list[str] = []
     special_ui: list[str] = []
@@ -68,6 +68,6 @@ class UserProfile(BaseModel):
     cloud_services_used: list[str] = []  # e.g., EC2, Lambda, S3, RDS
     infrastructure_scale: str = ""  # small, medium, large, enterprise
     compliance_requirements: list[str] = []  # SOC2, HIPAA, PCI-DSS, etc.
-    existing_iac_tool: Optional[str] = None  # current IaC tool if any
+    existing_iac_tool: str | None = None  # current IaC tool if any
     multi_account: bool = False  # multi-account/multi-region deployment
     immutable_infrastructure: bool = False  # containers/serverless vs mutable VMs

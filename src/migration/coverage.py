@@ -1,8 +1,9 @@
 """Coverage Gap Analysis engine."""
 
 from dataclasses import dataclass, field
-from src.models import UserProfile
+
 from src.knowledge_base.schema import FrameworkData
+from src.models import UserProfile
 
 
 @dataclass
@@ -127,7 +128,10 @@ class CoverageAnalyzer:
         # Canvas/WebGL gap
         if any("canvas" in ui.lower() or "webgl" in ui.lower() for ui in profile.special_ui):
             canvas_cap = target_fw.capabilities.get("canvas_webgl", "")
-            if canvas_cap != True:
+            # Intentionally not `not canvas_cap`: canvas_cap can be a truthy
+            # non-boolean string like "partial" or "plugin", which must still
+            # register as a gap. Only an exact boolean True means full support.
+            if canvas_cap != True:  # noqa: E712
                 gaps.append(self.COMMON_GAPS["canvas_webgl"])
 
         # Mobile gap for web-only frameworks

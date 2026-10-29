@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING
 from src.graph.knowledge_graph import (
     Entity,
     EntityType,
-    KnowledgeGraph,
     Relationship,
     RelationshipType,
 )

@@ -2,8 +2,8 @@
 
 from dataclasses import dataclass
 
-from src.models import UserProfile, BudgetPreference
 from src.knowledge_base.schema import FrameworkData
+from src.models import BudgetPreference, UserProfile
 
 
 @dataclass

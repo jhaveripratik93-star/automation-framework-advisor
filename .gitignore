@@ -26,6 +26,10 @@ env/
 logs/
 *.log
 
+# Lint / type-check caches
+.ruff_cache/
+.mypy_cache/
+
 # OS files
 .DS_Store
 Thumbs.db

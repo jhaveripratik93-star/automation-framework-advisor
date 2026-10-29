@@ -1,5 +1,6 @@
 """Formatting helpers for tool output rendering."""
 from __future__ import annotations
+
 from typing import Any
 
 

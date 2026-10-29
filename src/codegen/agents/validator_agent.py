@@ -54,7 +54,7 @@ def run_validator(state: CodeGenState, llm_client: Any) -> dict:
 
     # Inject static findings as a concrete list so the LLM fixes exactly these
     static_findings = (
-        f"\n\nSTATIC PRE-CHECK FOUND UNDECLARED SYMBOLS — you MUST fix all of these:\n"
+        "\n\nSTATIC PRE-CHECK FOUND UNDECLARED SYMBOLS — you MUST fix all of these:\n"
         + "\n".join(f"  - {s}" for s in sorted(static.undeclared))
         if not static.is_clean else ""
     )

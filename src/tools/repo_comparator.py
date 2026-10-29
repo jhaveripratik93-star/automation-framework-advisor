@@ -16,7 +16,8 @@ import zipfile
 from pathlib import PurePosixPath
 from typing import NamedTuple
 
-from src.tools.assertion_counter import count as count_assertions, count_loop_assertions
+from src.tools.assertion_counter import count as count_assertions
+from src.tools.assertion_counter import count_loop_assertions
 
 # ---------------------------------------------------------------------------
 # Data model

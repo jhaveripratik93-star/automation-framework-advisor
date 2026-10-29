@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
-from collections import Counter, defaultdict
+from collections import defaultdict
 from typing import Any
 
 from src.codegen.models import (
@@ -21,7 +21,6 @@ from src.codegen.models import (
     PageMethod,
     PageObjectSpec,
     ParameterizedGroup,
-    StepGenerationResult,
     TargetFramework,
     TestCaseGenerationResult,
 )

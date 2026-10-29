@@ -1,7 +1,7 @@
 """Individual criterion scoring functions."""
 
-from src.models import UserProfile, CloudProvider
 from src.knowledge_base.schema import FrameworkData
+from src.models import CloudProvider, UserProfile
 
 
 def score_language_compatibility(

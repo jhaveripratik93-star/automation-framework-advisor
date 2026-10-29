@@ -11,9 +11,9 @@ Key design decisions:
 """
 from __future__ import annotations
 
-import re
 import logging
-from typing import Any, TYPE_CHECKING
+import re
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.knowledge_base.loader import KnowledgeBase
@@ -54,7 +54,7 @@ def classify_support(value: Any) -> str:
 
 # ── Auto-derive capability_map from YAML files ────────────────────────────────
 
-def build_capability_map(kb: "KnowledgeBase") -> dict[str, list[str]]:
+def build_capability_map(kb: KnowledgeBase) -> dict[str, list[str]]:
     """Build a mapping: human-readable label → [yaml_capability_keys].
 
     Strategy:
@@ -290,7 +290,7 @@ def score_framework_for_capability(
 
 def analyze_coverage(
     test_cases: list[dict],
-    kb: "KnowledgeBase",
+    kb: KnowledgeBase,
     frameworks: list[str] | None = None,
 ) -> dict:
     """Full coverage analysis.

@@ -113,7 +113,7 @@ def make_select_tools_node(tool_selection_agent, tool_executor):
             for turn in recent:
                 context_lines.append(f"{turn['role']}: {turn['content'][:150]}")
             if context_lines:
-                msg = f"[Conversation context]\n" + "\n".join(context_lines) + f"\n\n[Current message] {msg}"
+                msg = "[Conversation context]\n" + "\n".join(context_lines) + f"\n\n[Current message] {msg}"
         selection = tool_selection_agent.select(msg, available)
         logger.info("LangGraph[select_tools]: %d tool(s) selected", len(selection.tool_calls))
 

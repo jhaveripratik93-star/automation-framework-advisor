@@ -23,20 +23,26 @@ def build_codegen_brief(
     target_framework: str,
     test_cases: list[dict[str, Any]],
     selector_map: dict[str, str] | None,
+    team_id: str = "default",
 ) -> dict[str, Any]:
     """Build a manual-mode brief for generating test code from manual test
     cases, when no LLM is configured.
 
-    Reuses the same per-framework context (`FRAMEWORK_CONTEXT`) and step
-    generation rules (`STEP_GENERATOR_SYSTEM`) that `CodeGenOrchestrator`
-    sends to Groq, so manual-mode output follows identical conventions.
+    Reuses the same per-framework context and step generation rules
+    (`STEP_GENERATOR_SYSTEM`) that `CodeGenOrchestrator` sends to Groq, so
+    manual-mode output follows identical conventions — including a named
+    team profile's own style overrides (see src/team_profiles.py) when
+    `team_id` isn't "default". This is the most-used path (no API key
+    required), so team style has to apply here too, not just when Groq
+    is configured.
     """
-    from src.codegen.agent_config import FRAMEWORK_CONTEXT, STEP_GENERATOR_SYSTEM
+    from src.codegen.agent_config import STEP_GENERATOR_SYSTEM
+    from src.codegen.style_profiles import get_framework_context
 
     system_prompt = STEP_GENERATOR_SYSTEM.get(
         target_framework, STEP_GENERATOR_SYSTEM.get("playwright_ts", "")
     )
-    framework_ctx = FRAMEWORK_CONTEXT.get(target_framework, "")
+    framework_ctx = get_framework_context(target_framework, team_id=team_id)
     if framework_ctx:
         system_prompt = f"{system_prompt}\n\nFramework reference:\n{framework_ctx}"
 

@@ -19,20 +19,20 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from src.graph import KnowledgeGraph
     from src.graph.graphrag_engine import GraphRAGEngine
     from src.knowledge_base.loader import KnowledgeBase
-    from src.graph import KnowledgeGraph
 
+from src.agents.callbacks import PipelineCallbackHandler, logging_callback
 from src.agents.decision_agent import DecisionAgent
-from src.agents.tool_selection_agent import ToolSelectionAgent
 from src.agents.evaluation_agent import EvaluationAgent
 from src.agents.format_agent import FormatAgent
+from src.agents.langgraph_pipeline import build_pipeline
+from src.agents.memory import ConversationMemory
 from src.agents.reflection_agent import ReflectionAgent
 from src.agents.synthesis_agent import SynthesisAgent
-from src.agents.memory import ConversationMemory
-from src.agents.callbacks import PipelineCallbackHandler, logging_callback
-from src.agents.langgraph_pipeline import build_pipeline
 from src.agents.tool_router import ToolRouter
+from src.agents.tool_selection_agent import ToolSelectionAgent
 from src.coverage.test_case_extraction import extract_test_cases_from_text
 
 logger = logging.getLogger(__name__)
@@ -63,7 +63,7 @@ class AgentOrchestrator:
         self._synthesis_agent = SynthesisAgent(llm_client=llm_client)
         self._evaluation_agent = EvaluationAgent(llm_client=llm_client)
         self._reflection_agent = ReflectionAgent(llm_client=llm_client)
-        self._format_agent = FormatAgent(llm_client=llm_client)
+        self._format_agent = FormatAgent(llm_client=llm_client, knowledge_base=knowledge_base)
 
         # ── Conversation memory (persists across pipeline invocations) ─
         self._conversation_memory = ConversationMemory(max_turns=50)

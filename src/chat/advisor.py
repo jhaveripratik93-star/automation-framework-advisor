@@ -6,11 +6,10 @@ responses in Phase 2 by swapping the `respond()` method.
 
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
+from src.knowledge_base import KnowledgeBase
 from src.models import UserProfile
-from src.knowledge_base import KnowledgeBase, FrameworkData
 from src.scoring.models import DecisionMatrix, FrameworkScore
 
 

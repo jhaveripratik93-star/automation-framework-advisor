@@ -1,8 +1,8 @@
 """Scoring & Evaluation Engine module."""
 
 from .engine import ScoringEngine
+from .models import CriteriaScores, DecisionMatrix, FrameworkScore
 from .weights import WeightProfile
-from .models import DecisionMatrix, FrameworkScore, CriteriaScores
 
 __all__ = [
     "ScoringEngine",

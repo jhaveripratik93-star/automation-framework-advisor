@@ -7,11 +7,11 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from src.codegen.agent_config import (
-    FRAMEWORK_CONTEXT,
     PIPELINE_SETTINGS,
     SUITE_ARCHITECT_SYSTEM,
     SUITE_ARCHITECT_USER_TEMPLATE,
 )
+from src.codegen.style_profiles import get_framework_context
 
 if TYPE_CHECKING:
     from src.codegen.pipeline import CodeGenState
@@ -49,7 +49,7 @@ def run_suite_architect(state: CodeGenState, llm_client: Any) -> dict:
 
     test_cases_text = _format_test_case(tc)
     scenario_text = json.dumps(scenario, indent=2) if scenario else "not available"
-    fw_context = FRAMEWORK_CONTEXT.get(framework, "")
+    fw_context = get_framework_context(framework)
 
     prompt = SUITE_ARCHITECT_USER_TEMPLATE.format(
         framework=framework,

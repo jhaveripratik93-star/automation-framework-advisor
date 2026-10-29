@@ -7,7 +7,8 @@ capabilities: ``analyze_test_case_coverage`` and ``analyze_uploaded_content``.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from src.tools.base_executor import BaseToolExecutor
 

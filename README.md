@@ -22,13 +22,12 @@ seamless migrations, and verifies 100% functional coverage parity.
 # Install dependencies
 pip install -r requirements.txt
 
-# Set Groq API key (required for LLM features)
-# Option 1: Environment variable (recommended)
+# Set Groq API key (optional — enables LLM-backed features; the app
+# falls back to rule-based logic if this isn't set)
 export GROQ_API_KEY="your_api_key_here"
+# or create config/.env with GROQ_API_KEY=your_api_key_here
 
-# Option 2: The key is already hardcoded in the app as fallback
-
-# Option 1: Run the Streamlit UI (recommended for interactive use)
+# Run the Streamlit UI (recommended for interactive use)
 
 .\.venv\Scripts\streamlit.exe run streamlit_app.py
 # or
@@ -45,6 +44,8 @@ python run.py
 
 > **Note:** The app uses Groq's cloud API for LLM inference - no local setup required.
 > If Groq is unavailable, the advisor automatically falls back to the rule-based AdvisorChat.
+>
+> See [docs/QUICK_START.md](docs/QUICK_START.md) for a full first-steps walkthrough.
 
 ## Project Structure
 

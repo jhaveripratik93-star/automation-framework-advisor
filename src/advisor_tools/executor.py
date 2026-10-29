@@ -14,7 +14,8 @@ planning ``src.migration.planner``/``src.migration.coverage`` already own.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from src.scoring.weights import WeightProfile
 from src.tools.base_executor import BaseToolExecutor
@@ -302,6 +303,7 @@ class AdvisorToolsExecutor(BaseToolExecutor):
           6. Case-study relevance for this specific framework.
         """
         from collections import Counter
+
         from src.knowledge_base.schema import classify_framework_data
 
         lines = [f"## Framework Comparison: {' vs '.join(frameworks)}\n"]
@@ -378,8 +380,8 @@ class AdvisorToolsExecutor(BaseToolExecutor):
           - Best-fit badge on top scorer
           - Case-study relevance
         """
+        from src.models import ArchitectureType, ExperienceLevel, UserProfile
         from src.scoring.engine import ScoringEngine
-        from src.models import UserProfile, ArchitectureType, ExperienceLevel
 
         use_case_lower = use_case.lower()
 
@@ -615,6 +617,7 @@ class AdvisorToolsExecutor(BaseToolExecutor):
     def _list_frameworks_by_category(self, category: str | None = None) -> str:
         """List frameworks grouped by their functional category using architecture_fit classification."""
         from collections import defaultdict
+
         from src.knowledge_base.schema import FRAMEWORK_CATEGORIES, classify_framework_data
 
         _KEYWORD_MAP: dict[str, str] = {
@@ -698,8 +701,8 @@ class AdvisorToolsExecutor(BaseToolExecutor):
         architecture: str = "web_spa",
     ) -> str:
         """Run ScoringEngine with the active WeightProfile and return a ranked scorecard."""
+        from src.models import ArchitectureType, ExperienceLevel, UserProfile
         from src.scoring.engine import ScoringEngine
-        from src.models import UserProfile, ArchitectureType, ExperienceLevel
 
         arch_map = {
             "api": ArchitectureType.API_ONLY,
@@ -742,7 +745,7 @@ class AdvisorToolsExecutor(BaseToolExecutor):
         }
 
         lines = [
-            f"## Weighted Framework Scorecard",
+            "## Weighted Framework Scorecard",
             f"*Active weight preset: **{self.weight_profile.profile_name}***\n",
             "| Rank | Framework | Score | Confidence | Top Strength | Key Weakness |",
             "|---|---|---|---|---|---|",

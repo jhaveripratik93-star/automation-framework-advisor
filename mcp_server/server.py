@@ -522,6 +522,7 @@ async def convert_test_code(
     from_framework: str,
     to_framework: str,
     ctx: Context,
+    team_id: str = "default",
 ) -> dict[str, Any]:
     """Convert a single test file's source code from one framework to
     another (e.g. Selenium -> Playwright, K6 -> Robot Framework),
@@ -565,13 +566,22 @@ async def convert_test_code(
     converted assertion-count delta), `parity_report` (per-test-case
     mismatch detail from the auto-chained repo comparator, with
     `is_equivalent` as the headline signal), and `report` (short
-    markdown summary of all of the above)."""
+    markdown summary of all of the above).
+
+    `team_id` selects a named team profile (created in the Streamlit
+    app's Settings -> Team Profiles dialog) so this team's own
+    conversion rules are used instead of the tool's shared defaults.
+    Leave as "default" unless the user has told you which team profile
+    to use — if this workspace's mcp.json sets DEFAULT_TEAM_PROFILE,
+    leaving this as "default" resolves to that configured profile
+    automatically, not the literal built-in default."""
     import anyio
 
     from mcp_server.sampling import make_llm_call
     from src.conversion.service import ConversionRequest, convert
 
     llm_call, llm_mode = make_llm_call(ctx)
+    resolved_team_id = svc.resolve_team_id(team_id)
 
     def _run_conversion():
         return convert(ConversionRequest(
@@ -579,6 +589,7 @@ async def convert_test_code(
             from_framework=from_framework,
             to_framework=to_framework,
             llm_call=llm_call,
+            team_id=resolved_team_id,
         ))
 
     result = await anyio.to_thread.run_sync(_run_conversion)
@@ -838,6 +849,7 @@ async def check_conversion_consistency(
     to_framework: str,
     ctx: Context,
     runs: int = 5,
+    team_id: str = "default",
 ) -> dict[str, Any]:
     """Run the SAME code conversion `runs` times in a row and report how
     reproducible and accurate the result is — this is the measurement
@@ -862,13 +874,18 @@ async def check_conversion_consistency(
     produced the same assertion count — the strict reproducibility bar),
     `assertion_counts` (list, one per run, to eyeball variance directly),
     and `report` (markdown summary). Keep `runs` modest (5-10) — each run
-    can itself make multiple LLM calls via its repair loop."""
+    can itself make multiple LLM calls via its repair loop.
+
+    `team_id` selects a named team profile, same as convert_test_code.
+    Leave as "default" unless told otherwise — if this workspace's
+    mcp.json sets DEFAULT_TEAM_PROFILE, that profile is used automatically."""
     import anyio
 
     from mcp_server.sampling import make_llm_call
     from src.conversion.consistency import check_consistency
 
     llm_call, llm_mode = make_llm_call(ctx)
+    resolved_team_id = svc.resolve_team_id(team_id)
 
     def _run_check():
         return check_consistency(
@@ -877,6 +894,7 @@ async def check_conversion_consistency(
             to_framework=to_framework,
             llm_call=llm_call,
             runs=runs,
+            team_id=resolved_team_id,
         )
 
     report = await anyio.to_thread.run_sync(_run_check)
@@ -908,6 +926,7 @@ def generate_test_code(
     test_cases: list[dict[str, Any]],
     target_framework: str = "playwright_py",
     selector_map: dict[str, str] | None = None,
+    team_id: str = "default",
 ) -> dict[str, Any]:
     """Generate executable automated test code from manual/plain-English
     test cases.
@@ -918,6 +937,14 @@ def generate_test_code(
 
     target_framework: one of playwright_ts, playwright_py, selenium_py,
     selenium_java, cypress_js, rest_assured, robot_framework.
+
+    team_id selects a named team profile (created in the Streamlit app's
+    Settings -> Team Profiles dialog) so generated code follows that
+    team's own coding standards instead of the tool's built-in defaults.
+    Leave as "default" unless the user has told you which team profile
+    to use — if this workspace's mcp.json sets DEFAULT_TEAM_PROFILE,
+    leaving this as "default" resolves to that configured profile
+    automatically.
 
     selector_map optionally maps element phrases (e.g. "username field")
     to concrete CSS/XPath selectors — anything left unmapped is
@@ -941,9 +968,11 @@ def generate_test_code(
             )
         }
 
+    resolved_team_id = svc.resolve_team_id(team_id)
+
     if not svc.groq_available():
         from mcp_server.manual_mode import build_codegen_brief
-        return build_codegen_brief(fw_value, test_cases, selector_map)
+        return build_codegen_brief(fw_value, test_cases, selector_map, team_id=resolved_team_id)
 
     from src.codegen import CodeGenRequest, ManualTestCase, TargetFramework, TestStep
 
@@ -974,6 +1003,7 @@ def generate_test_code(
         test_cases=manual_tests,
         target_framework=TargetFramework(fw_value),
         selector_map=selector_map or {},
+        team_id=resolved_team_id,
     )
     orchestrator = svc.get_codegen_orchestrator()
     suite = orchestrator.generate(request)
@@ -1081,7 +1111,8 @@ def compare_repos_csv(
     downloadable CSV string (Test Case, File A, File B, Assertions A,
     Assertions B, Delta, Status) — convenient for writing straight to a
     .csv file."""
-    from src.tools.repo_comparator import compare_repos as _compare_repos, to_csv
+    from src.tools.repo_comparator import compare_repos as _compare_repos
+    from src.tools.repo_comparator import to_csv
 
     report = _compare_repos(files_a, files_b, framework_a, framework_b)
     return to_csv(report)

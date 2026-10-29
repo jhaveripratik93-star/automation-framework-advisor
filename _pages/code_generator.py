@@ -276,11 +276,15 @@ def _extract_elements_from_steps(test_cases: list) -> list[str]:
 
 
 def _generate(fw_label: str) -> None:
-    from src.codegen import (
-        CodeGenOrchestrator, CodeGenRequest, ManualTestCase,
-        TestStep, TargetFramework, CodeGenOptions,
-    )
     from services.app_services import get_llm_client
+    from src.codegen import (
+        CodeGenOptions,
+        CodeGenOrchestrator,
+        CodeGenRequest,
+        ManualTestCase,
+        TargetFramework,
+        TestStep,
+    )
 
     fw_value  = _TARGET_FRAMEWORKS[fw_label]
     framework = TargetFramework(fw_value)
@@ -326,6 +330,7 @@ def _generate(fw_label: str) -> None:
             target_framework=framework,
             options=options,
             selector_map=selector_map,
+            team_id=st.session_state.get("active_team_profile", "default"),
         )
         total = len(manual_tests)
 
@@ -335,13 +340,19 @@ def _generate(fw_label: str) -> None:
         completed = [0]
         project_context = st.session_state.get("codegen_project_context")
         def _tracked(req):
-            from src.codegen.renderer import _FRAMEWORK_CONFIG
+            import re
+            import time
+
             from src.codegen.agent_config import PIPELINE_SETTINGS
-            import time, re
             from src.codegen.models import (
-                FileType, GeneratedFile, GenerationSource, GenerationStats,
-                GeneratedTestSuite, ValidationResult,
+                FileType,
+                GeneratedFile,
+                GeneratedTestSuite,
+                GenerationSource,
+                GenerationStats,
+                ValidationResult,
             )
+            from src.codegen.renderer import _FRAMEWORK_CONFIG
             fw   = req.target_framework
             cfg  = _FRAMEWORK_CONFIG.get(fw.value, _FRAMEWORK_CONFIG["playwright_ts"])
             files, _per_tc_states = [], []
@@ -441,13 +452,15 @@ def _generate(fw_label: str) -> None:
         status.empty()
     except Exception as e:
         st.error(f"Generation failed: {e}")
-        import traceback; st.code(traceback.format_exc())
+        import traceback
+        st.code(traceback.format_exc())
     finally:
         progress.empty()
 
 
 def _show_result() -> None:
-    import io, zipfile
+    import io
+    import zipfile
     result = st.session_state.codegen_result
     st.markdown("---")
 

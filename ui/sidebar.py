@@ -43,7 +43,7 @@ def render() -> None:
 # ── Per-page sidebar sections ─────────────────────────────────────────
 
 def _advisor_sidebar() -> None:
-    from src.scoring.weights import WeightProfile, PRESETS, CRITERIA_IDS, CLOUD_CRITERIA_IDS
+    from src.scoring.weights import CLOUD_CRITERIA_IDS, CRITERIA_IDS, PRESETS, WeightProfile
 
     _CRITERIA_LABELS = {
         "C1_language_compatibility": "Language Compatibility",
@@ -304,8 +304,8 @@ def _home_sidebar() -> None:
         )
 
         # Last-updated info instead of auto-scan
-        from pathlib import Path as _Path
         import datetime
+        from pathlib import Path as _Path
         fw_dir = _Path("data/frameworks")
         if fw_dir.exists():
             mtimes = [f.stat().st_mtime for f in fw_dir.glob("*.yaml")]
@@ -362,7 +362,6 @@ def _studio_sidebar() -> None:
 
         if st.button("🗑 Clear Studio", key="sb_clear_studio", use_container_width=True):
             st.session_state.studio_result = None
-            st.session_state.studio_consistency_report = None
             st.session_state.studio_source_code = ""
             st.session_state.studio_widget_key_v += 1
             st.rerun()
@@ -615,7 +614,8 @@ def _fetch_url(url: str) -> tuple[str, str]:
 
 def _ingest_case_study(text: str, source: str = "case_study") -> None:
     try:
-        import re, hashlib
+        import hashlib
+        import re
         from pathlib import Path
         slug = re.sub(r"[^a-z0-9]+", "_", source.lower())[:40]
         uid  = hashlib.md5(text[:200].encode()).hexdigest()[:6]

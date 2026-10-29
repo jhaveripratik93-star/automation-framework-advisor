@@ -2,6 +2,7 @@
 
 import math
 from dataclasses import dataclass, field
+
 from src.models import UserProfile
 
 

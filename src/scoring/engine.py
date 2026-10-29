@@ -3,23 +3,24 @@
 import logging
 from datetime import datetime
 
+from src.knowledge_base import FrameworkData, KnowledgeBase
 from src.models import UserProfile
-from src.knowledge_base import KnowledgeBase, FrameworkData
+
 from .criteria import (
-    score_language_compatibility,
     score_api_validation,
-    score_performance_load,
     score_cicd_integration,
-    score_maintainability,
-    score_cloud_readiness,
-    score_license_cost,
-    score_cloud_provider_support,
-    score_iac_capabilities,
     score_cloud_migration_readiness,
+    score_cloud_provider_support,
+    score_cloud_readiness,
+    score_iac_capabilities,
+    score_language_compatibility,
+    score_license_cost,
+    score_maintainability,
+    score_performance_load,
 )
-from .penalties import calculate_penalties, calculate_bonuses
-from .weights import WeightProfile, CRITERIA_IDS
-from .models import DecisionMatrix, FrameworkScore, CriteriaScores
+from .models import CriteriaScores, DecisionMatrix, FrameworkScore
+from .penalties import calculate_bonuses, calculate_penalties
+from .weights import WeightProfile
 
 logger = logging.getLogger(__name__)
 
@@ -222,7 +223,17 @@ class ScoringEngine:
     def _derive_pros_cons(
         self, score: FrameworkScore
     ) -> tuple[list[str], list[str]]:
-        """Derive pros and cons from criteria scores."""
+        """Derive pros and cons from criteria scores.
+
+        `pros` always includes at least one entry — the single
+        highest-scoring criterion — even if it falls short of the
+        "Strong" (>=85) bar, labeled as a relative "Best: ..." pick
+        instead. Without this fallback, a framework whose scores are all
+        solid-but-unremarkable (e.g. K6: 75/50/78/78/25/81/70 — nothing
+        clears 85) shows no "Top Strength" at all, which reads as a data
+        gap rather than what it actually is: a framework with no single
+        standout strength.
+        """
         scores_dict = score.criteria_scores.model_dump()
         if score.cloud_criteria_scores:
             scores_dict.update(score.cloud_criteria_scores)
@@ -249,6 +260,11 @@ class ScoringEngine:
                 pros.append(f"Strong {label} ({value}/100)")
             elif value <= 40:
                 cons.append(f"Weak {label} ({value}/100)")
+
+        if not pros and scores_dict:
+            best_c_id, best_value = max(scores_dict.items(), key=lambda kv: kv[1])
+            best_label = criterion_labels.get(best_c_id, best_c_id)
+            pros.append(f"Best: {best_label} ({best_value}/100)")
 
         for penalty in score.penalties_applied:
             cons.append(penalty)

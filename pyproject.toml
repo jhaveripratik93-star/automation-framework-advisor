@@ -1,0 +1,68 @@
+[project]
+name = "automation-framework-advisor"
+version = "0.1.0"
+description = "AI-powered advisor for automation framework selection, migration, and coverage analysis."
+requires-python = ">=3.11"
+
+# ── Ruff (lint + import sort) ──────────────────────────────────────────
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+exclude = [".venv", "data", "logs", "state", "static"]
+
+[tool.ruff.lint]
+# E/F  = pycodestyle + pyflakes (correctness essentials)
+# I    = import sorting
+# UP   = pyupgrade (modern syntax)
+# B    = flake8-bugbear (likely-bug patterns)
+select = ["E", "F", "I", "UP", "B"]
+
+# Baseline exceptions — pre-existing style debt at the time this config
+# was introduced, intentionally NOT auto-fixed in bulk to avoid a
+# behavior-risking mass-edit across unrelated modules. New code should
+# not rely on these; tighten this list over time as the debt is paid
+# down file by file.
+ignore = [
+    "E501",  # line-too-long — codebase predates this line-length convention
+    "E701",  # multiple-statements-on-one-line-colon (a few one-liners)
+    "E702",  # multiple-statements-on-one-line-semicolon
+    "E741",  # ambiguous-variable-name (e.g. `l` in a few comprehensions)
+    "E402",  # module-import-not-at-top — a couple of intentional sys.path-before-import spots
+    "UP042", # replace-str-enum — changing enum base classes is a behavior risk, not a style nit
+    "F841",  # unused-variable — pre-existing; worth a dedicated pass, not a blanket autofix
+    "B007",  # unused-loop-control-variable
+    "B905",  # zip-without-explicit-strict
+]
+
+[tool.ruff.lint.per-file-ignores]
+# These try/except imports exist specifically to re-export optional
+# submodules via __all__.append(...) for availability probing — ruff
+# can't see that usage, so F401 is a false positive here.
+"src/graph/__init__.py" = ["F401"]
+
+# Intentional staged bootstrap: imports are deliberately interleaved
+# with top-level statements (sys.path setup, st.set_page_config() must
+# run first, kb = get_kb() must happen before later imports that assume
+# it's loaded) — reordering for import-sort compliance would obscure the
+# documented initialization sequence of the app's entry point.
+"streamlit_app.py" = ["E402", "I001"]
+
+# ── mypy (type checking) ───────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = false
+# NOTE: there is a pre-existing baseline of ~35 type errors scattered
+# across the codebase (predating this config). CI runs mypy as a
+# non-blocking/informational step for now — see .github/workflows/ci.yml
+# — rather than silently suppressing them or attempting a risky blanket
+# fix. Tighten this (and flip CI to blocking) as the baseline is cleared.
+exclude = ["^\\.venv/", "^tests/"]
+
+# ── pytest ──────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# test_groq_connection.py is a manual smoke script (live network call
+# against the real Groq API), not a unit test — excluded from the
+# default run so CI never depends on, or spends, a real API key/quota.
+addopts = "--ignore=tests/test_groq_connection.py"

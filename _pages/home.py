@@ -38,7 +38,7 @@ def render() -> None:
         </div>
         <div class="home-stat-pill">
             <div class="home-stat-icon">🧭</div>
-            <div><div class="home-stat-value">6</div><div class="home-stat-label">Core Features</div></div>
+            <div><div class="home-stat-value">5</div><div class="home-stat-label">Core Features</div></div>
         </div>
         <div class="home-stat-pill">
             <div class="home-stat-icon">📡</div>

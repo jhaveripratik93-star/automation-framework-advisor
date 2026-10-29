@@ -2,7 +2,6 @@
 
 import logging
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from src.models import UserProfile
 
@@ -158,10 +157,10 @@ class BoilerplateGenerator:
             "[pytest]\n"
             "testpaths = tests\n"
             "addopts = --html=reports/report.html --self-contained-html\n"
-            f"markers =\n"
-            f"    smoke: Smoke test suite\n"
-            f"    regression: Full regression suite\n"
-            f"    api: API tests\n"
+            "markers =\n"
+            "    smoke: Smoke test suite\n"
+            "    regression: Full regression suite\n"
+            "    api: API tests\n"
         )
 
     def _gen_conftest(self, framework: str, profile: UserProfile) -> str:
@@ -189,7 +188,7 @@ class BoilerplateGenerator:
                 'CMD ["pytest", "--headed=false"]\n'
             )
         return (
-            f"FROM python:3.11-slim\n\n"
+            "FROM python:3.11-slim\n\n"
             "WORKDIR /app\n"
             "COPY requirements.txt .\n"
             "RUN pip install -r requirements.txt\n"

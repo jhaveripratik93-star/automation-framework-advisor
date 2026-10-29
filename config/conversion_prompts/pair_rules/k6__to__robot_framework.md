@@ -2,11 +2,14 @@ K6 → Robot Framework CONVERSION RULES
 K6 is an HTTP/load tool. Robot Framework replaces it using RequestsLibrary
 for HTTP calls.
 
+## Required Setup
+
 MANDATORY library imports under *** Settings ***:
     Library    RequestsLibrary
     Library    Collections
 
-*** CRITICAL — group()/exported-function → Test Case MAPPING (read first) ***
+## Shape Detection (Read First)
+
 A k6 source file has ONE of two shapes. Identify which shape you are given
 and follow its rule EXACTLY — this determines whether the output needs a
 *** Test Cases *** section at all:
@@ -66,7 +69,8 @@ single file contains BOTH group()-wrapped sections AND top-level
 check()s outside any group(), apply SHAPE A per group and SHAPE C for the
 remaining ungrouped logic, in the same file.
 
-CONVERSION DETAILS:
+## Conversion Details
+
 - Return statements: use the modern `RETURN    ${variable}` syntax
   (NEVER `[Return]`).
 - Exception handling: use `TRY ... EXCEPT    AS    ${error} ... END`
@@ -76,6 +80,8 @@ CONVERSION DETAILS:
 - List parameters in [Arguments]: pass as a standard scalar `${METRICS}`
   if other positional arguments follow it; use `@{METRICS}` only when it's
   the last argument or there are no further positional arguments after it.
+
+## Keyword / API Mapping
 
 EXAMPLE CONVERSION PATTERN:
 *** Keywords ***
@@ -113,7 +119,9 @@ Each test MUST:
 2. Make the HTTP call and store the result in ${response}
 3. Assert EVERY k6 check() entry with the matching RF keyword above
 
-EXAMPLE (SHAPE A) — converting this k6 code:
+## Worked Example — Shape A
+
+Converting this k6 code:
 export function getUsers() {
     let result = true;
     group('Get Users Returns 200 With Users Key', function () {
@@ -149,8 +157,10 @@ Get Users Returns 200 With Users Key
     ${result}=    Get Users
     Should Be True    ${result}
 
-EXAMPLE (SHAPE C — no group(), checks live directly in the default
-function) — converting this k6 code:
+## Worked Example — Shape C
+
+No group(), checks live directly in the default function — converting
+this k6 code:
 export const options = {
     vus: 10,
     duration: '30s',

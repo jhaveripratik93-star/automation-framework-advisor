@@ -297,7 +297,7 @@ _EXTERNAL_IMPORT_MARKERS = {
     "sqlalchemy": "sqlalchemy", "cx_oracle": "oracle",
     # Messaging
     "confluent_kafka": "kafka", "kafka": "kafka",
-    "pika": "rabbitmq", "boto3": "aws-sqs",
+    "pika": "rabbitmq",
     "aio_pika": "rabbitmq",
     # HTTP clients
     "requests": "http-requests", "httpx": "http-httpx",

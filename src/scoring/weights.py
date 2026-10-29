@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from src.models import UserProfile, BudgetPreference, ExperienceLevel
 
+from src.models import BudgetPreference, ExperienceLevel, UserProfile
 
 # Criterion IDs
 C1 = "C1_language_compatibility"

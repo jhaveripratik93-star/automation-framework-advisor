@@ -6,18 +6,21 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.models import UserProfile
-from src.knowledge_base import KnowledgeBase
-from src.scoring import ScoringEngine, WeightProfile, DecisionMatrix
-from src.migration.planner import MigrationPlanner
-from src.migration.coverage import CoverageAnalyzer
 from src.generator import BoilerplateGenerator
+from src.knowledge_base import KnowledgeBase
+from src.migration.coverage import CoverageAnalyzer
+from src.migration.planner import MigrationPlanner
+from src.models import UserProfile
+from src.scoring import DecisionMatrix, ScoringEngine, WeightProfile
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global instances
-kb = KnowledgeBase(data_dir="data/frameworks")
+# Global instances. `kb` is built (and loaded) in `lifespan()` below via
+# the shared src.bootstrap factory — nothing expensive runs at import
+# time, matching the lazy-loading convention used by
+# services/app_services.py and mcp_server/services.py.
+kb: KnowledgeBase | None = None
 scoring_engine: ScoringEngine | None = None
 migration_planner = MigrationPlanner()
 coverage_analyzer = CoverageAnalyzer()
@@ -27,15 +30,16 @@ boilerplate_generator = BoilerplateGenerator()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup/shutdown lifecycle."""
-    global scoring_engine
-    kb.load()
+    global kb, scoring_engine
+    from src.bootstrap import build_kb, build_scanner
+
+    kb = build_kb()
     scoring_engine = ScoringEngine(knowledge_base=kb)
     logger.info("Advisor Agent initialized successfully")
 
     # Auto-discover new frameworks on startup (non-blocking)
     try:
-        from src.discovery.framework_scanner import FrameworkScanner
-        scanner = FrameworkScanner(kb=kb, data_dir="data/frameworks")
+        scanner = build_scanner(kb)
         new_fws = scanner.scan(force=False)
         if new_fws:
             logger.info(
@@ -64,6 +68,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _require_kb() -> KnowledgeBase:
+    """Narrow the Optional[KnowledgeBase] global for type checkers and
+    fail with a clear 503 instead of an AttributeError if a route is
+    somehow invoked before the lifespan startup hook has run."""
+    if kb is None:
+        raise HTTPException(status_code=503, detail="Knowledge base not initialized")
+    return kb
 
 
 @app.get("/")
@@ -96,7 +109,8 @@ async def list_frameworks():
 async def list_frameworks_categorized():
     """List all frameworks in the knowledge base grouped by category."""
     from src.knowledge_base.schema import (
-        FRAMEWORK_CATEGORIES, classify_framework_data,
+        FRAMEWORK_CATEGORIES,
+        classify_framework_data,
     )
 
     categorized: dict[str, list] = {cat_id: [] for cat_id in FRAMEWORK_CATEGORIES}
@@ -148,7 +162,7 @@ async def analyze_coverage(
     profile: UserProfile, target_framework: str = "Playwright"
 ):
     """Analyze coverage gaps for a target framework."""
-    fw_data = kb.get(target_framework.lower())
+    fw_data = _require_kb().get(target_framework.lower())
     if not fw_data:
         raise HTTPException(
             status_code=404,
@@ -190,10 +204,10 @@ async def discover_frameworks(force: bool = False):
     Returns:
         Discovered frameworks grouped by category, plus a flat list for backward compat.
     """
-    from src.discovery.framework_scanner import FrameworkScanner
+    from src.bootstrap import build_scanner
     from src.knowledge_base.schema import FRAMEWORK_CATEGORIES
 
-    scanner = FrameworkScanner(kb=kb, data_dir="data/frameworks")
+    scanner = build_scanner(_require_kb())
     new_fws = scanner.scan(force=force)
 
     # Flat list (backward compatible)
@@ -249,16 +263,11 @@ async def add_framework(name: str):
     Returns:
         Status and profile path if successful.
     """
-    from src.discovery.framework_scanner import FrameworkScanner
-    from src.llm.groq_client import GroqClient
+    from src.bootstrap import build_groq_client, build_scanner
     from src.knowledge_base.schema import FrameworkData
 
-    client = GroqClient()
-    scanner = FrameworkScanner(
-        kb=kb,
-        llm_client=client if client.is_available else None,
-        data_dir="data/frameworks",
-    )
+    client = build_groq_client()
+    scanner = build_scanner(_require_kb(), llm_client=client)
     profile = scanner.research_framework(name)
     if not profile:
         raise HTTPException(status_code=404, detail=f"Could not research framework: {name}")

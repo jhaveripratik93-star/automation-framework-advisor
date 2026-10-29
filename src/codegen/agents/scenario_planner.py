@@ -1,18 +1,15 @@
 """Scenario Planner Agent — analyses the full test case before any code is written."""
 from __future__ import annotations
 
-import json
 import logging
-import re
 from typing import TYPE_CHECKING, Any
 
 from src.codegen.agent_config import (
     ACTION_KEYWORDS,
-    FRAMEWORK_CONTEXT,
     PIPELINE_SETTINGS,
-    SCENARIO_PLANNER_SYSTEM,
     SCENARIO_PLANNER_USER_TEMPLATE,
 )
+from src.codegen.style_profiles import get_framework_context
 
 if TYPE_CHECKING:
     from src.codegen.pipeline import CodeGenState
@@ -55,7 +52,7 @@ def run_scenario_planner(state: CodeGenState, llm_client: Any) -> dict:
 
     prompt = SCENARIO_PLANNER_USER_TEMPLATE.format(
         test_cases=test_cases_text,
-        framework_context=FRAMEWORK_CONTEXT.get(framework, ""),
+        framework_context=get_framework_context(framework),
         project_context="none",
     )
 

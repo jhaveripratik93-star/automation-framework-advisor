@@ -51,6 +51,45 @@ GROQ_API_KEY=your_key_here
 GROQ_MODEL=openai/gpt-oss-120b
 ```
 
+### A note on DEFAULT_TEAM_PROFILE — pinning a team profile
+
+If you've created a named team profile (Streamlit app → Settings →
+Team Profiles — see the "Team Profiles" feature for what this is:
+per-team conversion prompts and codegen style, so different teams
+sharing this tool don't all get identical output), `convert_test_code`,
+`check_conversion_consistency`, and `generate_test_code` all accept an
+optional `team_id` argument to use it. Without `DEFAULT_TEAM_PROFILE`
+set, leaving `team_id` unspecified resolves to `"default"` (the tool's
+shared, built-in configuration) — Kiro has no way to know which named
+profile you want unless you tell it every time.
+
+Set `DEFAULT_TEAM_PROFILE` to pin this workspace's MCP connection to one
+team's profile automatically, so you never have to pass `team_id` on
+each call:
+
+```json
+{
+  "mcpServers": {
+    "automation-framework-advisor": {
+      "command": "<...>",
+      "args": ["<...>/mcp_server/server.py"],
+      "cwd": "<...>",
+      "env": { "DEFAULT_TEAM_PROFILE": "team_alpha" },
+      "disabled": false
+    }
+  }
+}
+```
+
+(or add `DEFAULT_TEAM_PROFILE=team_alpha` to `config/.env` instead — the
+`env` block in `mcp.json` takes precedence if both are set.) The profile
+must already exist (create it via the Streamlit UI first) — this only
+changes which one is used by default, not how profiles are created. An
+unknown or unset value falls back to `"default"` with a warning logged
+to `logs/mcp_server.log`, it never fails the call. You can still
+override it per-call by passing `team_id` explicitly — an explicit value
+always wins over `DEFAULT_TEAM_PROFILE`.
+
 ## 2. One-shot setup
 
 Run this single script after cloning/unzipping the project:

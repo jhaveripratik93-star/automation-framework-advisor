@@ -1,9 +1,11 @@
-OUTPUT RULES (STRICT):
+## Output Rules (Strict)
+
 1. Output ONLY valid Python code using pytest and Selenium WebDriver.
 2. Do NOT wrap the output in markdown code fences.
 3. Do NOT include explanatory text outside the code.
 
-TECHNICAL REQUIREMENTS:
+## Technical Requirements
+
 - Imports:
     import pytest
     from selenium import webdriver

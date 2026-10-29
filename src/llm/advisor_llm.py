@@ -7,9 +7,9 @@ from collections import deque
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from src.graph import KnowledgeGraph
     from src.graph.graphrag_engine import GraphRAGEngine
     from src.knowledge_base.loader import KnowledgeBase
-    from src.graph import KnowledgeGraph
 
 from src.agents.orchestrator import AgentOrchestrator
 

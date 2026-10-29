@@ -901,7 +901,7 @@ def _paste_mode(from_fw: str, to_fw: str, v: int) -> None:
             render_thinking(f"Converting {from_fw} → {to_fw}…")
 
         try:
-            from services.app_services import get_llm_client, get_kb
+            from services.app_services import get_kb, get_llm_client
             from src.conversion.service import ConversionRequest, convert
             from src.tools.formatters import resolve_framework
 
@@ -915,6 +915,7 @@ def _paste_mode(from_fw: str, to_fw: str, v: int) -> None:
                     from_framework=from_fw,
                     to_framework=to_fw,
                     llm_call=_llm_call,
+                    team_id=st.session_state.get("active_team_profile", "default"),
                 ),
                 to_fw_data=to_fw_data,
             )
@@ -924,7 +925,6 @@ def _paste_mode(from_fw: str, to_fw: str, v: int) -> None:
             st.session_state.studio_to_fw = to_fw
             st.session_state.studio_source_code = source_code
             st.session_state.studio_from_fw = from_fw
-            st.session_state.studio_consistency_report = None  # stale — frameworks/source changed
             _show_result()
 
         except Exception as exc:
@@ -1358,15 +1358,3 @@ def _show_result(result=None, to_fw=None, key_suffix: str = "single") -> None:
         with col_run:
             st.markdown("**Install & Run**")
             st.code(install_cmd + "\n" + run_cmd, language="bash")
-
-    with st.expander("🧾 Prompt sources used for this conversion", expanded=False):
-        if result.prompt_sources:
-            for s in result.prompt_sources:
-                st.markdown(f"- `{s}`")
-        else:
-            st.markdown("_No prompt files found — used built-in fallback prompt._")
-        st.caption(
-            "Edit these files under config/conversion_prompts/ to change how "
-            "conversions are generated for your whole team — no code change "
-            "or redeploy needed."
-        )
