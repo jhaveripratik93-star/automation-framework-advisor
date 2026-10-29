@@ -600,6 +600,24 @@ async def convert_test_code(
     return payload
 
 
+def _build_endpoint_context_for(
+    analysis: dict[str, Any], from_framework: str, to_framework: str
+) -> str:
+    """For a Robot->Playwright conversion, distill the resolved custom-library
+    source referenced by ``analysis`` into a keyword->HTTP-endpoint context (see
+    src/analysis/endpoint_extractor.build_endpoint_context). Returns "" for any
+    other framework pair or when nothing is derivable. Never raises — endpoint
+    extraction is best-effort and must not break conversion."""
+    if "robot" not in (from_framework or "").lower() or "playwright" not in (to_framework or "").lower():
+        return ""
+    try:
+        from src.analysis.endpoint_extractor import build_endpoint_context
+
+        return build_endpoint_context(analysis or {}, (analysis or {}).get("source_root") or "")
+    except Exception:  # noqa: BLE001 — context injection is best-effort
+        return ""
+
+
 def _convert_from_path_core(
     path: str,
     to_framework: str,
@@ -631,6 +649,15 @@ def _convert_from_path_core(
         return analysis
 
     resolved_path = analysis.get("input_path", path)
+
+    # For a Robot->Playwright conversion, distill the resolved custom-library
+    # source into a keyword->HTTP-endpoint context so the model can TRANSLATE
+    # keyword calls into native Playwright APIRequestContext calls instead of
+    # importing the legacy client. Best-effort: "" when nothing is derivable,
+    # in which case conversion behaves exactly as before (bundling fallback).
+    endpoint_context = _build_endpoint_context_for(
+        analysis, from_framework, to_framework
+    )
 
     if test_case_name and analysis.get("matched_test_cases", 0) == 0:
         return {
@@ -669,6 +696,7 @@ def _convert_from_path_core(
                 from_framework=from_framework,
                 to_framework=to_framework,
                 llm_call=llm_call,
+                shared_context=endpoint_context,
             ))
             file_results.append({
                 "file_path": fp,

@@ -56,6 +56,57 @@ class _ScriptedLLM:
         return self._output
 
 
+_NIFI_ROBOT = _AUTOTEST_ROOT / "core-tests" / "component" / "nifi.robot"
+
+
+class _CapturingLLM:
+    """Records every (system_prompt, user_prompt) pair it is called with so a
+    test can assert the injected custom-library endpoint context reached the
+    prompt. Returns a canned valid snippet."""
+
+    def __init__(self, output: str = VALID_PLAYWRIGHT_OUTPUT):
+        self._output = output
+        self.calls: list[tuple[str, str]] = []
+
+    def __call__(self, system_prompt: str, user_prompt: str) -> str:
+        self.calls.append((system_prompt, user_prompt))
+        return self._output
+
+
+def test_endpoint_context_injected_into_prompt_for_robot_to_playwright():
+    """A path-based Robot->Playwright conversion of nifi.robot feeds the
+    resolved custom-library endpoint map / source into the conversion context,
+    so the derived GET flow/status mapping is present in the user prompt the
+    (stubbed) llm_call receives. No live LLM involved."""
+    if not _robot_available() or not _NIFI_ROBOT.is_file():
+        return
+    analysis = _analyze_path_for_studio(str(_NIFI_ROBOT), "", str(_AUTOTEST_ROOT))
+    assert "error" not in analysis
+
+    llm = _CapturingLLM()
+    results = _convert_matched_files(
+        analysis, "Robot Framework", "Playwright", llm, to_fw_data=None
+    )
+    assert results and any("result" in fr for fr in results)
+    assert llm.calls, "expected at least one conversion call"
+
+    # The endpoint map (derived from clamps/nifi/nifi.py) must be in the prompt.
+    all_prompts = "\n".join(sys_p + "\n" + usr_p for sys_p, usr_p in llm.calls)
+    assert "get_flow_status" in all_prompts
+    assert "GET /nifi-api/flow/status" in all_prompts
+    # and the native-translation instruction travels with it
+    assert "APIRequestContext" in all_prompts
+
+
+def test_endpoint_context_not_injected_for_non_playwright_target():
+    """The endpoint context is Robot->Playwright specific — a different target
+    gets an empty shared_context (conversion unchanged)."""
+    from _pages.code_studio import _build_endpoint_context_for
+
+    analysis = {"source_root": "", "files": []}
+    assert _build_endpoint_context_for(analysis, "Robot Framework", "Cypress") == ""
+
+
 def test_analyze_single_file_returns_populated_dict():
     if not _robot_available() or not _COMBINED_ROBOT.is_file():
         return

@@ -54,6 +54,42 @@ def test_robot_to_playwright_profile_has_browser_free_api_rule():
     assert "must not" in rendered and "browser" in rendered
 
 
+def test_robot_to_playwright_profile_has_native_api_strategy():
+    """The Robot->Playwright rules now carry the ORDERED strategy (native-API
+    translation preferred, bundling fallback), the APIRequestContext +
+    skip-on-unreachable guidance, and the worked Nifi.get_flow_status example."""
+    set_prompts_root(None)
+    profile = load_prompt_profile("Robot Framework", "Playwright")
+    rendered = profile.render_system_prompt("Robot Framework", "Playwright")
+    low = rendered.lower()
+
+    # Ordered strategy: step 1 native-first, step 2 bundle fallback.
+    assert "step 1" in low and "step 2" in low
+    assert "native" in low
+    assert "fallback" in low or "fall back" in low
+    assert "prefer" in low  # native translation preferred
+
+    # APIRequestContext + skip-on-unreachable semantics.
+    assert "apirequestcontext" in low
+    assert "new_context" in low
+    assert "skip" in low and "unreachable" in low
+    assert "backendunavailable" in low
+    assert "resolve_setting" in low
+
+    # Self-contained requirement (no legacy client import / no bundling).
+    assert "self-contained" in low
+    assert "must not import" in low
+
+    # Worked example mirrors test_nifi_flow_status.py.
+    assert "nifi.get_flow_status" in low
+    assert "/nifi-api/flow/status" in low
+    assert "controllerstatus" in low
+    assert "nifi_base_url" in low
+
+    # Bundling fallback path is still described (kept working).
+    assert "bundl" in low
+
+
 def test_missing_pair_rules_degrades_gracefully():
     set_prompts_root(None)
     profile = load_prompt_profile("Selenium", "K6")  # no pair file for this combo

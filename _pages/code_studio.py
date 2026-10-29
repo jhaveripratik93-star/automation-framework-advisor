@@ -104,6 +104,25 @@ def _analyze_path_for_studio(path: str, test_case_name: str, source_root: str) -
     return filter_result_by_test_case(result, test_case_name)
 
 
+def _build_endpoint_context_for(analysis: dict, from_fw: str, to_fw: str) -> str:
+    """Pure (Streamlit-free) helper: for a Robot->Playwright conversion, distill
+    the resolved custom-library source referenced by ``analysis`` into a
+    keyword->HTTP-endpoint context string (see
+    src/analysis/endpoint_extractor.build_endpoint_context). Returns "" for any
+    other framework pair or when nothing is derivable, so callers can attach it
+    unconditionally. Never raises — endpoint extraction is best-effort and must
+    not break conversion."""
+    if "robot" not in (from_fw or "").lower() or "playwright" not in (to_fw or "").lower():
+        return ""
+    try:
+        from src.analysis.endpoint_extractor import build_endpoint_context
+
+        return build_endpoint_context(analysis or {}, (analysis or {}).get("source_root") or "")
+    except Exception as exc:  # noqa: BLE001 — context injection is best-effort
+        logger.info("endpoint context build failed (%s) — converting without it", exc)
+        return ""
+
+
 def _convert_matched_files(analysis: dict, from_fw: str, to_fw: str, llm_call, to_fw_data) -> list[dict]:
     """Pure (Streamlit-free) per-file read + convert loop for the path flow.
 
@@ -118,8 +137,17 @@ def _convert_matched_files(analysis: dict, from_fw: str, to_fw: str, llm_call, t
     ``{"file_path": fp, "result": ConversionResult}`` or
     ``{"file_path": fp, "error": "<message>"}``. ``llm_call`` and ``to_fw_data``
     are injected so this is unit-testable with a stub llm_call.
+
+    For a Robot->Playwright conversion, the resolved custom-library SOURCE is
+    distilled into a keyword->HTTP-endpoint context (best-effort, Streamlit-free)
+    and attached to each ConversionRequest so the model can translate keyword
+    calls into native Playwright APIRequestContext calls instead of importing the
+    legacy client. When nothing is derivable the context is empty and conversion
+    behaves exactly as before (falling back to bundling).
     """
     from src.conversion.service import ConversionRequest, convert
+
+    endpoint_context = _build_endpoint_context_for(analysis, from_fw, to_fw)
 
     file_results: list[dict] = []
     seen: set[str] = set()
@@ -141,6 +169,7 @@ def _convert_matched_files(analysis: dict, from_fw: str, to_fw: str, llm_call, t
                     from_framework=from_fw,
                     to_framework=to_fw,
                     llm_call=llm_call,
+                    shared_context=endpoint_context,
                 ),
                 to_fw_data=to_fw_data,
             )

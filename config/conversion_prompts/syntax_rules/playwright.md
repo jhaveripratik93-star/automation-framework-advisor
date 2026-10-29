@@ -16,13 +16,25 @@ BROWSER FIXTURE — ONLY WHEN THE TEST DRIVES A UI (STRICT):
   the browser `Page` fixture, and MUST NOT do anything that triggers
   pytest-playwright's browser launch. Injecting an unused `page` forces a
   Chromium launch at setup and fails the whole test for no reason.
-- For an API-only test that needs an HTTP client, use `requests`/`httpx`, or
-  Playwright's APIRequestContext via
-  `playwright.sync_api.sync_playwright().request` — and ONLY if an HTTP client
-  is actually needed. If the source already drives a custom client (e.g.
-  `Nifi()`), KEEP that custom client instead of introducing browser deps.
+- For an API-only test that needs an HTTP client, use Playwright's
+  APIRequestContext (`playwright.request.new_context(base_url=...)` then
+  `.get/.post/.put/.delete(...)`) or `requests`/`httpx`.
 - Keep custom test tags as registered pytest marks; never pull in a browser
   dependency just to satisfy a tag.
+
+PREFER NATIVE API TRANSLATION OVER IMPORTING A REST CLIENT (STRICT):
+- When a Robot keyword maps to a custom-library method that is ultimately a
+  direct HTTP/REST call (its body calls `self.rest.get/post/put/delete(...)`,
+  `self.client.<verb>(...)`, `requests.*`, `httpx.*`, or another HTTP client),
+  TRANSLATE it into a native Playwright APIRequestContext call with the REAL
+  method, path, headers/auth and base URL (scheme/host/port/base-path read from
+  the library + its config module). Make the connection env-overridable with the
+  SAME defaults the source used, and SKIP (not fail, not false-pass) when the
+  backend is unreachable. The resulting test MUST be self-contained — it MUST
+  NOT import the `clamps`/`common` client and MUST NOT require bundling.
+- ONLY fall back to importing the bundled custom client (see the direct-import
+  rule below) for a keyword whose behavior genuinely CANNOT be reduced to a
+  direct HTTP call (stateful drivers, DB sessions, k8s, message buses).
 
 BUNDLED CUSTOM LIBRARY IMPORTS — DIRECT, NO TODO-STUB FALLBACK (STRICT):
 - When a test depends on a custom library whose source will be bundled
