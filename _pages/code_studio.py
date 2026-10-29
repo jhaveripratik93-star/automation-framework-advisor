@@ -501,6 +501,12 @@ def _collect_dependency_files(
 _IMPORT_TO_DISTRIBUTION: dict[str, str] = {
     "yaml": "PyYAML",
     "robot": "robotframework",
+    # `import transit` is the Cognitect transit-python data-format library,
+    # whose PyPI distribution is `transit-python` — NOT the unrelated `transit`
+    # package on PyPI (a C++ exoplanet-transit modeling lib needing Eigen).
+    "transit": "transit-python",
+    # edn_format is imported as edn_format, installed as the same name on PyPI.
+    "edn_format": "edn_format",
 }
 
 
