@@ -50,6 +50,7 @@ class PromptProfile:
     syntax_rules: str          # rules for the TARGET framework (may be empty)
     pair_rules: str            # rules specific to (from, to) (may be empty)
     sources: list[str]         # file paths actually read, for diagnostics/UI display
+    reference_docs: str = ""   # team's uploaded architecture/design docs (may be empty)
 
     def render_system_prompt(self, from_name: str, to_name: str, *, extra: str = "") -> str:
         """Assemble the final system prompt string sent to the LLM."""
@@ -59,6 +60,8 @@ class PromptProfile:
             parts.append(self.syntax_rules)
         if self.pair_rules:
             parts.append(self.pair_rules)
+        if self.reference_docs:
+            parts.append("## Team Reference Documents\n\n" + self.reference_docs)
         if extra:
             parts.append(extra)
         return "\n\n".join(p.strip() for p in parts if p.strip())
@@ -73,15 +76,27 @@ def _read_if_exists(path: Path) -> str:
     return ""
 
 
-def load_prompt_profile(from_name: str, to_name: str) -> PromptProfile:
+def load_prompt_profile(
+    from_name: str, to_name: str, team_id: str = "default",
+) -> PromptProfile:
     """Load the full prompt profile for converting from_name -> to_name.
 
     Missing files degrade gracefully to an empty string for that section —
     a brand-new framework pair with no pair_rules file yet still gets the
     base prompt + target syntax rules, so conversion isn't blocked while a
     team iterates on wording.
+
+    `team_id` selects a per-team profile (see src/team_profiles.py) so
+    different teams sharing one deployment can have different conversion
+    rules. "default" (the default) preserves the original behaviour
+    exactly — same directory, same `set_prompts_root()` test override —
+    so existing callers that never pass `team_id` are unaffected.
     """
-    root = prompts_root()
+    if team_id and team_id != "default":
+        from src.team_profiles import conversion_prompts_dir
+        root = conversion_prompts_dir(team_id)
+    else:
+        root = prompts_root()
     sources: list[str] = []
 
     base_path = root / "base_system_prompt.md"
@@ -113,9 +128,17 @@ def load_prompt_profile(from_name: str, to_name: str) -> PromptProfile:
     if pair_rules:
         sources.append(str(pair_path))
 
+    reference_docs = ""
+    if team_id and team_id != "default":
+        from src.team_profiles import reference_docs_context
+        reference_docs = reference_docs_context(team_id)
+        if reference_docs:
+            sources.append(f"<{team_id}'s reference documents>")
+
     return PromptProfile(
         base_system_prompt=base,
         syntax_rules=syntax_rules,
         pair_rules=pair_rules,
         sources=sources,
+        reference_docs=reference_docs,
     )

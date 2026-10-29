@@ -9,6 +9,10 @@ _DEFAULTS: dict = {
     "page": "home",
     # Active LLM provider — "groq" | "gemini" — see ui/settings_dialog.py
     "llm_provider": "groq",
+    # Active team profile — selects per-team conversion prompts and
+    # codegen style rules; see src/team_profiles.py and
+    # ui/settings_dialog.py's "Team Profiles" tab.
+    "active_team_profile": "default",
     # Advisor
     "messages": [],
     "uploaded_docs_context": "",
@@ -22,7 +26,6 @@ _DEFAULTS: dict = {
     "studio_to_fw": "",
     "studio_from_fw": "",
     "studio_source_code": "",
-    "studio_consistency_report": None,
     "studio_widget_key_v": 0,
     # Repo Comparator
     "rc_report":   None,

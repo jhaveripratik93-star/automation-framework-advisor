@@ -75,6 +75,7 @@ class ConversionRequest:
     to_framework: str
     llm_call: LLMCall
     shared_context: str = ""   # cross-file context, optional (kept for future multi-file support)
+    team_id: str = "default"   # selects a per-team prompt profile — see src/team_profiles.py
 
 
 @dataclass
@@ -205,7 +206,7 @@ def convert(request: ConversionRequest, *, to_fw_data: object | None = None) -> 
     target_lang, eco = resolve_target_language(to_fw_data, to_name)
     fence = eco.get("fence", "")
 
-    profile = load_prompt_profile(from_name, to_name)
+    profile = load_prompt_profile(from_name, to_name, team_id=request.team_id)
     system_prompt = profile.render_system_prompt(from_name, to_name)
 
     attempts: list[ConversionAttempt] = []

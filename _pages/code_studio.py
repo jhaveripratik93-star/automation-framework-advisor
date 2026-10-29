@@ -138,6 +138,7 @@ def _single_file_mode(from_fw: str, to_fw: str, v: int) -> None:
                     from_framework=from_fw,
                     to_framework=to_fw,
                     llm_call=_llm_call,
+                    team_id=st.session_state.get("active_team_profile", "default"),
                 ),
                 to_fw_data=to_fw_data,
             )
@@ -147,109 +148,12 @@ def _single_file_mode(from_fw: str, to_fw: str, v: int) -> None:
             st.session_state.studio_to_fw = to_fw
             st.session_state.studio_source_code = source_code
             st.session_state.studio_from_fw = from_fw
-            st.session_state.studio_consistency_report = None  # stale — frameworks/source changed
             _show_result()
 
         except Exception as exc:
             loading_slot.empty()
             st.error(f"Conversion failed: {exc}")
             logger.error("Conversion error: %s", exc)
-
-    _consistency_check_section()
-
-
-def _consistency_check_section() -> None:
-    """Point 6: run the same conversion N times and report how
-    reproducible/accurate the result is."""
-    result = st.session_state.get("studio_result")
-    if result is None:
-        return
-
-    st.markdown("---")
-    st.markdown("#### 🔁 Consistency check")
-    st.caption(
-        "Runs this exact conversion multiple times and reports how often the "
-        "output compiles, passes structural checks, and agrees on assertion "
-        "count — proving the result is reproducible, not a one-shot fluke."
-    )
-    runs = st.slider("Number of runs", min_value=2, max_value=10, value=5, key="consistency_runs")
-    run_check = st.button("▶ Run consistency check", key="btn_consistency")
-
-    if run_check:
-        source_code = st.session_state.get("studio_source_code", "")
-        from_fw = st.session_state.get("studio_from_fw", "")
-        to_fw = st.session_state.get("studio_to_fw", "")
-        if not source_code:
-            st.warning("Convert a file first, then run the consistency check on it.")
-            return
-
-        loading_slot = st.empty()
-        with loading_slot.container():
-            render_thinking(f"Running {runs} conversion attempts…")
-        try:
-            from services.app_services import get_kb, get_llm_client
-            from src.conversion.consistency import check_consistency
-            from src.tools.formatters import resolve_framework
-
-            client = get_llm_client()
-
-            def _llm_call(system_prompt: str, user_prompt: str) -> str:
-                r = client.chat(
-                    messages=[{"role": "user", "content": user_prompt}],
-                    system=system_prompt,
-                    temperature=0.1,
-                )
-                return r.get("content") or r.get("reasoning") or ""
-
-            to_fw_data = resolve_framework(get_kb(), to_fw)
-            report = check_consistency(
-                source_code=source_code,
-                from_framework=from_fw,
-                to_framework=to_fw,
-                llm_call=_llm_call,
-                runs=runs,
-                to_fw_data=to_fw_data,
-            )
-            loading_slot.empty()
-            st.session_state.studio_consistency_report = report
-        except Exception as exc:
-            loading_slot.empty()
-            st.error(f"Consistency check failed: {exc}")
-            logger.error("Consistency check error: %s", exc)
-            return
-
-    report = st.session_state.get("studio_consistency_report")
-    if report is not None:
-        _render_consistency_report(report)
-
-
-def _render_consistency_report(report) -> None:
-    if report.is_consistent:
-        st.success(
-            f"✅ Consistent across {report.total_runs} run(s): every run compiled, "
-            f"passed structural checks, and agreed on assertion count."
-        )
-    else:
-        st.warning(
-            f"⚠️ Not fully consistent: {report.valid_count}/{report.total_runs} run(s) valid "
-            f"(score {report.consistency_score:.0%}), assertion counts: {report.assertion_counts}"
-        )
-
-    st.markdown(
-        f"**Cross-repo parity equivalent:** {report.parity_equivalent_count}/{report.total_runs} run(s)"
-    )
-
-    with st.expander("Per-run detail", expanded=not report.is_consistent):
-        for r in report.records:
-            icon = "✅" if r.is_valid and r.assertion_count == report.assertion_count_mode else (
-                   "⚠️" if r.is_valid else "❌")
-            st.markdown(
-                f"{icon} **Run {r.run_number}** — valid: {r.is_valid}, "
-                f"assertions: {r.assertion_count}, attempts: {r.attempts_needed}, "
-                f"parity equivalent: {r.is_parity_equivalent}"
-            )
-            if r.errors:
-                st.caption("; ".join(r.errors))
 
 
 def _target_lang_display(target_language: str):
@@ -374,15 +278,3 @@ def _show_result() -> None:
         with col_run:
             st.markdown("**Install & Run**")
             st.code(install_cmd + "\n" + run_cmd, language="bash")
-
-    with st.expander("🧾 Prompt sources used for this conversion", expanded=False):
-        if result.prompt_sources:
-            for s in result.prompt_sources:
-                st.markdown(f"- `{s}`")
-        else:
-            st.markdown("_No prompt files found — used built-in fallback prompt._")
-        st.caption(
-            "Edit these files under config/conversion_prompts/ to change how "
-            "conversions are generated for your whole team — no code change "
-            "or redeploy needed."
-        )

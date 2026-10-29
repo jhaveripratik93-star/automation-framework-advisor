@@ -1,5 +1,7 @@
 Robot Framework → Playwright conversion rules.
 
+## Completeness Principle
+
 GENERIC COMPLETENESS PRINCIPLE (applies to every conversion, not just one file):
 Convert everything the source test actually uses — never the test body alone.
 Walk the dependency chain and port each part the chosen test(s) reference:
@@ -13,6 +15,8 @@ Walk the dependency chain and port each part the chosen test(s) reference:
 If a referenced keyword/library is missing from context, emit a clearly-named helper
 stub plus a TODO naming exactly what is missing, rather than omitting the behavior.
 
+## Porting Custom Python Libraries
+
 PORT CUSTOM PYTHON LIBRARIES FROM THEIR IMPLEMENTATION, NOT GUESSES:
 When the suite imports a custom library (Cassandra/Kafka/DB/HTTP client, etc.), read
 that library's Python source if it is in context and replicate its real construction
@@ -23,6 +27,8 @@ in the helper:
     file; Kafka SASL/SSL; bearer tokens for HTTP).
   - Ports, keyspaces/topics/namespaces, load-balancing/retry policies, timeouts.
   - Expose each as an environment override with the SAME default the source used.
+
+## Remote / Keyword-Server Libraries
 
 REMOTE / KEYWORD-SERVER LIBRARIES (Robot `Remote` library, XML-RPC keyword servers):
 The keyword logic lives on the SERVER, not in the suite. The helper is a thin XML-RPC
@@ -37,11 +43,15 @@ proxy (Python's stdlib xmlrpc.client is sufficient — no extra dependency).
   - Pass arguments with the arity the server expects; a zero-arg call to a keyword
     that needs a host raises an ArityException.
 
+## Runtime-Resolved Config
+
 RUNTIME-RESOLVED CONFIG (service discovery, not env vars):
 Robot config modules often compute hosts at runtime (e.g.
 resolve_hostname_to_ip("cassandra")) rather than reading env vars. In-cluster,
 default the helper to those SAME service names/ports so the test needs zero
 configuration, with env vars as optional overrides. Do not invent IPs.
+
+## Stateful Connection Lifecycle
 
 STATEFUL CONNECTION LIFECYCLE (servers that keep a global/persistent session):
   - Make connect idempotent: disconnect any stale session first, then connect, so a
@@ -52,7 +62,8 @@ STATEFUL CONNECTION LIFECYCLE (servers that keep a global/persistent session):
   - Faithfully port multi-step connect keywords (e.g. "connect to each host and stay
     on the first that reports healthy"), not just the first call.
 
-ASSERTIONS, STRUCTURE & DATA SEMANTICS:
+## Assertions, Structure & Data Semantics
+
   - Preserve exact computed values and data shapes (timestamps, week math, numeric
     results). Map Robot assertions to explicit checks: Should Not Be Empty, Should Be
     Equal As Numbers, list containment, etc.

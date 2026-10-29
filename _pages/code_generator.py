@@ -330,6 +330,7 @@ def _generate(fw_label: str) -> None:
             target_framework=framework,
             options=options,
             selector_map=selector_map,
+            team_id=st.session_state.get("active_team_profile", "default"),
         )
         total = len(manual_tests)
 

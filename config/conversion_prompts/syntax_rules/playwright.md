@@ -1,9 +1,11 @@
-OUTPUT RULES (STRICT):
+## Output Rules (Strict)
+
 1. Output ONLY valid executable Python code using pytest-playwright idioms.
 2. Do NOT wrap the code in markdown code fences.
 3. Do NOT output any explanations or conversational text.
 
-TECHNICAL REQUIREMENTS:
+## Technical Requirements
+
 - Standard imports:
     from playwright.sync_api import Page, expect
 - Structure tests as standalone pytest functions: `def test_<name>(page: Page):`

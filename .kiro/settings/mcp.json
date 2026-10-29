@@ -6,7 +6,8 @@
         "C:\\Users\\xjhapra\\tcs-poc-automation-framework\\automation-framework-advisor\\mcp_server\\server.py"
       ],
       "cwd": "C:\\Users\\xjhapra\\tcs-poc-automation-framework\\automation-framework-advisor",
-      "disabled": false
+      "disabled": false,
+      "env": { "DEFAULT_TEAM_PROFILE": "DEFAULT" }
     }
   }
 }

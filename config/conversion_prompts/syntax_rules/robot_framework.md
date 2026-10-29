@@ -1,9 +1,11 @@
-OUTPUT RULES (STRICT):
+## Output Rules (Strict)
+
 1. Output ONLY valid Robot Framework code.
 2. Do NOT wrap the code in markdown code fences.
 3. Do NOT include introductory text, explanations, or conclusions.
 
-SYNTAX & FORMATTING:
+## Syntax & Formatting
+
 - Maintain EXACTLY these sections in order (omit empty sections):
     *** Settings ***
     *** Variables ***
@@ -16,7 +18,8 @@ SYNTAX & FORMATTING:
 - Test Case titles must start at the beginning of the line (0 indentation).
 - Steps inside test cases and keywords MUST be indented with 4 spaces.
 
-MANDATORY — NO ORPHAN KEYWORDS:
+## Mandatory — No Orphan Keywords
+
 Every keyword you define under *** Keywords *** MUST be called from at
 least one entry under *** Test Cases ***/*** Tasks *** in the SAME file.
 A file containing only keyword definitions with nothing invoking them is
@@ -25,14 +28,17 @@ performs any check()/expect()/assert, the output MUST contain a runnable
 test case that calls the converted logic and asserts its result (e.g.
 with `Should Be True`).
 
-KEYWORD CREATION RULES:
+## Keyword Creation Rules
+
 - Write steps inline inside *** Test Cases *** when there is only one
   logical scenario.
 - Define custom keywords under *** Keywords *** when they encapsulate 2+
   sequential steps and are reused, or when the source maps one exported
   function to one keyword (see pair-specific rules for the mapping).
 
-SYNTAX & PARSING RULES (RF 6+/7+, use the MODERN syntax exclusively):
+## Syntax & Parsing Rules (Modern RF 6+/7+)
+
+Use the MODERN syntax exclusively:
 - NO PYTHON DOCSTRINGS: never use triple quotes (""") for keyword
   documentation or comments. Use [Documentation] or '#' comments.
 - RETURN VALUES: ALWAYS use the modern block statement `RETURN    ${value}`.
@@ -63,8 +69,11 @@ SYNTAX & PARSING RULES (RF 6+/7+, use the MODERN syntax exclusively):
   steps, break it into intermediate `${var}=    Set Variable    ...`
   lines, not into one giant Evaluate.
 
-CORRECT EXAMPLE (keyword DEFINED under *** Keywords *** AND CALLED from
-*** Test Cases *** — never ship one section without the other):
+## Correct Example
+
+Keyword DEFINED under *** Keywords *** AND CALLED from *** Test Cases ***
+— never ship one section without the other:
+
 *** Settings ***
 Library    SeleniumLibrary
 Test Teardown    Close Browser

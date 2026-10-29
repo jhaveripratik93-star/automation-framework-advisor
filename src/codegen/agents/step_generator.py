@@ -6,11 +6,11 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from src.codegen.agent_config import (
-    FRAMEWORK_CONTEXT,
     PIPELINE_SETTINGS,
     STEP_GENERATOR_SYSTEM,
     STEP_GENERATOR_USER_TEMPLATE,
 )
+from src.codegen.style_profiles import get_framework_context
 
 if TYPE_CHECKING:
     from src.codegen.pipeline import CodeGenState
@@ -67,7 +67,7 @@ def run_step_generator(state: CodeGenState, llm_client: Any) -> dict:
     arch = state.get("suite_architecture", {})
 
     system = STEP_GENERATOR_SYSTEM.get(framework, STEP_GENERATOR_SYSTEM["playwright_ts"])
-    fw_context = FRAMEWORK_CONTEXT.get(framework, "")
+    fw_context = get_framework_context(framework)
     if fw_context:
         system = f"{system}\n\nFramework reference:\n{fw_context}"
 

@@ -75,6 +75,9 @@ class CodeGenOrchestrator:
 
     def generate(self, request: CodeGenRequest) -> GeneratedTestSuite:
         """Execute the full code generation pipeline (agent pipeline only)."""
+        from src.codegen.style_profiles import set_active_team
+        set_active_team(request.team_id)
+
         if self._use_agent_pipeline:
             return self._generate_with_agents(request)
         return self._generate_legacy(request)
@@ -149,15 +152,12 @@ class CodeGenOrchestrator:
         Returns a list of code strings, one per test case, in the same order.
         project_context is an optional ProjectContext dict from RepoScanner.
         """
-        from src.codegen.agent_config import (
-            FRAMEWORK_CONTEXT,
-            PIPELINE_SETTINGS,
-            STEP_GENERATOR_SYSTEM,
-        )
+        from src.codegen.agent_config import PIPELINE_SETTINGS, STEP_GENERATOR_SYSTEM
         from src.codegen.agents.scenario_planner import _heuristic_scenario
+        from src.codegen.style_profiles import get_framework_context
 
         system = STEP_GENERATOR_SYSTEM.get(framework_value, STEP_GENERATOR_SYSTEM["playwright_ts"])
-        fw_ctx = FRAMEWORK_CONTEXT.get(framework_value, "")
+        fw_ctx = get_framework_context(framework_value)
         if fw_ctx:
             system = f"{system}\n\nFramework reference:\n{fw_ctx}"
 

@@ -34,7 +34,7 @@ def test_render_system_prompt_includes_all_sections():
     assert "Robot Framework" in rendered
     # syntax + pair rules both present
     assert "SHAPE A" in rendered  # from pair_rules
-    assert "ORPHAN KEYWORDS" in rendered  # from syntax_rules
+    assert "orphan keywords" in rendered.lower()  # from syntax_rules (now a readable `## ` section heading)
 
 
 def test_missing_pair_rules_degrades_gracefully():

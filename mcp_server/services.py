@@ -88,6 +88,59 @@ def groq_available() -> bool:
     return get_groq_client().is_available
 
 
+def get_default_team_id() -> str:
+    """Resolve the fallback `team_id` for conversion/codegen tools when a
+    caller doesn't pass one explicitly.
+
+    Configured via the DEFAULT_TEAM_PROFILE environment variable — set it
+    in this server's `env` block in .kiro/settings/mcp.json (or in
+    config/.env) to pin every MCP tool call from this workspace to one
+    team's profile, instead of passing `team_id` on every call:
+
+        "env": { "DEFAULT_TEAM_PROFILE": "team_alpha" }
+
+    Re-validated on every call (not cached) against the team profiles
+    that actually exist on disk right now, since profiles can be
+    created/renamed/deleted live via the Streamlit Settings UI while
+    this server keeps running. An unset or unknown name falls back to
+    "default" (the tool's built-in shared configuration) with a one-time
+    warning rather than silently resolving to a profile that doesn't
+    exist.
+    """
+    import os
+
+    from src.team_profiles import DEFAULT_PROFILE_ID, profile_exists
+
+    configured = os.getenv("DEFAULT_TEAM_PROFILE", "").strip()
+    if not configured or configured == DEFAULT_PROFILE_ID:
+        return DEFAULT_PROFILE_ID
+    if not profile_exists(configured):
+        logger.warning(
+            "DEFAULT_TEAM_PROFILE='%s' (from mcp.json/config/.env) does not "
+            "match any existing team profile — falling back to 'default'. "
+            "Create it first via the Streamlit app's Settings -> Team "
+            "Profiles page.",
+            configured,
+        )
+        return DEFAULT_PROFILE_ID
+    return configured
+
+
+def resolve_team_id(team_id: str) -> str:
+    """Apply the DEFAULT_TEAM_PROFILE fallback to a tool's `team_id`
+    argument. Call this in every conversion/codegen MCP tool instead of
+    using the raw `team_id` parameter directly — an explicit non-"default"
+    value from the caller always wins; "default" (the tool's own baked-in
+    parameter default, meaning the caller didn't override it) resolves to
+    whatever this workspace has configured instead of the literal string.
+    """
+    from src.team_profiles import DEFAULT_PROFILE_ID
+
+    if team_id and team_id != DEFAULT_PROFILE_ID:
+        return team_id
+    return get_default_team_id()
+
+
 def get_graph():
     """Lazily load (or seed) the persistent knowledge graph."""
     global _graph

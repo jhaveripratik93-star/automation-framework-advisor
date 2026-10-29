@@ -145,6 +145,7 @@ def check_consistency(
     *,
     runs: int = DEFAULT_RUNS,
     to_fw_data: object | None = None,
+    team_id: str = "default",
 ) -> ConsistencyReport:
     """Run the SAME conversion `runs` times and measure reproducibility.
 
@@ -152,6 +153,9 @@ def check_consistency(
     retry within a run) — each run is an independent conversion attempt
     through the full pipeline (compile check, structural check, parity
     check), exactly as a single `convert()` call would do.
+
+    `team_id` selects a per-team prompt profile (see src/team_profiles.py)
+    so the measured consistency reflects that team's actual rules.
     """
     if runs < 1:
         raise ValueError("runs must be >= 1")
@@ -167,6 +171,7 @@ def check_consistency(
                 from_framework=from_framework,
                 to_framework=to_framework,
                 llm_call=llm_call,
+                team_id=team_id,
             ),
             to_fw_data=to_fw_data,
         )

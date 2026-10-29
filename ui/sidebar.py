@@ -362,7 +362,6 @@ def _studio_sidebar() -> None:
 
         if st.button("🗑 Clear Studio", key="sb_clear_studio", use_container_width=True):
             st.session_state.studio_result = None
-            st.session_state.studio_consistency_report = None
             st.session_state.studio_source_code = ""
             st.session_state.studio_widget_key_v += 1
             st.rerun()

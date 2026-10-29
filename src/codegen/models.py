@@ -89,6 +89,7 @@ class CodeGenRequest(BaseModel):
     target_framework: TargetFramework = TargetFramework.PLAYWRIGHT_TS
     options: CodeGenOptions = Field(default_factory=lambda: CodeGenOptions())
     selector_map: dict[str, str] = {}    # User-provided element → selector mapping
+    team_id: str = "default"             # selects a per-team style profile — see src/team_profiles.py
 
 
 class CodeGenOptions(BaseModel):

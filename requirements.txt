@@ -22,6 +22,9 @@ groq==0.37.1
 # Excel parsing
 openpyxl==3.1.5
 
+# PDF text extraction (Team Profiles — reference/architecture documents)
+pypdf==6.20.1
+
 # LangGraph / LangChain orchestration
 langgraph==1.2.14
 langchain-core==1.6.7
