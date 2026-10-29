@@ -1,4 +1,4 @@
-"""Automation Framework Advisor — MCP server.
+"""Test Automation Pilot — MCP server.
 
 Wraps the feature-owned executors (``src.advisor_tools``, ``src.coverage``,
 ``src.prerequisites``, composed by ``src.agents.tool_router.ToolRouter``)
@@ -831,5 +831,5 @@ def add_framework_to_kb(name: str) -> dict[str, Any]:
 # ════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    logger.info("Starting Automation Framework Advisor MCP server (stdio)")
+    logger.info("Starting Test Automation Pilot MCP server (stdio)")
     mcp.run(transport="stdio")

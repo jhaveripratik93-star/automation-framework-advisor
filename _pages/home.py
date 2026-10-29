@@ -18,7 +18,7 @@ def render() -> None:
     st.markdown(f"""
     <div class="home-hero">
         <div class="home-hero-eyebrow">✨ AI-Powered Testing Advisor</div>
-        <div class="home-hero-title">Automation Framework Advisor</div>
+        <div class="home-hero-title">Test Automation Pilot</div>
         <div class="home-hero-sub">
             AI-powered tool to evaluate, migrate, and verify test automation frameworks.
             Compare {fw_count} frameworks, convert test suites, and analyse coverage gaps — all in one place.
@@ -99,7 +99,7 @@ def _render_feature_grid() -> None:
     c1, c2, c3 = st.columns(3)
     with c1:
         _feature_card(
-            icon="🧭", title="Framework Advisor",
+            icon="🧭", title="Test Pilot",
             desc=("Chat with an AI agent to compare frameworks, get migration plans, "
                   "and receive scored recommendations tailored to your project."),
             tags=["LLM Chat", "Scoring Matrix", "Migration Plan"],

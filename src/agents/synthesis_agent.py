@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = (
-    "You are a data quality analyst for an automation framework advisor. "
+    "You are a data quality analyst for an test automation pilot. "
     "You receive raw tool results and must determine: "
     "(1) whether the data is sufficient to answer the user's question, "
     "(2) what gaps or contradictions exist, "

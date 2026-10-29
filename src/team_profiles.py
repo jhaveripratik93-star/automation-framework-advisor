@@ -50,6 +50,7 @@ __all__ = [
     "list_profiles", "get_profile", "profile_exists",
     "create_profile", "create_profile_from_repo", "delete_profile",
     "conversion_prompts_dir", "codegen_style_dir",
+    "own_conversion_prompts_dir", "own_codegen_style_dir",
     "reference_docs_dir", "list_reference_docs", "add_reference_doc",
     "delete_reference_doc", "reference_docs_context",
     "export_profile_zip", "import_profile_zip",
@@ -143,6 +144,37 @@ def codegen_style_dir(team_id: str) -> Path | None:
         if team_dir.exists():
             return team_dir
     return None
+
+
+def own_conversion_prompts_dir(team_id: str) -> Path:
+    """This team's OWN conversion_prompts/ directory — no fallback.
+
+    `conversion_prompts_dir()` deliberately falls back to the shared
+    default directory when a team has no override, which is correct for
+    READING at conversion time (a team with no custom prompt should use
+    the default). It is NOT correct for WRITING: a save must always land
+    in the team's own directory, never in config/conversion_prompts/
+    (the shared default every profile reads from). Writing through the
+    read-fallback resolver is exactly what made edits to one profile
+    leak into all of them. Edit UIs resolve write paths through here.
+    """
+    if team_id == DEFAULT_PROFILE_ID:
+        return DEFAULT_CONVERSION_PROMPTS_DIR
+    return PROFILES_ROOT / team_id / "conversion_prompts"
+
+
+def own_codegen_style_dir(team_id: str) -> Path:
+    """This team's OWN codegen_style/ directory — no fallback.
+
+    Same rationale as `own_conversion_prompts_dir`: the read-time
+    resolver (`codegen_style_dir`) returns None when a team has no
+    override so callers fall back to the built-in FRAMEWORK_CONTEXT, but
+    a WRITE must always target the team's own directory. Only valid for
+    named profiles — 'default' has no on-disk codegen style to write to.
+    """
+    if team_id == DEFAULT_PROFILE_ID:
+        raise ValueError("The default profile's codegen style is in code, not a file.")
+    return PROFILES_ROOT / team_id / "codegen_style"
 
 
 def reference_docs_dir(team_id: str) -> Path | None:

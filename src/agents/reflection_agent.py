@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = (
-    "You are a quality reviewer for an automation framework advisor. "
+    "You are a quality reviewer for an Test Automation Pilot. "
     "You will receive the user's original question and a draft response. "
     "Critique the draft and decide if it is ready to send.\n\n"
     "A response PASSES if it:\n"
