@@ -120,6 +120,86 @@ def test_extract_from_real_nifi_source():
     via = next(e.via for e in client.endpoints if e.method_name == "get_flow_status")
     assert via == "self.rest.get"
 
+    # Defect A: methods whose REAL path is read from source, never guessed.
+    # get_templates -> self.rest.get("flow/templates")
+    assert eps["get_templates"] == ("GET", "flow/templates")
+    # get_nested_process_groups -> self.rest.get("process-groups/{flow_id}/process-groups")
+    assert eps["get_nested_process_groups"] == ("GET", "process-groups/{flow_id}/process-groups")
+
+
+def test_derived_state_keywords_reuse_populating_endpoint():
+    """Defect A regression: get_flow_data / load_flow_process_groups do NOT make
+    their own HTTP call — they return state populated by the
+    `processor_group_flow` property (GET flow/process-groups/{flow_id}). The
+    extractor must classify them as DERIVED and carry the populating endpoint,
+    so the converter reuses it instead of guessing `/nifi-api/flow` (which the
+    user observed 404-ing)."""
+    if not _NIFI_PY.is_file():
+        return
+    text = _NIFI_PY.read_text(encoding="utf-8", errors="replace")
+    client = extract_endpoints_from_source(text, service_hint="nifi")
+    by_name = {e.method_name: e for e in client.endpoints}
+
+    # The populating property itself is the real direct HTTP call.
+    assert "processor_group_flow" in by_name
+    assert not by_name["processor_group_flow"].is_derived
+    assert by_name["processor_group_flow"].http_method == "GET"
+    assert by_name["processor_group_flow"].path == "flow/process-groups/{flow_id}"
+
+    # get_flow_data is DERIVED, referencing the populating member, and carries
+    # that member's REAL endpoint — NOT a guessed /nifi-api/flow.
+    gfd = by_name["get_flow_data"]
+    assert gfd.is_derived
+    assert gfd.derived_from == "processor_group_flow"
+    assert (gfd.http_method, gfd.path) == ("GET", "flow/process-groups/{flow_id}")
+
+    # load_flow_process_groups is likewise derived from the same populating member.
+    lfp = by_name["load_flow_process_groups"]
+    assert lfp.is_derived
+    assert lfp.derived_from == "processor_group_flow"
+    assert (lfp.http_method, lfp.path) == ("GET", "flow/process-groups/{flow_id}")
+
+    # Crucially, no endpoint anywhere maps get_flow_data to a bare /flow guess.
+    assert gfd.path != "flow"
+
+
+def test_derived_state_classification_synthetic():
+    """A public keyword that delegates to another member (no direct HTTP call
+    of its own) is classified DERIVED. When the populating member's path is
+    known it is carried; when unknown, the endpoint is left blank so the
+    converter skips-with-reason rather than guessing."""
+    src = '''
+class Svc:
+    def list_things(self):
+        return self.rest.get("things")
+
+    @property
+    def _cache(self):
+        return self.rest.get("things/{id}")
+
+    def get_cached(self):
+        return self._cache["payload"]
+
+    def get_unknown(self):
+        return self.helper()
+'''
+    client = extract_endpoints_from_source(src)
+    by_name = {e.method_name: e for e in client.endpoints}
+
+    # A public direct call qualifies the class as a REST client.
+    assert client.is_rest_client
+    assert by_name["list_things"].http_method == "GET"
+
+    # Delegates to a member with a known direct call -> carries that endpoint.
+    assert by_name["get_cached"].is_derived
+    assert by_name["get_cached"].derived_from == "_cache"
+    assert (by_name["get_cached"].http_method, by_name["get_cached"].path) == ("GET", "things/{id}")
+
+    # Delegates to a member with NO resolvable endpoint -> derived, blank path.
+    assert by_name["get_unknown"].is_derived
+    assert by_name["get_unknown"].http_method == ""
+    assert by_name["get_unknown"].path == ""
+
 
 # ──────────────────────────────────────────────────────────────────────
 # build_endpoint_context — consumes an analyzer-shaped analysis dict
@@ -165,6 +245,18 @@ def test_build_context_from_analysis_shape():
     assert "Resolved custom-library source" in context
     assert "class Nifi" in context
     assert 'base_path="/nifi-api"' in context
+
+    # Defect A: the "never guess" rule and the derived-state reuse guidance are
+    # part of the injected map, and get_flow_data points at the REAL populating
+    # endpoint (not a /nifi-api/flow guess).
+    assert "NEVER invent" in context
+    assert "DERIVED" in context
+    assert "get_flow_data" in context
+    assert "GET /nifi-api/flow/process-groups/{flow_id}" in context
+    # the process-groups path appears in the DISTILLED map (not only the
+    # verbatim source block), so it survives the prompt's shared-context cap.
+    map_only = context.split("## Resolved custom-library source")[0]
+    assert "flow/process-groups/{flow_id}" in map_only
 
 
 def test_build_context_empty_when_no_custom_libs():

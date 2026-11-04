@@ -408,3 +408,91 @@ def test_convert_playwright_runs_both_postprocess_guards():
     assert "NotImplementedError" not in code
     # Assertion preserved.
     assert 'assert "controllerStatus" in status' in code
+
+
+# ── Defect A: the structured endpoint map survives the shared-context cap ──
+# The user prompt caps shared_context so a huge verbatim-source block can't
+# blow the token budget. The compact endpoint MAP must ALWAYS reach the model
+# (otherwise the converter loses the real paths and guesses). _cap_shared_context
+# keeps the full map and truncates only the reference source.
+
+from src.conversion.service import _cap_shared_context, _SHARED_CONTEXT_CAP
+
+
+def test_cap_shared_context_preserves_full_map_truncates_source():
+    endpoint_map = (
+        "## Custom-library endpoint map (for NATIVE API translation)\n\n"
+        "- `get_flow_data` -> DERIVED reuse `GET /nifi-api/flow/process-groups/{flow_id}`\n"
+        "- `get_flow_status` -> `GET /nifi-api/flow/status`\n"
+    )
+    big_source = "## Resolved custom-library source\n\n```python\n" + ("x" * 50000) + "\n```"
+    ctx = endpoint_map + "\n\n" + big_source
+
+    capped = _cap_shared_context(ctx)
+    # The full map (every endpoint) survives verbatim.
+    assert endpoint_map.rstrip() in capped
+    assert "get_flow_data" in capped
+    assert "GET /nifi-api/flow/process-groups/{flow_id}" in capped
+    assert "get_flow_status" in capped
+    # The verbose source is truncated — the whole thing didn't survive.
+    assert len(capped) < len(ctx)
+    assert capped.count("x") < 50000
+
+
+def test_cap_shared_context_plain_text_simple_cap():
+    plain = "y" * 5000
+    capped = _cap_shared_context(plain)
+    assert capped == plain[:_SHARED_CONTEXT_CAP]
+
+
+def test_cap_shared_context_keeps_whole_map_even_when_over_budget():
+    # A map alone larger than the cap must NOT be sliced (losing real endpoints
+    # would reintroduce guessing); the reference source is dropped instead.
+    big_map = (
+        "## Custom-library endpoint map (for NATIVE API translation)\n\n"
+        + "\n".join(f"- `kw{i}` -> `GET /api/kw{i}`" for i in range(400))
+    )
+    ctx = big_map + "\n\n## Resolved custom-library source\n\n```python\nSRC\n```"
+    assert len(big_map) > _SHARED_CONTEXT_CAP  # precondition
+    capped = _cap_shared_context(ctx)
+    assert capped == big_map.rstrip()
+    assert "kw399" in capped
+    assert "Resolved custom-library source" not in capped
+
+
+def test_endpoint_map_reaches_llm_prompt_uncut():
+    """End-to-end with a capturing stub: a realistic endpoint map + large source
+    is passed as shared_context; the converted user prompt still contains the
+    full derived-state mapping (process-groups path), proving the map is not
+    truncated away by the 2000-char cap."""
+    endpoint_map = (
+        "## Custom-library endpoint map (for NATIVE API translation)\n\n"
+        "USE ONLY the paths shown here. NEVER invent a \"likely\" endpoint.\n\n"
+        "- `get_flow_status` -> `GET /nifi-api/flow/status`\n"
+        "- `get_flow_data` -> DERIVED from `processor_group_flow`: "
+        "`GET /nifi-api/flow/process-groups/{flow_id}`\n"
+    )
+    source_block = "## Resolved custom-library source\n\n```python\n" + ("s" * 40000) + "\n```"
+    ctx = endpoint_map + "\n\n" + source_block
+
+    captured: list[str] = []
+
+    class _Capturing:
+        def __call__(self, system_prompt: str, user_prompt: str) -> str:
+            captured.append(user_prompt)
+            return VALID_ROBOT_OUTPUT
+
+    convert(ConversionRequest(
+        source_code=K6_SOURCE_WITH_ASSERTION,
+        from_framework="K6",
+        to_framework="Robot Framework",
+        llm_call=_Capturing(),
+        shared_context=ctx,
+    ))
+    assert captured
+    prompt = captured[0]
+    assert "get_flow_status" in prompt
+    assert "GET /nifi-api/flow/status" in prompt
+    # The derived-state mapping with the REAL process-groups path survives.
+    assert "GET /nifi-api/flow/process-groups/{flow_id}" in prompt
+    assert "NEVER invent" in prompt

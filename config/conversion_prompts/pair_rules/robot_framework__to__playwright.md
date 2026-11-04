@@ -20,6 +20,24 @@ require bundling for such a keyword. Concretely:
     (http vs https), host/service name, port, and base path. When a
     "Custom-library endpoint map" is provided in the context below, use its
     derived method/path and base-URL pieces directly.
+  - NEVER GUESS AN ENDPOINT. Use ONLY an HTTP path that is present in the
+    provided "Custom-library endpoint map" or directly visible in the provided
+    library source. Do NOT invent a "likely"/"assumed" path (e.g. do NOT turn
+    an unknown `get_flow_data` into `GET /nifi-api/flow`) — a guessed path
+    silently 404s and is a defect.
+  - DERIVED-STATE KEYWORDS REUSE THE POPULATING ENDPOINT. If a keyword maps to
+    a method that returns cached/derived state rather than making its own HTTP
+    call (the endpoint map marks it `DERIVED from <method>`), convert it by
+    calling the SAME endpoint the populating method uses — e.g.
+    `Nifi.get_flow_data` returns `self.processor_group_flow["flow"]`, so it
+    reuses `load_flow_process_groups`/`processor_group_flow`'s real
+    `GET /nifi-api/flow/process-groups/{flow_id}` result, NOT a new path. Never
+    emit a separate GET for a derived-state keyword.
+  - IF THE REAL ENDPOINT CANNOT BE DETERMINED from the endpoint map or the
+    provided source (e.g. a derived keyword whose populating method's path is
+    also unknown), the generated test MUST `pytest.skip(...)` with a clear
+    reason (or raise `BackendUnavailable`) rather than emit a guessed path.
+    Skipping honestly is always preferable to a silent 404.
   - Make every connection setting env-overridable with the SAME default the
     source used (e.g. `NIFI_HOSTS`/`NIFI_PORT`/`NIFI_BASE_URL`), via a small
     `resolve_setting`-style helper. Do NOT invent IPs.
@@ -96,6 +114,44 @@ browser-free pytest test — NO `from clamps...` import, NO bundling:
 Here `resolve_setting` returns the env override if set, else the in-cluster
 service default (`NIFI_HOSTS`="nifi", `NIFI_PORT`="7777", `NIFI_BASE_PATH`="/nifi-api"),
 and `BackendUnavailable` is raised to skip when NiFi is unreachable.
+
+### Worked example — derived-state keyword reuses the populating endpoint
+
+`Nifi.get_flow_data` does NOT make its own HTTP call — its body is
+`return self.processor_group_flow["flow"]`, and `processor_group_flow` (the
+populating member, also reached via `load_flow_process_groups`) is
+`self.rest.get("flow/process-groups/{flow_id}")` with `flow_id="root"`. So the
+REAL endpoint is `GET /nifi-api/flow/process-groups/root`. Do NOT invent
+`GET /nifi-api/flow`. The `Can Get Flow Process Groups` test converts to a
+single call against the populating endpoint:
+
+    # Robot:
+    #   Nifi.load_flow_process_groups
+    #   ${data}=    Nifi.get_flow_data
+    #   Should Not Be Empty    ${data}
+
+    @pytest.mark.nifi
+    def test_can_get_flow_process_groups(playwright):
+        base_url = _nifi_base_url()
+        request: APIRequestContext = playwright.request.new_context(base_url=base_url)
+        try:
+            flow_id = os.environ.get("NIFI_FLOW_ID", "root")
+            try:
+                # get_flow_data is DERIVED from processor_group_flow ->
+                # GET /nifi-api/flow/process-groups/{flow_id}; reuse THAT path.
+                response = request.get(f"/nifi-api/flow/process-groups/{flow_id}")
+            except Exception as exc:
+                raise BackendUnavailable(f"NiFi not reachable at {base_url}: {exc}") from exc
+            assert response.ok, f"GET /nifi-api/flow/process-groups/{flow_id} returned HTTP {response.status}"
+            data = response.json()["processGroupFlow"]["flow"]
+            assert data, "flow data should not be empty"
+        finally:
+            request.dispose()
+
+If the endpoint map marked a derived keyword's endpoint as unknown (its
+populating method's path could not be resolved), the test MUST
+`pytest.skip("<keyword>: endpoint could not be determined from source")`
+instead of guessing a path.
 
 ## Completeness Principle
 

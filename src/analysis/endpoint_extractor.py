@@ -50,12 +50,27 @@ _REST_ATTR_NAMES = {"rest", "client", "session", "http", "api", "conn", "connect
 
 @dataclass
 class Endpoint:
-    """One keyword method reduced to a single HTTP call."""
+    """One keyword method reduced to a single HTTP call OR classified as a
+    method that returns cached/derived state populated by another method.
+
+    When ``derived_from`` is set, this method does NOT itself issue an HTTP
+    request: it reads state populated by the ``derived_from`` method/property
+    (e.g. ``get_flow_data`` -> ``return self.processor_group_flow["flow"]``).
+    In that case ``http_method``/``path`` carry the REAL endpoint of the
+    populating method when it is known, so the converter reuses THAT path
+    instead of guessing a new one. ``http_method``/``path`` are empty only when
+    the populating method's own path could not be resolved either.
+    """
 
     method_name: str          # python method name, e.g. "get_flow_status"
-    http_method: str          # "GET" / "POST" / ...
+    http_method: str          # "GET" / "POST" / ... ("" for an unresolved derived method)
     path: str                 # path literal passed to the verb, e.g. "flow/status"
     via: str                  # the attribute chain used, e.g. "self.rest.get"
+    derived_from: str | None = None  # populating method/property name, else None
+
+    @property
+    def is_derived(self) -> bool:
+        return self.derived_from is not None
 
     def to_dict(self) -> dict:
         return {
@@ -63,6 +78,7 @@ class Endpoint:
             "http_method": self.http_method,
             "path": self.path,
             "via": self.via,
+            "derived_from": self.derived_from,
         }
 
 
@@ -183,6 +199,35 @@ def _first_http_call_in(method: ast.FunctionDef) -> tuple[str, str, str] | None:
     return None
 
 
+def _delegated_member_in(method: ast.FunctionDef) -> str | None:
+    """If a method makes no direct HTTP call but returns/derives its value from
+    another ``self`` member (method call or property/attribute), return that
+    member's name — else None.
+
+    This catches the "cached/derived state" pattern the task calls out, e.g.::
+
+        def get_flow_data(self):
+            return self.processor_group_flow["flow"]   # -> "processor_group_flow"
+
+        def load_flow_process_groups(self):
+            return self.processor_group_flow            # -> "processor_group_flow"
+
+    The member can be referenced as a bare attribute (``self.x``), subscripted
+    (``self.x["k"]``), or called (``self.x(...)``). The FIRST ``self.<name>``
+    reference found anywhere in the body is reported (best effort); a leading
+    underscore is allowed because the populating member is often a property or
+    private helper that itself makes the real HTTP call.
+    """
+    for node in ast.walk(method):
+        if not isinstance(node, ast.Attribute):
+            continue
+        if isinstance(node.value, ast.Name) and node.value.id == "self":
+            if node.attr == method.name:
+                continue  # a recursive self-call is not a delegation target
+            return node.attr
+    return None
+
+
 def _extract_init_defaults(cls: ast.ClassDef) -> tuple[str | None, str | None, bool | None]:
     """Pull (default_port, default_base_path, https_enabled) hints from the
     class ``__init__`` signature and body.
@@ -264,27 +309,69 @@ def extract_endpoints_from_source(class_source: str, service_hint: str | None = 
         logger.info("endpoint_extractor: could not parse source (%s)", exc)
         return result
 
-    # Pick the first class that has at least one HTTP-reducible method.
+    # Pick the first class that has at least one HTTP-reducible OR derived
+    # keyword method.
     for cls in [n for n in tree.body if isinstance(n, ast.ClassDef)]:
+        methods = [m for m in cls.body if isinstance(m, ast.FunctionDef)]
+
+        # Pass 1: resolve EVERY method's own direct HTTP call (public AND
+        # private/property) so a public keyword that delegates to a private
+        # helper or a @property can reuse that member's REAL endpoint instead
+        # of the converter guessing one.
+        direct: dict[str, tuple[str, str, str]] = {}  # name -> (verb, path, via)
+        for m in methods:
+            http = _first_http_call_in(m)
+            if http is not None:
+                direct[m.name] = http
+
         endpoints: list[Endpoint] = []
-        for item in cls.body:
-            if not isinstance(item, ast.FunctionDef):
-                continue
+        for item in methods:
             if item.name.startswith("_"):
-                continue  # private helper, not a Robot keyword
-            http = _first_http_call_in(item)
-            if http is None:
-                continue
-            http_method, path, via = http
-            endpoints.append(
-                Endpoint(
-                    method_name=item.name,
-                    http_method=http_method,
-                    path=path,
-                    via=via,
+                continue  # private helper/property, not a Robot keyword itself
+
+            if item.name in direct:
+                http_method, path, via = direct[item.name]
+                endpoints.append(
+                    Endpoint(method_name=item.name, http_method=http_method, path=path, via=via)
                 )
-            )
-        if endpoints:
+                continue
+
+            # No direct HTTP call — is this derived/cached state delegating to
+            # another member whose real endpoint we DO know? Record the link so
+            # the converter reuses the populating endpoint, never a guess.
+            member = _delegated_member_in(item)
+            if member is None:
+                continue
+            if member in direct:
+                http_method, path, via = direct[member]
+                endpoints.append(
+                    Endpoint(
+                        method_name=item.name,
+                        http_method=http_method,
+                        path=path,
+                        via=via,
+                        derived_from=member,
+                    )
+                )
+            else:
+                # Delegates to a member whose own endpoint is unknown (not a
+                # direct literal HTTP call). Still record the derivation link —
+                # this tells the converter the keyword is NOT a new HTTP call,
+                # so it must not invent a path (skip-with-reason instead).
+                endpoints.append(
+                    Endpoint(
+                        method_name=item.name,
+                        http_method="",
+                        path="",
+                        via="",
+                        derived_from=member,
+                    )
+                )
+
+        # Only treat the class as a REST client if at least one method reduced
+        # to a real HTTP call (a class with only derived links and no concrete
+        # path is not usable for native translation -> fall back to bundling).
+        if any(not e.is_derived for e in endpoints):
             port, base_path, https = _extract_init_defaults(cls)
             result.class_name = cls.name
             result.endpoints = endpoints
@@ -370,13 +457,32 @@ def build_endpoint_context(analysis: dict, source_root: str = "") -> str:
             f"scheme=`{pieces['scheme']}`, service/host=`{pieces['service']}`, "
             f"port=`{pieces['port']}`, base_path=`{pieces['base_path']}`"
         )
+        base = pieces["base_path"] or ""
         lines.append("- Keyword → native HTTP call:")
         for ep in client.endpoints:
-            lines.append(
-                f"  - `{ep.method_name}` → `{ep.http_method} "
-                f"{pieces['base_path'] or ''}/{ep.path}`"
-                f" (via `{ep.via}`)"
-            )
+            if not ep.is_derived:
+                lines.append(
+                    f"  - `{ep.method_name}` → `{ep.http_method} "
+                    f"{base}/{ep.path}`"
+                    f" (via `{ep.via}`)"
+                )
+            elif ep.http_method and ep.path:
+                # Derived-state keyword whose populating member's REAL endpoint
+                # is known: tell the model to REUSE that endpoint, never guess.
+                lines.append(
+                    f"  - `{ep.method_name}` → DERIVED (returns cached/derived "
+                    f"state; NOT a new HTTP call). Reuse the endpoint of "
+                    f"`{ep.derived_from}`: `{ep.http_method} {base}/{ep.path}`."
+                )
+            else:
+                # Derived but populating endpoint unknown: explicitly forbid a
+                # guessed path — skip-with-reason instead.
+                lines.append(
+                    f"  - `{ep.method_name}` → DERIVED from `{ep.derived_from}` "
+                    f"(returns cached/derived state; NOT a direct HTTP call). Its "
+                    f"endpoint is not in this map — do NOT invent one; skip the "
+                    f"test with a clear reason if it cannot be determined."
+                )
         sections.append("\n".join(lines))
 
         # Include the resolved source verbatim (capped) so paths/headers/auth
@@ -399,7 +505,15 @@ def build_endpoint_context(analysis: dict, source_root: str = "") -> str:
         "skipping on an unreachable backend — do NOT import the custom client "
         "and do NOT require bundling. Only fall back to importing the bundled "
         "client for a keyword that is NOT in this map (its behavior could not "
-        "be reduced to a direct HTTP call).\n"
+        "be reduced to a direct HTTP call).\n\n"
+        "USE ONLY the paths shown here (or a path directly visible in the "
+        "resolved source below). NEVER invent a \"likely\" endpoint. A keyword "
+        "marked DERIVED returns cached/derived state populated by another "
+        "method — convert it by reusing THAT method's endpoint (shown), never "
+        "a new guessed path. If a required endpoint genuinely cannot be "
+        "determined from this map or the source, the generated test MUST "
+        "`pytest.skip(...)` with a clear reason (or raise `BackendUnavailable`) "
+        "rather than emit a guessed path that silently 404s.\n"
     )
     parts = [header, "\n\n".join(sections)]
     if source_sections:

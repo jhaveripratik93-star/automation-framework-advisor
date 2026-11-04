@@ -90,6 +90,39 @@ def test_robot_to_playwright_profile_has_native_api_strategy():
     assert "bundl" in low
 
 
+def test_robot_to_playwright_profile_forbids_guessing_endpoints():
+    """Defect A: the pair + syntax rules forbid inventing endpoints, require
+    reusing the populating endpoint for derived-state keywords, and require a
+    skip-with-reason when the real endpoint is unknown. The worked derived-state
+    example (get_flow_data reusing the process-groups endpoint) is present."""
+    set_prompts_root(None)
+    profile = load_prompt_profile("Robot Framework", "Playwright")
+    rendered = profile.render_system_prompt("Robot Framework", "Playwright")
+    low = rendered.lower()
+
+    # never-guess rule (present in BOTH the pair file and the syntax file).
+    assert "never guess an endpoint" in low
+    assert "never invent" in low or 'never a "likely"' in low or "do not invent" in low
+
+    # derived-state keywords reuse the populating endpoint, not a new path.
+    assert "derived" in low
+    assert "populating endpoint" in low or "populating method" in low
+
+    # skip-with-reason when the real endpoint cannot be determined.
+    assert "pytest.skip" in low
+    assert "backendunavailable" in low
+
+    # worked derived-state example: get_flow_data -> process-groups endpoint.
+    assert "get_flow_data" in low
+    assert "/nifi-api/flow/process-groups/" in low
+
+    # the SYNTAX file (playwright.md) carries the rule too, independently.
+    assert profile.syntax_rules
+    syn = profile.syntax_rules.lower()
+    assert "never guess an endpoint" in syn
+    assert "derived" in syn and "pytest.skip" in syn
+
+
 def test_missing_pair_rules_degrades_gracefully():
     set_prompts_root(None)
     profile = load_prompt_profile("Selenium", "K6")  # no pair file for this combo

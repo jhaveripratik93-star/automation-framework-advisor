@@ -35,6 +35,14 @@ PREFER NATIVE API TRANSLATION OVER IMPORTING A REST CLIENT (STRICT):
 - ONLY fall back to importing the bundled custom client (see the direct-import
   rule below) for a keyword whose behavior genuinely CANNOT be reduced to a
   direct HTTP call (stateful drivers, DB sessions, k8s, message buses).
+- NEVER GUESS AN ENDPOINT. Use ONLY a path present in the provided
+  "Custom-library endpoint map" or directly visible in the provided library
+  source — never an "assumed"/"likely" path (a guessed path silently 404s).
+  When a keyword returns cached/derived state (marked `DERIVED from <method>`
+  in the map), reuse the SAME endpoint the populating method uses, not a new
+  path. If the real endpoint cannot be determined from the map or source, the
+  test MUST `pytest.skip(...)` with a clear reason (or raise
+  `BackendUnavailable`) instead of emitting a guessed path.
 
 BUNDLED CUSTOM LIBRARY IMPORTS — DIRECT, NO TODO-STUB FALLBACK (STRICT):
 - When a test depends on a custom library whose source will be bundled

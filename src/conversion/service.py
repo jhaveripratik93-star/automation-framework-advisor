@@ -154,6 +154,40 @@ class ConversionResult:
         return "\n".join(lines)
 
 
+# Marker that separates the COMPACT structured endpoint map (which must always
+# reach the model) from the verbose verbatim library source (reference-only,
+# safe to truncate) in a Robot->Playwright shared context — see
+# src/analysis/endpoint_extractor.build_endpoint_context.
+_ENDPOINT_SOURCE_MARKER = "## Resolved custom-library source"
+# Overall budget for the shared context appended to the user prompt.
+_SHARED_CONTEXT_CAP = 2000
+
+
+def _cap_shared_context(ctx: str) -> str:
+    """Cap the shared project context for the prompt WITHOUT ever dropping the
+    structured endpoint map.
+
+    The endpoint extractor emits a compact ``keyword -> HTTP endpoint`` MAP
+    followed by a large verbatim ``## Resolved custom-library source`` block.
+    A naive ``ctx[:2000]`` slice discarded whatever fell past 2000 chars — in
+    practice the verbose source, but on a bigger map it could lop off real
+    endpoints and reintroduce guessing. So keep the MAP in full and spend the
+    REMAINING budget on the (reference-only) source block, truncating just
+    that. Plain contexts with no such marker fall back to the simple cap.
+    """
+    marker = ctx.find(_ENDPOINT_SOURCE_MARKER)
+    if marker == -1:
+        return ctx[:_SHARED_CONTEXT_CAP]
+    endpoint_map = ctx[:marker].rstrip()
+    source_block = ctx[marker:]
+    remaining = _SHARED_CONTEXT_CAP - len(endpoint_map)
+    if remaining <= 0:
+        # The map alone already exceeds the budget — keep the full map
+        # (endpoints must never be guessed) and drop the reference source.
+        return endpoint_map
+    return endpoint_map + "\n\n" + source_block[:remaining]
+
+
 def _strip_cicd_trailer(code: str) -> str:
     """Second-guard against a leaked CI/CD block (point 1) — the prompt
     already forbids it, this catches an LLM that ignores the instruction."""
@@ -221,7 +255,7 @@ def convert(request: ConversionRequest, *, to_fw_data: object | None = None) -> 
         f"```\n{request.source_code}\n```"
     )
     if request.shared_context:
-        user_prompt += f"\n\nShared project context:\n{request.shared_context[:2000]}"
+        user_prompt += f"\n\nShared project context:\n{_cap_shared_context(request.shared_context)}"
 
     for attempt_number in range(1, MAX_REPAIR_ATTEMPTS + 2):  # 1 initial + N repairs
         raw = request.llm_call(system_prompt, user_prompt)

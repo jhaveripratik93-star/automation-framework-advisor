@@ -32,7 +32,9 @@ from _pages.code_studio import (
     _collect_unresolved_dependencies,
     _conftest_with_marks,
     _convert_matched_files,
+    _derive_source_root_from_resolved,
     _dest_rel_for_resolved,
+    _effective_source_root,
     _merge_requirements,
     _scan_dotted_imports,
 )
@@ -111,9 +113,86 @@ def test_collect_includes_transitive_dependencies():
     assert "clamps/infrastructure/k8s/kubernetes_base.py" in dest_map
 
     # external pip packages / stdlib must NOT be bundled
-    assert not any(d.startswith("kubernetes") for d in dest_map)
+    assert not any(d.startswith("kubernetes/") for d in dest_map)
     assert "json.py" not in dest_map
     assert "os.py" not in dest_map
+
+
+# --- (b3) Defect B: deep dotted from-import transitive bundling even with ---
+#          an EMPTY source_root (walk-up resolution leaves it blank). --------
+
+
+def test_scan_dotted_imports_emits_deep_from_import_submodule():
+    """Defect B unit proof: a deep dotted `from X.Y.Z import Name` line must
+    emit the full dotted module `X.Y.Z` as a candidate so the resolver can map
+    it to kubernetes_base.py on disk. (Previously application_controller's
+    `from clamps.infrastructure.k8s.kubernetes_base import KubernetesBase` was
+    not followed, causing ModuleNotFoundError at runtime.)"""
+    text = (
+        "import logging\n"
+        "from kubernetes import client, watch\n"
+        "from kubernetes.client.rest import ApiException\n"
+        "from clamps.infrastructure.k8s.kubernetes_base import KubernetesBase\n"
+    )
+    found = _scan_dotted_imports(text)
+    # the deep PROJECT module must be emitted so it can be resolved + bundled
+    assert "clamps.infrastructure.k8s.kubernetes_base" in found
+    # third-party bases emitted too (classified as pip deps downstream)
+    assert "kubernetes" in found
+    assert "kubernetes.client.rest" in found
+
+
+def test_effective_source_root_strips_dest_suffix():
+    abs_path = r"C:\x\autotest\clamps\infrastructure\k8s\application_controller.py"
+    dest = "clamps/infrastructure/k8s/application_controller.py"
+    root = _effective_source_root(abs_path, dest)
+    assert root is not None
+    assert Path(root).parts[-1] == "autotest"
+
+
+def test_effective_source_root_none_on_mismatch():
+    # abs path does not end with the dest layout -> no root guessed.
+    assert _effective_source_root(r"C:\a\b\c.py", "x/y/z.py") is None
+
+
+def test_collect_transitive_deps_with_empty_source_root():
+    """Defect B regression: when the analysis carries NO source_root (walk-up
+    resolution), the transitive scan was skipped entirely, so
+    application_controller.py was bundled but its `kubernetes_base` import was
+    NOT followed -> ModuleNotFoundError. The bundler must now recover an
+    effective root from the resolved abs paths and bundle the full closure."""
+    if not _robot_available() or not _NIFI_ROBOT.is_file():
+        return
+    analysis = _analyze_path_for_studio(str(_NIFI_ROBOT), "", str(_AUTOTEST_ROOT))
+    assert "error" not in analysis
+
+    # Simulate the real defect condition: source_root blanked out.
+    analysis_no_root = dict(analysis)
+    analysis_no_root["source_root"] = ""
+
+    assert _derive_source_root_from_resolved(analysis_no_root)  # recovered
+    dest_map = _dest_map(analysis_no_root)
+
+    # both the fallback-bundled controller AND its deep transitive import
+    assert "clamps/infrastructure/k8s/application_controller.py" in dest_map
+    assert "clamps/infrastructure/k8s/kubernetes_base.py" in dest_map
+    assert "clamps/nifi/nifi.py" in dest_map
+    # their own transitive project deps are reached too
+    assert "common/rest.py" in dest_map
+    # package __init__ markers for the k8s path
+    assert "clamps/infrastructure/__init__.py" in dest_map
+    assert "clamps/infrastructure/k8s/__init__.py" in dest_map
+
+    # third-party scan (using the recovered root) must excludes project modules
+    # and keep `kubernetes` — the real pip dep of the k8s controllers.
+    scan_root = _derive_source_root_from_resolved(analysis_no_root)
+    deps = _collect_dependency_files(analysis_no_root)
+    third_party = _collect_third_party_requirements(deps, scan_root)
+    assert "kubernetes" in third_party
+    # no bundled project module leaked into third-party requirements
+    assert "clamps" not in third_party
+    assert "common" not in third_party
+    assert "configs" not in third_party
 
 
 # --- (b2) package-init imports are followed (the __init__.py scan bug) ------
@@ -636,6 +715,98 @@ def test_real_nifi_fixture_honest_imports_and_third_party_requirements():
         text = _zip_read_bytes(data, fname).decode("utf-8").lower()
         for token in forbidden:
             assert token not in text, f"{token!r} unexpectedly present in {fname}"
+
+
+# --- (g2) Defect B hybrid: native API calls + bundled k8s import end-to-end -
+
+# A realistic converted nifi test: STEP-1 native APIRequestContext calls for the
+# HTTP keywords, and a STEP-2 bundled import for the k8s controller keyword. The
+# produced ZIP must carry BOTH the native test AND the full bundled closure
+# (application_controller + kubernetes_base + their project deps + __init__ +
+# conftest sys.path), even when the analysis has no source_root.
+HYBRID_NATIVE_PLUS_BUNDLE_OUTPUT = """import os
+import pytest
+from playwright.sync_api import APIRequestContext
+
+
+@pytest.mark.nifi
+def test_can_get_flow_status(playwright):
+    request: APIRequestContext = playwright.request.new_context(base_url="http://nifi:7777")
+    try:
+        response = request.get("/nifi-api/flow/status")
+        assert response.ok
+    finally:
+        request.dispose()
+
+
+@pytest.mark.nifi
+def test_can_get_flow_process_groups(playwright):
+    request: APIRequestContext = playwright.request.new_context(base_url="http://nifi:7777")
+    try:
+        # get_flow_data is DERIVED -> reuse the process-groups endpoint.
+        response = request.get("/nifi-api/flow/process-groups/root")
+        assert response.ok
+        assert response.json()["processGroupFlow"]["flow"]
+    finally:
+        request.dispose()
+
+
+@pytest.mark.dont_run
+def test_restart_nifi_pod(playwright):
+    from clamps.infrastructure.k8s.application_controller import ApplicationController
+    controller = ApplicationController("nifi")
+    controller.restart_app_with_timer(5)
+"""
+
+
+def test_hybrid_native_and_bundled_closure_with_empty_source_root():
+    if not _robot_available() or not _NIFI_ROBOT.is_file():
+        return
+    analysis = _analyze_path_for_studio(str(_NIFI_ROBOT), "", str(_AUTOTEST_ROOT))
+    assert "error" not in analysis
+    analysis_no_root = dict(analysis)
+    analysis_no_root["source_root"] = ""  # the real defect condition
+
+    llm = _ScriptedLLM(HYBRID_NATIVE_PLUS_BUNDLE_OUTPUT)
+    file_results = _convert_matched_files(
+        analysis_no_root, "Robot Framework", "Playwright", llm, to_fw_data=None
+    )
+    assert file_results and all("result" in fr for fr in file_results)
+
+    dependency_files = _collect_dependency_files(analysis_no_root)
+    unresolved = _collect_unresolved_dependencies(analysis_no_root)
+    scan_root = _derive_source_root_from_resolved(analysis_no_root) or ""
+    third_party = _collect_third_party_requirements(dependency_files, scan_root)
+    data = _build_project_zip(
+        file_results, "Playwright",
+        dependency_files=dependency_files, unresolved=unresolved,
+        third_party=third_party,
+    )
+    names = _zip_names(data)
+
+    # (a) native test body present (APIRequestContext + the reused derived path)
+    test_name = next(n for n in names if n.startswith("converted_project/tests/"))
+    test_src = _zip_read_bytes(data, test_name).decode("utf-8")
+    assert "APIRequestContext" in test_src
+    assert "/nifi-api/flow/process-groups/root" in test_src
+    # and the bundled fallback import for the k8s controller keyword
+    assert "from clamps.infrastructure.k8s.application_controller import ApplicationController" in test_src
+
+    # (b) full bundled closure for the k8s controller is in the ZIP
+    assert "converted_project/clamps/infrastructure/k8s/application_controller.py" in names
+    assert "converted_project/clamps/infrastructure/k8s/kubernetes_base.py" in names
+    assert "converted_project/clamps/infrastructure/k8s/__init__.py" in names
+    assert "converted_project/clamps/__init__.py" in names
+    assert "converted_project/conftest.py" in names
+
+    # (c) kubernetes (the k8s controller's third-party dep) is in requirements
+    req_text = _zip_read_bytes(data, "converted_project/requirements.txt").decode("utf-8")
+    req_names = {l.strip().lower() for l in req_text.splitlines() if l.strip()}
+    assert "kubernetes" in req_names
+
+    # (d) conftest wires sys.path so the bundled package imports resolve
+    conftest = _zip_read_bytes(data, "converted_project/conftest.py").decode("utf-8")
+    assert "sys.path" in conftest
 
 
 # --- (h) custom pytest-mark registration in the generated conftest ---------

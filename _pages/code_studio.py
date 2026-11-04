@@ -378,6 +378,75 @@ def _iter_init_entries(dest_rel: str, source_root: str) -> list[tuple[str, str |
     return entries
 
 
+def _effective_source_root(abs_path: str, dest_rel: str) -> str | None:
+    """Derive the project source root from a resolved file's ABSOLUTE path and
+    its computed in-project destination path, or None if they don't line up.
+
+    When the analyzer resolves a dependency via a directory walk-up, the
+    analysis dict can carry an EMPTY ``source_root`` even though every resolved
+    file still lives under a common project root on disk. Without a root the
+    transitive import scan is skipped entirely (``root_path is None``), so a
+    bundled file's own deep imports — e.g. ``application_controller.py``'s
+    ``from clamps.infrastructure.k8s.kubernetes_base import KubernetesBase`` —
+    are never followed and the module is missing at runtime.
+
+    Recover the root by stripping the ``dest_rel`` package suffix from the
+    resolved absolute path: ``.../autotest/clamps/infrastructure/k8s/
+    application_controller.py`` minus ``clamps/infrastructure/k8s/
+    application_controller.py`` -> ``.../autotest``. Returns the root only when
+    the abs path actually ends with the dest_rel parts (so a mismatch from the
+    dotted-module fallback layout is ignored, not guessed).
+    """
+    abs_parts = Path(abs_path).resolve().parts
+    rel_parts = tuple(p for p in dest_rel.split("/") if p)
+    if not rel_parts or len(abs_parts) <= len(rel_parts):
+        return None
+    if abs_parts[-len(rel_parts):] != rel_parts:
+        return None
+    return str(Path(*abs_parts[: -len(rel_parts)]))
+
+
+def _derive_source_root_from_resolved(analysis: dict) -> str | None:
+    """Best-effort project source root recovered from the analyzer's resolved
+    dependency ABSOLUTE paths when ``analysis['source_root']`` is empty.
+
+    Walks the resolved CUSTOM libraries (and resolved resources/variables) and
+    returns the first ``_effective_source_root`` that lines up abs-path with
+    computed dest layout. Returns None when none line up (then the caller keeps
+    an empty root and behaves as before). Pure; reads nothing from disk.
+    """
+    for fd in analysis.get("files", []):
+        if not isinstance(fd, dict) or fd.get("error"):
+            continue
+        settings = fd.get("settings") or {}
+        for lib in settings.get("libraries", []) or []:
+            if lib.get("kind") != "custom" or not lib.get("exists"):
+                continue
+            rp = lib.get("resolved_path")
+            if not rp:
+                continue
+            dest = _dest_rel_for_resolved(rp, "", lib.get("raw_module", ""))
+            if not dest:
+                continue
+            root = _effective_source_root(rp, dest)
+            if root:
+                return root
+        for key in ("resources", "variables"):
+            for dep in settings.get(key, []) or []:
+                if not dep.get("exists"):
+                    continue
+                rp = dep.get("resolved_path")
+                if not rp:
+                    continue
+                dest = _dest_rel_for_resolved(rp, "", "")
+                if not dest:
+                    continue
+                root = _effective_source_root(rp, dest)
+                if root:
+                    return root
+    return None
+
+
 def _collect_dependency_files(
     analysis: dict | None,
     max_depth: int = _MAX_TRANSITIVE_DEPTH,
@@ -412,6 +481,15 @@ def _collect_dependency_files(
         return []
 
     source_root = analysis.get("source_root") or ""
+
+    # When the analysis carries no source_root, the transitive import scan
+    # below would be skipped entirely (root_path is None), so a bundled file's
+    # own deep imports (e.g. application_controller -> kubernetes_base) would
+    # never be followed. Recover an effective root from the FIRST resolved
+    # custom-library file whose abs path lines up with its dest layout, so
+    # __init__ package markers and the transitive walk still resolve correctly.
+    if not source_root:
+        source_root = _derive_source_root_from_resolved(analysis) or ""
 
     # dest_rel -> abs_source_or_None (dedupe by destination path).
     dest_map: dict[str, str | None] = {}
@@ -1134,10 +1212,15 @@ def _render_project_zip_button(
         return
     dependency_files = _collect_dependency_files(analysis) if analysis else []
     unresolved = _collect_unresolved_dependencies(analysis) if analysis else []
+    # Use the same effective source root the bundler used so the third-party
+    # scan correctly excludes BUNDLED project modules even when the analysis
+    # carried no explicit source_root (walk-up resolution) — otherwise project
+    # modules would leak into requirements.txt as if they were pip packages.
+    scan_root = (analysis or {}).get("source_root") or (
+        _derive_source_root_from_resolved(analysis) if analysis else None
+    ) or ""
     third_party = (
-        _collect_third_party_requirements(
-            dependency_files, (analysis or {}).get("source_root") or ""
-        )
+        _collect_third_party_requirements(dependency_files, scan_root)
         if dependency_files
         else []
     )
