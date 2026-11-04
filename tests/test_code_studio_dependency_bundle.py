@@ -12,14 +12,18 @@ files verbatim (Option A) instead of NotImplementedError stubs:
 
 Dependency source is copied VERBATIM, never sent through the LLM converter.
 Any conversion here uses a scripted STUB llm_call (the headless LLM is not
-reliably reachable). Parser-backed tests skip (early return) when robotframework
-or the on-disk fixture is absent, matching the other analyzer tests. No running
-Streamlit server is needed; Streamlit is never launched.
+reliably reachable). Parser-backed tests run against a SELF-CONTAINED synthetic
+Robot suite built under pytest's ``tmp_path`` (see tests/conftest.py) and use
+``pytest.importorskip("robot")`` so they skip cleanly ONLY when robotframework
+is genuinely not installed. No running Streamlit server is needed; Streamlit is
+never launched.
 """
 import io
 import sys
 import zipfile
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -48,9 +52,6 @@ def _robot_available() -> bool:
     return True
 
 
-_AUTOTEST_ROOT = Path(__file__).parent.parent.parent / "autotest_2_extracted" / "autotest"
-_NIFI_ROBOT = _AUTOTEST_ROOT / "core-tests" / "component" / "nifi.robot"
-
 VALID_PLAYWRIGHT_OUTPUT = """from playwright.sync_api import sync_playwright
 
 
@@ -76,44 +77,44 @@ def _dest_map(analysis):
 # --- (a) real-fixture direct resolution ------------------------------------
 
 
-def test_collect_includes_direct_resolved_dependencies():
-    if not _robot_available() or not _NIFI_ROBOT.is_file():
-        return
-    analysis = _analyze_path_for_studio(str(_NIFI_ROBOT), "", str(_AUTOTEST_ROOT))
+def test_collect_includes_direct_resolved_dependencies(make_robot_suite):
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
+    analysis = _analyze_path_for_studio(str(suite.suite), "", str(suite.source_root))
     assert "error" not in analysis
     dest_map = _dest_map(analysis)
 
-    assert "clamps/nifi/nifi.py" in dest_map
-    assert "clamps/infrastructure/k8s/application_controller.py" in dest_map
+    assert suite.client_dest in dest_map
+    assert suite.app_controller_dest in dest_map
 
     # mapped to the real absolute source files on disk
-    nifi_src = Path(dest_map["clamps/nifi/nifi.py"])
-    assert nifi_src.is_file()
-    assert nifi_src.resolve() == (_AUTOTEST_ROOT / "clamps" / "nifi" / "nifi.py").resolve()
+    client_src = Path(dest_map[suite.client_dest])
+    assert client_src.is_file()
+    assert client_src.resolve() == suite.client_py.resolve()
 
     # __init__.py package markers along the bundled path
-    assert "clamps/__init__.py" in dest_map
-    assert "clamps/nifi/__init__.py" in dest_map
+    assert "widgets/__init__.py" in dest_map
+    assert "widgets/api/__init__.py" in dest_map
 
 
 # --- (b) bounded transitive scan reaches second-level deps -----------------
 
 
-def test_collect_includes_transitive_dependencies():
-    if not _robot_available() or not _NIFI_ROBOT.is_file():
-        return
-    analysis = _analyze_path_for_studio(str(_NIFI_ROBOT), "", str(_AUTOTEST_ROOT))
+def test_collect_includes_transitive_dependencies(make_robot_suite):
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
+    analysis = _analyze_path_for_studio(str(suite.suite), "", str(suite.source_root))
     dest_map = _dest_map(analysis)
 
-    # nifi.py imports these project modules; the static scan must pull them in.
-    assert "common/rest.py" in dest_map
+    # client.py imports these project modules; the static scan must pull them in.
+    assert "common_xyz/helper.py" in dest_map
     assert "configs/common_config.py" in dest_map
     assert "settings.py" in dest_map
-    # application_controller.py imports kubernetes_base (second-level).
-    assert "clamps/infrastructure/k8s/kubernetes_base.py" in dest_map
+    # app_controller.py imports k8s_base (second-level).
+    assert suite.k8s_base_dest in dest_map
 
     # external pip packages / stdlib must NOT be bundled
-    assert not any(d.startswith("kubernetes/") for d in dest_map)
+    assert not any(d.startswith("fakecloud/") for d in dest_map)
     assert "json.py" not in dest_map
     assert "os.py" not in dest_map
 
@@ -125,29 +126,29 @@ def test_collect_includes_transitive_dependencies():
 def test_scan_dotted_imports_emits_deep_from_import_submodule():
     """Defect B unit proof: a deep dotted `from X.Y.Z import Name` line must
     emit the full dotted module `X.Y.Z` as a candidate so the resolver can map
-    it to kubernetes_base.py on disk. (Previously application_controller's
-    `from clamps.infrastructure.k8s.kubernetes_base import KubernetesBase` was
-    not followed, causing ModuleNotFoundError at runtime.)"""
+    it to k8s_base.py on disk. (Previously app_controller's
+    `from widgets.infra.k8s.k8s_base import K8sBase` was not followed, causing
+    ModuleNotFoundError at runtime.)"""
     text = (
         "import logging\n"
-        "from kubernetes import client, watch\n"
-        "from kubernetes.client.rest import ApiException\n"
-        "from clamps.infrastructure.k8s.kubernetes_base import KubernetesBase\n"
+        "from fakecloud import client, watch\n"
+        "from fakecloud.client.rest import ApiException\n"
+        "from widgets.infra.k8s.k8s_base import K8sBase\n"
     )
     found = _scan_dotted_imports(text)
     # the deep PROJECT module must be emitted so it can be resolved + bundled
-    assert "clamps.infrastructure.k8s.kubernetes_base" in found
+    assert "widgets.infra.k8s.k8s_base" in found
     # third-party bases emitted too (classified as pip deps downstream)
-    assert "kubernetes" in found
-    assert "kubernetes.client.rest" in found
+    assert "fakecloud" in found
+    assert "fakecloud.client.rest" in found
 
 
 def test_effective_source_root_strips_dest_suffix():
-    abs_path = r"C:\x\autotest\clamps\infrastructure\k8s\application_controller.py"
-    dest = "clamps/infrastructure/k8s/application_controller.py"
+    abs_path = r"C:\x\src\widgets\infra\k8s\app_controller.py"
+    dest = "widgets/infra/k8s/app_controller.py"
     root = _effective_source_root(abs_path, dest)
     assert root is not None
-    assert Path(root).parts[-1] == "autotest"
+    assert Path(root).parts[-1] == "src"
 
 
 def test_effective_source_root_none_on_mismatch():
@@ -155,15 +156,15 @@ def test_effective_source_root_none_on_mismatch():
     assert _effective_source_root(r"C:\a\b\c.py", "x/y/z.py") is None
 
 
-def test_collect_transitive_deps_with_empty_source_root():
+def test_collect_transitive_deps_with_empty_source_root(make_robot_suite):
     """Defect B regression: when the analysis carries NO source_root (walk-up
-    resolution), the transitive scan was skipped entirely, so
-    application_controller.py was bundled but its `kubernetes_base` import was
-    NOT followed -> ModuleNotFoundError. The bundler must now recover an
-    effective root from the resolved abs paths and bundle the full closure."""
-    if not _robot_available() or not _NIFI_ROBOT.is_file():
-        return
-    analysis = _analyze_path_for_studio(str(_NIFI_ROBOT), "", str(_AUTOTEST_ROOT))
+    resolution), the transitive scan was skipped entirely, so app_controller.py
+    was bundled but its `k8s_base` import was NOT followed ->
+    ModuleNotFoundError. The bundler must now recover an effective root from the
+    resolved abs paths and bundle the full closure."""
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
+    analysis = _analyze_path_for_studio(str(suite.suite), "", str(suite.source_root))
     assert "error" not in analysis
 
     # Simulate the real defect condition: source_root blanked out.
@@ -174,24 +175,24 @@ def test_collect_transitive_deps_with_empty_source_root():
     dest_map = _dest_map(analysis_no_root)
 
     # both the fallback-bundled controller AND its deep transitive import
-    assert "clamps/infrastructure/k8s/application_controller.py" in dest_map
-    assert "clamps/infrastructure/k8s/kubernetes_base.py" in dest_map
-    assert "clamps/nifi/nifi.py" in dest_map
+    assert suite.app_controller_dest in dest_map
+    assert suite.k8s_base_dest in dest_map
+    assert suite.client_dest in dest_map
     # their own transitive project deps are reached too
-    assert "common/rest.py" in dest_map
+    assert "common_xyz/helper.py" in dest_map
     # package __init__ markers for the k8s path
-    assert "clamps/infrastructure/__init__.py" in dest_map
-    assert "clamps/infrastructure/k8s/__init__.py" in dest_map
+    assert "widgets/infra/__init__.py" in dest_map
+    assert "widgets/infra/k8s/__init__.py" in dest_map
 
-    # third-party scan (using the recovered root) must excludes project modules
-    # and keep `kubernetes` — the real pip dep of the k8s controllers.
+    # third-party scan (using the recovered root) must exclude project modules
+    # and keep `fakecloud` — the real pip dep of the k8s controllers.
     scan_root = _derive_source_root_from_resolved(analysis_no_root)
     deps = _collect_dependency_files(analysis_no_root)
     third_party = _collect_third_party_requirements(deps, scan_root)
-    assert "kubernetes" in third_party
+    assert "fakecloud" in third_party
     # no bundled project module leaked into third-party requirements
-    assert "clamps" not in third_party
-    assert "common" not in third_party
+    assert "widgets" not in third_party
+    assert "common_xyz" not in third_party
     assert "configs" not in third_party
 
 
@@ -217,36 +218,25 @@ def test_collect_follows_package_init_imports(tmp_path):
     assert "pkg/sub.py" in dest
 
 
-def test_collect_follows_real_clamps_package_init_chain():
-    # Real-fixture proof: clamps/__init__.py imports clamps.cenxrestapi,
-    # clamps.cenxfederatedapi, clamps.databases.solr.solr, clamps.cenxqueryapi.
-    # All resolve as packages/modules on disk and were previously MISSED
-    # because the bundled clamps/__init__.py was never scanned.
-    if not _robot_available() or not _NIFI_ROBOT.is_file():
-        return
-    analysis = _analyze_path_for_studio(str(_NIFI_ROBOT), "", str(_AUTOTEST_ROOT))
+def test_collect_follows_real_package_init_chain(make_robot_suite):
+    # Synthetic-fixture proof of the "package __init__ scan" case: the bundled
+    # widgets/__init__.py eagerly imports widgets.subapi and
+    # widgets.extra.helper. These resolve as modules on disk and would be
+    # MISSED unless the bundled widgets/__init__.py is itself SCANNED (the exact
+    # class of the reported ModuleNotFoundError from an eager package init).
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
+    analysis = _analyze_path_for_studio(str(suite.suite), "", str(suite.source_root))
     dest_map = _dest_map(analysis)
 
-    # package inits reached only via scanning clamps/__init__.py:
-    assert "clamps/cenxrestapi/__init__.py" in dest_map
-    assert "clamps/cenxfederatedapi/__init__.py" in dest_map
-    assert "clamps/cenxqueryapi/__init__.py" in dest_map
-    # the exact submodule from the reported ModuleNotFoundError trace:
-    #   from clamps.cenxrestapi import Session  -> clamps/cenxrestapi/session.py
-    assert "clamps/cenxrestapi/session.py" in dest_map
-    assert "clamps/cenxrestapi/customization.py" in dest_map
-    assert "clamps/cenxrestapi/topology.py" in dest_map
-    assert "clamps/cenxrestapi/data.py" in dest_map
-    assert "clamps/cenxrestapi/cenxens.py" in dest_map
-    # recursion continues through the second-level package inits:
-    assert "clamps/cenxqueryapi/cenxqueryapi.py" in dest_map
-    assert "clamps/cenxfederatedapi/entity.py" in dest_map
-    # and the module imported via the dotted submodule path:
-    assert "clamps/databases/solr/solr.py" in dest_map
+    # submodules reached ONLY via scanning widgets/__init__.py:
+    assert suite.subapi_dest in dest_map
+    assert "widgets/extra/__init__.py" in dest_map
+    assert "widgets/extra/helper.py" in dest_map
 
-    # every clamps module these inits resolve to maps to a real file on disk
+    # every widgets module these inits resolve to maps to a real file on disk
     for rel, abs_src in dest_map.items():
-        if rel.startswith("clamps/") and abs_src is not None:
+        if rel.startswith("widgets/") and abs_src is not None:
             assert Path(abs_src).is_file()
 
 
@@ -334,16 +324,16 @@ def test_transitive_respects_max_depth(tmp_path):
 def test_scan_dotted_imports_basic():
     text = (
         "import json\n"
-        "import clamps.nifi.nifi as n\n"
-        "from common.rest import UnexpectedHttpResponse\n"
+        "import widgets.api.client as n\n"
+        "from common_xyz.rest import UnexpectedHttpResponse\n"
         "from . import sibling\n"          # relative -> skipped
         "from .pkg import thing\n"         # relative -> skipped
         "    import indented.module\n"
     )
     found = _scan_dotted_imports(text)
     assert "json" in found
-    assert "clamps.nifi.nifi" in found
-    assert "common.rest" in found
+    assert "widgets.api.client" in found
+    assert "common_xyz.rest" in found
     assert "indented.module" in found
     assert "sibling" not in found
     assert "pkg" not in found
@@ -397,17 +387,17 @@ def test_collect_bundles_from_import_submodule(tmp_path):
 
 
 def test_dest_rel_for_resolved_from_source_root(tmp_path):
-    src = tmp_path / "clamps" / "nifi" / "nifi.py"
+    src = tmp_path / "widgets" / "api" / "client.py"
     src.parent.mkdir(parents=True, exist_ok=True)
     src.write_text("", encoding="utf-8")
-    dest = _dest_rel_for_resolved(str(src), str(tmp_path), "clamps.nifi.nifi.Nifi")
-    assert dest == "clamps/nifi/nifi.py"
+    dest = _dest_rel_for_resolved(str(src), str(tmp_path), "widgets.api.client.Client")
+    assert dest == "widgets/api/client.py"
 
 
 def test_dest_rel_for_resolved_fallback_from_module():
     # No source_root -> derive from dotted module, dropping trailing class.
-    dest = _dest_rel_for_resolved(r"C:\somewhere\x.py", "", "clamps.nifi.nifi.Nifi")
-    assert dest == "clamps/nifi/nifi.py"
+    dest = _dest_rel_for_resolved(r"C:\somewhere\x.py", "", "widgets.api.client.Client")
+    assert dest == "widgets/api/client.py"
 
 
 # --- (d) ZIP contents: real verbatim dependency source + conftest ----------
@@ -423,10 +413,10 @@ def _zip_read_bytes(data: bytes, name: str) -> bytes:
         return zf.read(name)
 
 
-def test_build_project_zip_bundles_real_dependency_source():
-    if not _robot_available() or not _NIFI_ROBOT.is_file():
-        return
-    analysis = _analyze_path_for_studio(str(_NIFI_ROBOT), "", str(_AUTOTEST_ROOT))
+def test_build_project_zip_bundles_real_dependency_source(make_robot_suite):
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
+    analysis = _analyze_path_for_studio(str(suite.suite), "", str(suite.source_root))
     assert "error" not in analysis
 
     llm = _ScriptedLLM()
@@ -444,16 +434,16 @@ def test_build_project_zip_bundles_real_dependency_source():
     names = _zip_names(data)
 
     assert any(n.startswith("converted_project/tests/") for n in names)
-    assert "converted_project/clamps/nifi/nifi.py" in names
-    assert "converted_project/clamps/__init__.py" in names
-    assert "converted_project/clamps/nifi/__init__.py" in names
+    assert f"converted_project/{suite.client_dest}" in names
+    assert "converted_project/widgets/__init__.py" in names
+    assert "converted_project/widgets/api/__init__.py" in names
     assert "converted_project/conftest.py" in names
     assert "converted_project/requirements.txt" in names
     assert "converted_project/README.md" in names
 
-    # bundled nifi.py is a verbatim copy of the on-disk source
-    on_disk = (_AUTOTEST_ROOT / "clamps" / "nifi" / "nifi.py").read_bytes()
-    bundled = _zip_read_bytes(data, "converted_project/clamps/nifi/nifi.py")
+    # bundled client.py is a verbatim copy of the on-disk source
+    on_disk = suite.client_py.read_bytes()
+    bundled = _zip_read_bytes(data, f"converted_project/{suite.client_dest}")
     assert bundled == on_disk
 
     # no CI/CD tokens in requirements / README (substring check, matches the
@@ -472,11 +462,11 @@ def test_build_project_zip_default_no_dependencies_unchanged():
         target_language = "python"
 
     data = _build_project_zip(
-        [{"file_path": r"C:\x\nifi.robot", "result": _FakeResult()}], "Playwright"
+        [{"file_path": r"C:\x\suite.robot", "result": _FakeResult()}], "Playwright"
     )
     names = _zip_names(data)
     assert "converted_project/conftest.py" not in names
-    assert not [n for n in names if n.startswith("converted_project/clamps/")]
+    assert not [n for n in names if n.startswith("converted_project/widgets/")]
 
 
 # --- (e) unresolved dependency is reported, not silently dropped -----------
@@ -622,51 +612,51 @@ def test_merge_requirements_empty_third_party_noop():
 
 # --- (g) REAL-fixture end-to-end: honest imports + third-party reqs ---------
 
-# Stub-converted nifi test that (wrongly) wraps its bundled-dependency imports
-# in try/except ImportError NotImplementedError stubs. Flowed THROUGH convert()
-# so the import-stub postprocess guard rewrites it to direct imports in the ZIP.
-STUB_FALLBACK_NIFI_OUTPUT = """import pytest
+# Stub-converted test that (wrongly) wraps its bundled-dependency imports in
+# try/except ImportError NotImplementedError stubs. Flowed THROUGH convert() so
+# the import-stub postprocess guard rewrites it to direct imports in the ZIP.
+STUB_FALLBACK_OUTPUT = """import pytest
 
 try:
-    from clamps.nifi.nifi import Nifi
+    from widgets.api.client import Client
 except ImportError:
-    class Nifi:
-        def get_flow_status(self):
-            raise NotImplementedError("TODO: Implement clamps.nifi.nifi.Nifi")
+    class Client:
+        def get_thing_status(self):
+            raise NotImplementedError("TODO: Implement widgets.api.client.Client")
 
 try:
-    from clamps.infrastructure.k8s.application_controller import ApplicationController
+    from widgets.infra.k8s.app_controller import AppController
 except ImportError:
-    class ApplicationController:
+    class AppController:
         def restart(self):
-            raise NotImplementedError("TODO: Implement ApplicationController")
+            raise NotImplementedError("TODO: Implement AppController")
 
 
 @pytest.fixture
-def nifi() -> Nifi:
-    return Nifi()
+def client() -> Client:
+    return Client()
 
 
 @pytest.fixture
-def nifi_controller() -> ApplicationController:
-    return ApplicationController()
+def controller() -> AppController:
+    return AppController()
 
 
-def test_can_get_flow_status(nifi: Nifi):
-    status = nifi.get_flow_status()
-    assert "controllerStatus" in status
+def test_can_get_thing_status(client: Client):
+    status = client.get_thing_status()
+    assert "state" in status
 """
 
 
-def test_real_nifi_fixture_honest_imports_and_third_party_requirements():
-    if not _robot_available() or not _NIFI_ROBOT.is_file():
-        return
-    analysis = _analyze_path_for_studio(str(_NIFI_ROBOT), "", str(_AUTOTEST_ROOT))
+def test_synthetic_fixture_honest_imports_and_third_party_requirements(make_robot_suite):
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
+    analysis = _analyze_path_for_studio(str(suite.suite), "", str(suite.source_root))
     assert "error" not in analysis
 
-    # Convert the real fixture with a stub LLM that returns the stub-fallback
+    # Convert the synthetic fixture with a stub LLM that returns the stub-fallback
     # test code; the pipeline's import-stub guard must rewrite it.
-    llm = _ScriptedLLM(STUB_FALLBACK_NIFI_OUTPUT)
+    llm = _ScriptedLLM(STUB_FALLBACK_OUTPUT)
     file_results = _convert_matched_files(
         analysis, "Robot Framework", "Playwright", llm, to_fw_data=None
     )
@@ -687,27 +677,27 @@ def test_real_nifi_fixture_honest_imports_and_third_party_requirements():
     # (a) converted test imports both symbols DIRECTLY — no stub, no try/except.
     test_name = next(n for n in names if n.startswith("converted_project/tests/"))
     test_src = _zip_read_bytes(data, test_name).decode("utf-8")
-    assert "from clamps.nifi.nifi import Nifi" in test_src
+    assert "from widgets.api.client import Client" in test_src
     assert (
-        "from clamps.infrastructure.k8s.application_controller import ApplicationController"
+        "from widgets.infra.k8s.app_controller import AppController"
         in test_src
     )
     assert "except ImportError" not in test_src
     assert "NotImplementedError" not in test_src
 
-    # (b) requirements.txt contains kubernetes (guaranteed in the dep chain),
+    # (b) requirements.txt contains fakecloud (guaranteed in the dep chain),
     #     plus whatever other real third-party the scan found.
     req_text = _zip_read_bytes(data, "converted_project/requirements.txt").decode("utf-8")
     req_names = {l.strip().lower() for l in req_text.splitlines() if l.strip()}
-    assert "kubernetes" in third_party
-    assert "kubernetes" in req_names
+    assert "fakecloud" in third_party
+    assert "fakecloud" in req_names
     # the scan picked up real third-party deps of the bundled chain
     assert third_party, "expected at least one third-party requirement"
 
     # (c) README lists the detected third-party deps.
     readme = _zip_read_bytes(data, "converted_project/README.md").decode("utf-8")
     assert "Third-party packages detected from bundled code" in readme
-    assert "kubernetes" in readme
+    assert "fakecloud" in readme
 
     # (d) no CI/CD tokens in requirements / README.
     forbidden = ["github", "ci", "workflow", "actions"]
@@ -719,50 +709,50 @@ def test_real_nifi_fixture_honest_imports_and_third_party_requirements():
 
 # --- (g2) Defect B hybrid: native API calls + bundled k8s import end-to-end -
 
-# A realistic converted nifi test: STEP-1 native APIRequestContext calls for the
-# HTTP keywords, and a STEP-2 bundled import for the k8s controller keyword. The
+# A realistic converted test: STEP-1 native APIRequestContext calls for the HTTP
+# keywords, and a STEP-2 bundled import for the k8s controller keyword. The
 # produced ZIP must carry BOTH the native test AND the full bundled closure
-# (application_controller + kubernetes_base + their project deps + __init__ +
-# conftest sys.path), even when the analysis has no source_root.
+# (app_controller + k8s_base + their project deps + __init__ + conftest
+# sys.path), even when the analysis has no source_root.
 HYBRID_NATIVE_PLUS_BUNDLE_OUTPUT = """import os
 import pytest
 from playwright.sync_api import APIRequestContext
 
 
-@pytest.mark.nifi
-def test_can_get_flow_status(playwright):
-    request: APIRequestContext = playwright.request.new_context(base_url="http://nifi:7777")
+@pytest.mark.widgets
+def test_can_get_thing_status(playwright):
+    request: APIRequestContext = playwright.request.new_context(base_url="http://widgets:8080")
     try:
-        response = request.get("/nifi-api/flow/status")
+        response = request.get("/widgets-api/things/status")
         assert response.ok
     finally:
         request.dispose()
 
 
-@pytest.mark.nifi
-def test_can_get_flow_process_groups(playwright):
-    request: APIRequestContext = playwright.request.new_context(base_url="http://nifi:7777")
+@pytest.mark.widgets
+def test_can_get_thing_groups(playwright):
+    request: APIRequestContext = playwright.request.new_context(base_url="http://widgets:8080")
     try:
-        # get_flow_data is DERIVED -> reuse the process-groups endpoint.
-        response = request.get("/nifi-api/flow/process-groups/root")
+        # get_cached_things is DERIVED -> reuse the thing-group-flow endpoint.
+        response = request.get("/widgets-api/things/root/flow")
         assert response.ok
-        assert response.json()["processGroupFlow"]["flow"]
+        assert response.json()["flow"]
     finally:
         request.dispose()
 
 
 @pytest.mark.dont_run
-def test_restart_nifi_pod(playwright):
-    from clamps.infrastructure.k8s.application_controller import ApplicationController
-    controller = ApplicationController("nifi")
+def test_restart_app(playwright):
+    from widgets.infra.k8s.app_controller import AppController
+    controller = AppController("widgets")
     controller.restart_app_with_timer(5)
 """
 
 
-def test_hybrid_native_and_bundled_closure_with_empty_source_root():
-    if not _robot_available() or not _NIFI_ROBOT.is_file():
-        return
-    analysis = _analyze_path_for_studio(str(_NIFI_ROBOT), "", str(_AUTOTEST_ROOT))
+def test_hybrid_native_and_bundled_closure_with_empty_source_root(make_robot_suite):
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
+    analysis = _analyze_path_for_studio(str(suite.suite), "", str(suite.source_root))
     assert "error" not in analysis
     analysis_no_root = dict(analysis)
     analysis_no_root["source_root"] = ""  # the real defect condition
@@ -788,21 +778,21 @@ def test_hybrid_native_and_bundled_closure_with_empty_source_root():
     test_name = next(n for n in names if n.startswith("converted_project/tests/"))
     test_src = _zip_read_bytes(data, test_name).decode("utf-8")
     assert "APIRequestContext" in test_src
-    assert "/nifi-api/flow/process-groups/root" in test_src
+    assert "/widgets-api/things/root/flow" in test_src
     # and the bundled fallback import for the k8s controller keyword
-    assert "from clamps.infrastructure.k8s.application_controller import ApplicationController" in test_src
+    assert "from widgets.infra.k8s.app_controller import AppController" in test_src
 
     # (b) full bundled closure for the k8s controller is in the ZIP
-    assert "converted_project/clamps/infrastructure/k8s/application_controller.py" in names
-    assert "converted_project/clamps/infrastructure/k8s/kubernetes_base.py" in names
-    assert "converted_project/clamps/infrastructure/k8s/__init__.py" in names
-    assert "converted_project/clamps/__init__.py" in names
+    assert f"converted_project/{suite.app_controller_dest}" in names
+    assert f"converted_project/{suite.k8s_base_dest}" in names
+    assert "converted_project/widgets/infra/k8s/__init__.py" in names
+    assert "converted_project/widgets/__init__.py" in names
     assert "converted_project/conftest.py" in names
 
-    # (c) kubernetes (the k8s controller's third-party dep) is in requirements
+    # (c) fakecloud (the k8s controller's third-party dep) is in requirements
     req_text = _zip_read_bytes(data, "converted_project/requirements.txt").decode("utf-8")
     req_names = {l.strip().lower() for l in req_text.splitlines() if l.strip()}
-    assert "kubernetes" in req_names
+    assert "fakecloud" in req_names
 
     # (d) conftest wires sys.path so the bundled package imports resolve
     conftest = _zip_read_bytes(data, "converted_project/conftest.py").decode("utf-8")
@@ -815,8 +805,8 @@ def test_hybrid_native_and_bundled_closure_with_empty_source_root():
 def test_collect_custom_marks_excludes_builtins():
     code = (
         "import pytest\n"
-        "pytestmark = [pytest.mark.nifi]\n"
-        "@pytest.mark.cenx_platform\n"
+        "pytestmark = [pytest.mark.widgets]\n"
+        "@pytest.mark.platform_suite\n"
         "@pytest.mark.Implements_TEST_13556\n"
         "@pytest.mark.dont_run\n"
         "@pytest.mark.skip\n"              # built-in -> excluded
@@ -827,16 +817,16 @@ def test_collect_custom_marks_excludes_builtins():
     marks = _collect_custom_marks([code])
     assert marks == [
         "Implements_TEST_13556",
-        "cenx_platform",
         "dont_run",
-        "nifi",
+        "platform_suite",
+        "widgets",
     ]
 
 
 def test_conftest_with_marks_registers_each():
-    body = _conftest_with_marks(["nifi", "dont_run"])
+    body = _conftest_with_marks(["widgets", "dont_run"])
     assert "def pytest_configure(config):" in body
-    assert 'config.addinivalue_line("markers", "nifi:' in body
+    assert 'config.addinivalue_line("markers", "widgets:' in body
     assert 'config.addinivalue_line("markers", "dont_run:' in body
 
 
@@ -850,11 +840,11 @@ def test_build_project_zip_registers_marks_in_conftest(tmp_path):
     # A converted test uses a custom mark; the bundled conftest must register it.
     marked_code = (
         "import pytest\n"
-        "from clamps.nifi.nifi import Nifi\n"
+        "from widgets.api.client import Client\n"
         "\n"
-        "@pytest.mark.nifi\n"
+        "@pytest.mark.widgets\n"
         "def test_x():\n"
-        "    assert Nifi()\n"
+        "    assert Client()\n"
     )
 
     class _FakeResult:
@@ -862,13 +852,13 @@ def test_build_project_zip_registers_marks_in_conftest(tmp_path):
         target_language = "python"
 
     # dependency_files non-empty so conftest.py is written.
-    _write(tmp_path / "clamps" / "nifi" / "nifi.py", "class Nifi: pass\n")
-    dep_files = [("clamps/nifi/nifi.py", str(tmp_path / "clamps" / "nifi" / "nifi.py"))]
+    _write(tmp_path / "widgets" / "api" / "client.py", "class Client: pass\n")
+    dep_files = [("widgets/api/client.py", str(tmp_path / "widgets" / "api" / "client.py"))]
     data = _build_project_zip(
-        [{"file_path": r"C:\x\nifi.robot", "result": _FakeResult()}],
+        [{"file_path": r"C:\x\suite.robot", "result": _FakeResult()}],
         "Playwright",
         dependency_files=dep_files,
     )
     conftest = _zip_read_bytes(data, "converted_project/conftest.py").decode("utf-8")
     assert "def pytest_configure(config):" in conftest
-    assert 'config.addinivalue_line("markers", "nifi:' in conftest
+    assert 'config.addinivalue_line("markers", "widgets:' in conftest

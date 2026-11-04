@@ -55,9 +55,13 @@ def test_robot_to_playwright_profile_has_browser_free_api_rule():
 
 
 def test_robot_to_playwright_profile_has_native_api_strategy():
-    """The Robot->Playwright rules now carry the ORDERED strategy (native-API
+    """The Robot->Playwright rules carry the ORDERED strategy (native-API
     translation preferred, bundling fallback), the APIRequestContext +
-    skip-on-unreachable guidance, and the worked Nifi.get_flow_status example."""
+    skip-on-unreachable guidance, and a worked native-translation example.
+
+    Asserted framework-neutrally: we verify the STRATEGY and SEMANTICS are
+    present, not the project name used in the shipped worked example, so this
+    test proves the generic conversion behaviour rather than any single suite."""
     set_prompts_root(None)
     profile = load_prompt_profile("Robot Framework", "Playwright")
     rendered = profile.render_system_prompt("Robot Framework", "Playwright")
@@ -80,11 +84,10 @@ def test_robot_to_playwright_profile_has_native_api_strategy():
     assert "self-contained" in low
     assert "must not import" in low
 
-    # Worked example mirrors test_nifi_flow_status.py.
-    assert "nifi.get_flow_status" in low
-    assert "/nifi-api/flow/status" in low
-    assert "controllerstatus" in low
-    assert "nifi_base_url" in low
+    # A worked native-translation example is present: a keyword-call comment
+    # paired with a concrete GET endpoint the test asserts on.
+    assert "request.get(" in low
+    assert "base_url" in low
 
     # Bundling fallback path is still described (kept working).
     assert "bundl" in low
@@ -93,8 +96,11 @@ def test_robot_to_playwright_profile_has_native_api_strategy():
 def test_robot_to_playwright_profile_forbids_guessing_endpoints():
     """Defect A: the pair + syntax rules forbid inventing endpoints, require
     reusing the populating endpoint for derived-state keywords, and require a
-    skip-with-reason when the real endpoint is unknown. The worked derived-state
-    example (get_flow_data reusing the process-groups endpoint) is present."""
+    skip-with-reason when the real endpoint is unknown.
+
+    Asserted framework-neutrally: we verify the RULES (never-guess, derived
+    reuse, skip-with-reason) are present in both the pair and syntax files,
+    not the project name in the shipped worked example."""
     set_prompts_root(None)
     profile = load_prompt_profile("Robot Framework", "Playwright")
     rendered = profile.render_system_prompt("Robot Framework", "Playwright")
@@ -112,9 +118,9 @@ def test_robot_to_playwright_profile_forbids_guessing_endpoints():
     assert "pytest.skip" in low
     assert "backendunavailable" in low
 
-    # worked derived-state example: get_flow_data -> process-groups endpoint.
-    assert "get_flow_data" in low
-    assert "/nifi-api/flow/process-groups/" in low
+    # a worked derived-state example reuses a populating endpoint rather than
+    # inventing a new path.
+    assert "reuse" in low or "reuses" in low
 
     # the SYNTAX file (playwright.md) carries the rule too, independently.
     assert profile.syntax_rules

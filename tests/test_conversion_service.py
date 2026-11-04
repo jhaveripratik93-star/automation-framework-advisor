@@ -280,17 +280,17 @@ def test_parity_report_in_to_dict_is_json_serializable():
 # runs inside convert() so a REST/API Robot test never ships an unused
 # pytest-playwright browser fixture, regardless of what the LLM returns.
 
-NIFI_ROBOT_SOURCE = """*** Settings ***
-Library      clamps.nifi.nifi.Nifi  WITH NAME  Nifi
-Force Tags   nifi
+WIDGETS_ROBOT_SOURCE = """*** Settings ***
+Library      widgets.api.client.Client  WITH NAME  Client
+Force Tags   widgets
 
 *** Test Cases ***
-Can Get Flow Status
-    ${status}=  Nifi.get_flow_status
-    Should Contain  ${status}  controllerStatus
+Can Get Thing Status
+    ${status}=  Client.get_status
+    Should Contain  ${status}  serviceStatus
 
-Can Get Flow About Dialog Information
-    ${about_dialog}=  Nifi.get_flow_about
+Can Get Thing About Dialog Information
+    ${about_dialog}=  Client.get_about
     Should Contain  ${about_dialog}  about
 """
 
@@ -298,23 +298,23 @@ Can Get Flow About Dialog Information
 # though no test ever touches a browser.
 BROWSER_FIXTURED_PYTEST = """from playwright.sync_api import Page
 import pytest
-from clamps.nifi.nifi import Nifi
+from widgets.api.client import Client
 
 
 @pytest.fixture
-def nifi() -> Nifi:
-    return Nifi()
+def client() -> Client:
+    return Client()
 
 
-@pytest.mark.nifi
-def test_can_get_flow_status(page: Page, nifi: Nifi):
-    status = nifi.get_flow_status()
-    assert "controllerStatus" in status
+@pytest.mark.widgets
+def test_can_get_status(page: Page, client: Client):
+    status = client.get_status()
+    assert "serviceStatus" in status
 
 
-@pytest.mark.nifi
-def test_can_get_flow_about(page: Page, nifi: Nifi):
-    about = nifi.get_flow_about()
+@pytest.mark.widgets
+def test_can_get_about(page: Page, client: Client):
+    about = client.get_about()
     assert "about" in about
 """
 
@@ -331,7 +331,7 @@ def test_homepage_loads(page: Page):
 def test_convert_playwright_strips_unused_browser_fixture():
     llm = _ScriptedLLM([BROWSER_FIXTURED_PYTEST])
     result = convert(ConversionRequest(
-        source_code=NIFI_ROBOT_SOURCE,
+        source_code=WIDGETS_ROBOT_SOURCE,
         from_framework="Robot Framework",
         to_framework="Playwright",
         llm_call=llm,
@@ -339,11 +339,11 @@ def test_convert_playwright_strips_unused_browser_fixture():
     assert result.target_language == "python"
     # No test signature keeps a page parameter.
     assert "page: Page" not in result.code
-    assert "def test_can_get_flow_status(nifi: Nifi):" in result.code
-    assert "def test_can_get_flow_about(nifi: Nifi):" in result.code
+    assert "def test_can_get_status(client: Client):" in result.code
+    assert "def test_can_get_about(client: Client):" in result.code
     # Browser Page import gone; custom client + assertions preserved.
     assert "from playwright.sync_api import Page" not in result.code
-    assert "from clamps.nifi.nifi import Nifi" in result.code
+    assert "from widgets.api.client import Client" in result.code
     assert result.code.count("assert ") == BROWSER_FIXTURED_PYTEST.count("assert ")
 
 
@@ -370,29 +370,29 @@ BROWSER_AND_STUB_PYTEST = """from playwright.sync_api import Page
 import pytest
 
 try:
-    from clamps.nifi.nifi import Nifi
+    from widgets.api.client import Client
 except ImportError:
-    class Nifi:
-        def get_flow_status(self):
-            raise NotImplementedError("TODO: Implement clamps.nifi.nifi.Nifi")
+    class Client:
+        def get_status(self):
+            raise NotImplementedError("TODO: Implement widgets.api.client.Client")
 
 
 @pytest.fixture
-def nifi() -> Nifi:
-    return Nifi()
+def client() -> Client:
+    return Client()
 
 
-@pytest.mark.nifi
-def test_can_get_flow_status(page: Page, nifi: Nifi):
-    status = nifi.get_flow_status()
-    assert "controllerStatus" in status
+@pytest.mark.widgets
+def test_can_get_status(page: Page, client: Client):
+    status = client.get_status()
+    assert "serviceStatus" in status
 """
 
 
 def test_convert_playwright_runs_both_postprocess_guards():
     llm = _ScriptedLLM([BROWSER_AND_STUB_PYTEST])
     result = convert(ConversionRequest(
-        source_code=NIFI_ROBOT_SOURCE,
+        source_code=WIDGETS_ROBOT_SOURCE,
         from_framework="Robot Framework",
         to_framework="Playwright",
         llm_call=llm,
@@ -401,13 +401,13 @@ def test_convert_playwright_runs_both_postprocess_guards():
     # Browser-free: no page param, no browser Page import.
     assert "page: Page" not in code
     assert "from playwright.sync_api import Page" not in code
-    assert "def test_can_get_flow_status(nifi: Nifi):" in code
+    assert "def test_can_get_status(client: Client):" in code
     # Honest import: direct import, no try/except stub, no NotImplementedError.
-    assert "from clamps.nifi.nifi import Nifi" in code
+    assert "from widgets.api.client import Client" in code
     assert "except ImportError" not in code
     assert "NotImplementedError" not in code
     # Assertion preserved.
-    assert 'assert "controllerStatus" in status' in code
+    assert 'assert "serviceStatus" in status' in code
 
 
 # ── Defect A: the structured endpoint map survives the shared-context cap ──
@@ -422,8 +422,8 @@ from src.conversion.service import _cap_shared_context, _SHARED_CONTEXT_CAP
 def test_cap_shared_context_preserves_full_map_truncates_source():
     endpoint_map = (
         "## Custom-library endpoint map (for NATIVE API translation)\n\n"
-        "- `get_flow_data` -> DERIVED reuse `GET /nifi-api/flow/process-groups/{flow_id}`\n"
-        "- `get_flow_status` -> `GET /nifi-api/flow/status`\n"
+        "- `get_things` -> DERIVED reuse `GET /widget-api/things/{thing_id}/flow`\n"
+        "- `get_status` -> `GET /widget-api/status`\n"
     )
     big_source = "## Resolved custom-library source\n\n```python\n" + ("x" * 50000) + "\n```"
     ctx = endpoint_map + "\n\n" + big_source
@@ -431,9 +431,9 @@ def test_cap_shared_context_preserves_full_map_truncates_source():
     capped = _cap_shared_context(ctx)
     # The full map (every endpoint) survives verbatim.
     assert endpoint_map.rstrip() in capped
-    assert "get_flow_data" in capped
-    assert "GET /nifi-api/flow/process-groups/{flow_id}" in capped
-    assert "get_flow_status" in capped
+    assert "get_things" in capped
+    assert "GET /widget-api/things/{thing_id}/flow" in capped
+    assert "get_status" in capped
     # The verbose source is truncated — the whole thing didn't survive.
     assert len(capped) < len(ctx)
     assert capped.count("x") < 50000
@@ -468,9 +468,9 @@ def test_endpoint_map_reaches_llm_prompt_uncut():
     endpoint_map = (
         "## Custom-library endpoint map (for NATIVE API translation)\n\n"
         "USE ONLY the paths shown here. NEVER invent a \"likely\" endpoint.\n\n"
-        "- `get_flow_status` -> `GET /nifi-api/flow/status`\n"
-        "- `get_flow_data` -> DERIVED from `processor_group_flow`: "
-        "`GET /nifi-api/flow/process-groups/{flow_id}`\n"
+        "- `get_status` -> `GET /widget-api/status`\n"
+        "- `get_things` -> DERIVED from `thing_group_flow`: "
+        "`GET /widget-api/things/{thing_id}/flow`\n"
     )
     source_block = "## Resolved custom-library source\n\n```python\n" + ("s" * 40000) + "\n```"
     ctx = endpoint_map + "\n\n" + source_block
@@ -491,8 +491,8 @@ def test_endpoint_map_reaches_llm_prompt_uncut():
     ))
     assert captured
     prompt = captured[0]
-    assert "get_flow_status" in prompt
-    assert "GET /nifi-api/flow/status" in prompt
+    assert "get_status" in prompt
+    assert "GET /widget-api/status" in prompt
     # The derived-state mapping with the REAL process-groups path survives.
-    assert "GET /nifi-api/flow/process-groups/{flow_id}" in prompt
+    assert "GET /widget-api/things/{thing_id}/flow" in prompt
     assert "NEVER invent" in prompt

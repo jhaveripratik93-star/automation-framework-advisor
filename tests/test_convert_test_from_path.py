@@ -11,6 +11,11 @@ contract of the other analyzer tests.
 
 A guarded live-GROQ smoke test (skipped when no backend is configured) exercises
 the async tool end-to-end where a real backend exists.
+
+Parser-backed tests run against a SELF-CONTAINED synthetic Robot suite built
+under pytest's ``tmp_path`` (see tests/conftest.py) and use
+``pytest.importorskip("robot")`` so they skip cleanly ONLY when robotframework
+is genuinely not installed.
 """
 import json
 import sys
@@ -30,13 +35,6 @@ def _robot_available() -> bool:
         return False
     return True
 
-
-_AUTOTEST_ROOT = (
-    Path(__file__).parent.parent.parent
-    / "autotest_2_extracted" / "autotest"
-)
-_ANALYTICS_DIR = _AUTOTEST_ROOT / "core-tests" / "component" / "analytics"
-_COMBINED_ROBOT = _ANALYTICS_DIR / "combined.robot"
 
 # A valid Playwright-py snippet the stub returns for every conversion call.
 VALID_PLAYWRIGHT_OUTPUT = """from playwright.sync_api import sync_playwright
@@ -60,15 +58,15 @@ class _ScriptedLLM:
         return self._output
 
 
-def test_single_file_with_matching_name_converts_that_file():
-    if not _robot_available() or not _COMBINED_ROBOT.is_file():
-        return
+def test_single_file_with_matching_name_converts_that_file(make_robot_suite):
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
     llm = _ScriptedLLM()
     result = _convert_from_path_core(
-        str(_COMBINED_ROBOT),
+        str(suite.suite),
         to_framework="Playwright",
         test_case_name="",  # no filter -> all test cases in the single file
-        source_root=str(_AUTOTEST_ROOT),
+        source_root=str(suite.source_root),
         llm_call=llm,
         llm_mode="stub",
     )
@@ -85,14 +83,14 @@ def test_single_file_with_matching_name_converts_that_file():
     assert llm.call_count >= 1
 
 
-def test_directory_converts_multiple_files():
-    if not _robot_available() or not _ANALYTICS_DIR.is_dir():
-        return
+def test_directory_converts_multiple_files(make_robot_suite):
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
     llm = _ScriptedLLM()
     result = _convert_from_path_core(
-        str(_ANALYTICS_DIR),
+        str(suite.suite.parent),
         to_framework="Playwright",
-        source_root=str(_AUTOTEST_ROOT),
+        source_root=str(suite.source_root),
         llm_call=llm,
         llm_mode="stub",
     )
@@ -106,15 +104,15 @@ def test_directory_converts_multiple_files():
         assert "is_valid" in fr
 
 
-def test_name_filter_matching_nothing_returns_empty_without_converting():
-    if not _robot_available() or not _COMBINED_ROBOT.is_file():
-        return
+def test_name_filter_matching_nothing_returns_empty_without_converting(make_robot_suite):
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
     llm = _ScriptedLLM()
     result = _convert_from_path_core(
-        str(_COMBINED_ROBOT),
+        str(suite.suite),
         to_framework="Playwright",
         test_case_name="this-name-matches-no-test-case-xyz",
-        source_root=str(_AUTOTEST_ROOT),
+        source_root=str(suite.source_root),
         llm_call=llm,
         llm_mode="stub",
     )
@@ -137,14 +135,14 @@ def test_bad_path_returns_error_without_converting():
     assert llm.call_count == 0
 
 
-def test_result_is_json_serializable():
-    if not _robot_available() or not _COMBINED_ROBOT.is_file():
-        return
+def test_result_is_json_serializable(make_robot_suite):
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
     llm = _ScriptedLLM()
     result = _convert_from_path_core(
-        str(_COMBINED_ROBOT),
+        str(suite.suite),
         to_framework="Playwright",
-        source_root=str(_AUTOTEST_ROOT),
+        source_root=str(suite.source_root),
         llm_call=llm,
         llm_mode="stub",
     )
@@ -154,20 +152,21 @@ def test_result_is_json_serializable():
 def test_per_file_error_does_not_abort_run(tmp_path, monkeypatch):
     """One file whose read/convert raises yields a {"file_path", "error"}
     entry while the others still convert."""
-    if not _robot_available() or not _ANALYTICS_DIR.is_dir():
-        return
+    pytest.importorskip("robot")
     import mcp_server.server as server_mod
 
+    base = tmp_path / "suite_dir"
+    base.mkdir()
     # Build an analysis stub with three matched files so the loop runs 3x.
     fake_analysis = {
-        "input_path": str(_ANALYTICS_DIR),
+        "input_path": str(base),
         "total_files": 3,
         "matched_test_cases": 3,
         "readiness_counts": {"self_contained": 3, "needs_custom_libs": 0, "blocked": 0},
         "files": [
-            {"file_path": str(_ANALYTICS_DIR / "a.robot"), "test_cases": []},
-            {"file_path": str(_ANALYTICS_DIR / "b.robot"), "test_cases": []},
-            {"file_path": str(_ANALYTICS_DIR / "c.robot"), "test_cases": []},
+            {"file_path": str(base / "a.robot"), "test_cases": []},
+            {"file_path": str(base / "b.robot"), "test_cases": []},
+            {"file_path": str(base / "c.robot"), "test_cases": []},
         ],
         "report": "stub",
     }
@@ -187,7 +186,7 @@ def test_per_file_error_does_not_abort_run(tmp_path, monkeypatch):
 
     llm = _ScriptedLLM()
     result = _convert_from_path_core(
-        str(_ANALYTICS_DIR),
+        str(base),
         to_framework="Playwright",
         llm_call=llm,
         llm_mode="stub",
@@ -211,20 +210,20 @@ def _groq_available() -> bool:
 
 
 @pytest.mark.skipif(not _groq_available(), reason="no GROQ_API_KEY / LLM backend configured")
-def test_live_conversion_smoke_via_async_tool():
+def test_live_conversion_smoke_via_async_tool(make_robot_suite):
     """End-to-end through the real async tool against a live backend — skipped
     in a keyless environment. Does NOT fabricate an LLM."""
     import asyncio
 
     from mcp_server.server import convert_test_from_path
 
-    if not _robot_available() or not _COMBINED_ROBOT.is_file():
-        pytest.skip("robotframework or fixture unavailable")
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
 
     result = asyncio.run(convert_test_from_path(
-        path=str(_COMBINED_ROBOT),
+        path=str(suite.suite),
         to_framework="Playwright",
-        source_root=str(_AUTOTEST_ROOT),
+        source_root=str(suite.source_root),
         ctx=None,
     ))
     assert "error" not in result

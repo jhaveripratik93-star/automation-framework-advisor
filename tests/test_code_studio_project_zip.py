@@ -4,16 +4,19 @@ Exercises the Streamlit-free logic added to _pages/code_studio.py:
   - _safe_test_filename  (safe, de-duplicated test filenames)
   - _build_project_zip   (in-memory runnable project bundle)
 
-plus a multi-file sanity check that analyze_path on the real component/analytics
-directory yields >1 file and _convert_matched_files with a scripted stub
-llm_call returns one result per file. No running Streamlit server or live LLM
-backend is needed. Parser-backed tests skip (early return) when robotframework
-or the on-disk fixture is absent, matching the other analyzer tests.
+plus a multi-file sanity check that analyze_path on a SELF-CONTAINED synthetic
+suite directory (see tests/conftest.py) yields >1 file and _convert_matched_files
+with a scripted stub llm_call returns one result per file. No running Streamlit
+server or live LLM backend is needed, and nothing depends on any folder outside
+the repo. The parser-backed test uses ``pytest.importorskip("robot")`` so it
+skips cleanly ONLY when robotframework is absent.
 """
 import io
 import sys
 import zipfile
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -25,17 +28,6 @@ from _pages.code_studio import (
     _safe_test_filename,
 )
 
-
-def _robot_available() -> bool:
-    try:
-        import robot.api  # noqa: F401
-    except ImportError:
-        return False
-    return True
-
-
-_AUTOTEST_ROOT = Path(__file__).parent.parent.parent / "autotest_2_extracted" / "autotest"
-_ANALYTICS_DIR = _AUTOTEST_ROOT / "core-tests" / "component" / "analytics"
 
 VALID_PLAYWRIGHT_OUTPUT = """from playwright.sync_api import sync_playwright
 
@@ -69,8 +61,8 @@ class _FakeResult:
 
 def test_safe_test_filename_derives_from_stem():
     used: set[str] = set()
-    name = _safe_test_filename(r"C:\x\nifi.robot", ".py", used)
-    assert name == "test_nifi.py"
+    name = _safe_test_filename(r"C:\x\widgets.robot", ".py", used)
+    assert name == "test_widgets.py"
     assert name in used
 
 
@@ -107,7 +99,7 @@ def _zip_read(data: bytes, name: str) -> str:
 
 def test_build_project_zip_single_file_layout():
     file_results = [
-        {"file_path": r"C:\x\nifi.robot", "result": _FakeResult(VALID_PLAYWRIGHT_OUTPUT)},
+        {"file_path": r"C:\x\widgets.robot", "result": _FakeResult(VALID_PLAYWRIGHT_OUTPUT)},
     ]
     data = _build_project_zip(file_results, "Playwright")
     names = _zip_names(data)
@@ -116,7 +108,7 @@ def test_build_project_zip_single_file_layout():
     assert "converted_project/README.md" in names
     test_files = [n for n in names if n.startswith("converted_project/tests/")]
     assert len(test_files) == 1
-    assert test_files[0] == "converted_project/tests/test_nifi.py"
+    assert test_files[0] == "converted_project/tests/test_widgets.py"
 
     # tests file content equals the converted code
     assert _zip_read(data, test_files[0]) == VALID_PLAYWRIGHT_OUTPUT
@@ -166,7 +158,7 @@ def test_build_project_zip_no_results_still_valid_zip():
 
 def test_build_project_zip_no_ci_cd_content():
     file_results = [
-        {"file_path": r"C:\x\nifi.robot", "result": _FakeResult(VALID_PLAYWRIGHT_OUTPUT)},
+        {"file_path": r"C:\x\widgets.robot", "result": _FakeResult(VALID_PLAYWRIGHT_OUTPUT)},
     ]
     data = _build_project_zip(file_results, "Playwright")
     forbidden = ["github", "ci", "workflow", "actions", ".github", "ci/cd"]
@@ -179,13 +171,14 @@ def test_build_project_zip_no_ci_cd_content():
 # --- multi-file end-to-end sanity (stub llm_call) --------------------------
 
 
-def test_multi_file_analyze_and_convert_yields_all_files():
-    if not _robot_available() or not _ANALYTICS_DIR.is_dir():
-        return
-    analysis = _analyze_path_for_studio(str(_ANALYTICS_DIR), "", str(_AUTOTEST_ROOT))
+def test_multi_file_analyze_and_convert_yields_all_files(make_robot_suite):
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
+    suite_dir = suite.suite.parent  # the directory holding >1 synthetic suite
+    analysis = _analyze_path_for_studio(str(suite_dir), "", str(suite.source_root))
     assert "error" not in analysis
     n_files = len([f for f in analysis["files"] if not f.get("error")])
-    assert n_files > 1, "component/analytics should yield multiple file reports"
+    assert n_files > 1, "the synthetic suite dir should yield multiple file reports"
 
     llm = _ScriptedLLM()
     results = _convert_matched_files(analysis, "Robot Framework", "Playwright", llm, to_fw_data=None)

@@ -17,17 +17,17 @@ def test_removes_unused_page_keeps_other_param():
     code = (
         "from playwright.sync_api import Page\n"
         "\n"
-        "def test_x(page: Page, nifi):\n"
-        "    status = nifi.get_flow_status()\n"
-        "    assert 'controllerStatus' in status\n"
+        "def test_x(page: Page, client):\n"
+        "    status = client.get_status()\n"
+        "    assert 'serviceStatus' in status\n"
     )
     out = strip_unused_browser_fixture(code)
-    assert "def test_x(nifi):" in out
+    assert "def test_x(client):" in out
     assert "page" not in out.split("def test_x")[1].split(":")[0]
     assert "from playwright.sync_api import Page" not in out
     # body untouched
-    assert "status = nifi.get_flow_status()" in out
-    assert "assert 'controllerStatus' in status" in out
+    assert "status = client.get_status()" in out
+    assert "assert 'serviceStatus' in status" in out
 
 
 def test_removes_page_as_first_of_three():
@@ -78,8 +78,8 @@ def test_leaves_mixed_file_untouched_if_any_browser_usage():
     code = (
         "from playwright.sync_api import Page\n"
         "\n"
-        "def test_api(page: Page, nifi):\n"
-        "    assert nifi.get_flow_status()\n"
+        "def test_api(page: Page, client):\n"
+        "    assert client.get_status()\n"
         "\n"
         "def test_ui(page: Page):\n"
         "    page.goto('https://example.com')\n"
@@ -94,8 +94,8 @@ def test_idempotent():
     code = (
         "from playwright.sync_api import Page\n"
         "\n"
-        "def test_x(page: Page, nifi):\n"
-        "    assert nifi.ok()\n"
+        "def test_x(page: Page, client):\n"
+        "    assert client.ok()\n"
     )
     once = strip_unused_browser_fixture(code)
     twice = strip_unused_browser_fixture(once)
@@ -104,8 +104,8 @@ def test_idempotent():
 
 def test_nothing_to_do_returns_unchanged():
     code = (
-        "def test_plain(nifi):\n"
-        "    assert nifi.ok()\n"
+        "def test_plain(client):\n"
+        "    assert client.ok()\n"
     )
     assert strip_unused_browser_fixture(code) == code
 
@@ -151,60 +151,60 @@ def test_keeps_other_playwright_imports():
     assert "Page" not in out.split("\n")[0]
 
 
-# (e) fixture mirroring the user's converted nifi file --------------------
+# (e) fixture mirroring a converted API-only file (neutral custom client) ----
 
-NIFI_CONVERTED = """from playwright.sync_api import Page
+CLIENT_CONVERTED = """from playwright.sync_api import Page
 import pytest
-from clamps.nifi.nifi import Nifi
+from widgets.api.client import Client
 
 
 @pytest.fixture
-def nifi() -> Nifi:
-    return Nifi()
+def client() -> Client:
+    return Client()
 
 
-@pytest.mark.nifi
-def test_can_get_flow_status(page: Page, nifi: Nifi):
-    status = nifi.get_flow_status()
-    assert "controllerStatus" in status
+@pytest.mark.widgets
+def test_can_get_status(page: Page, client: Client):
+    status = client.get_status()
+    assert "serviceStatus" in status
 
 
-@pytest.mark.nifi
-def test_can_get_flow_about(page: Page, nifi: Nifi):
-    about = nifi.get_flow_about()
+@pytest.mark.widgets
+def test_can_get_about(page: Page, client: Client):
+    about = client.get_about()
     assert "about" in about
 
 
-@pytest.mark.nifi
-def test_can_get_flow_process_groups(page: Page, nifi: Nifi):
-    nifi.load_flow_process_groups()
-    data = nifi.get_flow_data()
+@pytest.mark.widgets
+def test_can_get_things(page: Page, client: Client):
+    client.load_things()
+    data = client.get_things()
     assert data
 
 
-@pytest.mark.nifi
-def test_restarting_nifi_pod(page: Page, nifi: Nifi):
-    before = nifi.get_templates()
-    after = nifi.get_templates()
+@pytest.mark.widgets
+def test_restarting_service(page: Page, client: Client):
+    before = client.get_items()
+    after = client.get_items()
     assert before == after
 """
 
 
-def test_nifi_file_all_four_signatures_lose_page():
-    out = strip_unused_browser_fixture(NIFI_CONVERTED)
+def test_client_file_all_four_signatures_lose_page():
+    out = strip_unused_browser_fixture(CLIENT_CONVERTED)
     assert "from playwright.sync_api import Page" not in out
     for fn in (
-        "test_can_get_flow_status",
-        "test_can_get_flow_about",
-        "test_can_get_flow_process_groups",
-        "test_restarting_nifi_pod",
+        "test_can_get_status",
+        "test_can_get_about",
+        "test_can_get_things",
+        "test_restarting_service",
     ):
-        assert f"def {fn}(nifi: Nifi):" in out, f"{fn} should keep only nifi"
+        assert f"def {fn}(client: Client):" in out, f"{fn} should keep only client"
     # all assertions preserved
-    assert out.count("assert ") == NIFI_CONVERTED.count("assert ")
+    assert out.count("assert ") == CLIENT_CONVERTED.count("assert ")
     # custom client import and fixture preserved
-    assert "from clamps.nifi.nifi import Nifi" in out
-    assert "def nifi() -> Nifi:" in out
+    assert "from widgets.api.client import Client" in out
+    assert "def client() -> Client:" in out
 
 
 # (f) un-parseable input returned unchanged -------------------------------
@@ -223,32 +223,32 @@ STUB_FALLBACK = (
     "import pytest\n"
     "\n"
     "try:\n"
-    "    from clamps.nifi.nifi import Nifi\n"
+    "    from widgets.api.client import Client\n"
     "except ImportError:\n"
-    "    class Nifi:\n"
-    "        def get_flow_status(self):\n"
-    "            raise NotImplementedError('TODO: Implement clamps.nifi.nifi.Nifi')\n"
+    "    class Client:\n"
+    "        def get_status(self):\n"
+    "            raise NotImplementedError('TODO: Implement widgets.api.client.Client')\n"
     "\n"
-    "        def get_flow_about(self):\n"
-    "            raise NotImplementedError('TODO: Implement clamps.nifi.nifi.Nifi')\n"
+    "        def get_about(self):\n"
+    "            raise NotImplementedError('TODO: Implement widgets.api.client.Client')\n"
     "\n"
     "\n"
-    "def test_can_get_flow_status():\n"
-    "    assert Nifi().get_flow_status()\n"
+    "def test_can_get_status():\n"
+    "    assert Client().get_status()\n"
 )
 
 
 def test_rewrites_stub_fallback_to_direct_import():
     out = rewrite_importerror_stub_fallback(STUB_FALLBACK)
-    assert "from clamps.nifi.nifi import Nifi" in out
+    assert "from widgets.api.client import Client" in out
     # try/except and the stub class are gone
     assert "try:" not in out
     assert "except ImportError" not in out
-    assert "class Nifi" not in out
+    assert "class Client" not in out
     assert "NotImplementedError" not in out
     # the real test body is untouched
-    assert "def test_can_get_flow_status():" in out
-    assert "assert Nifi().get_flow_status()" in out
+    assert "def test_can_get_status():" in out
+    assert "assert Client().get_status()" in out
 
 
 # (b) multi-name import with one stub class per name
@@ -288,10 +288,10 @@ def test_preserves_import_aliases():
 def test_direct_import_unchanged():
     code = (
         "import pytest\n"
-        "from clamps.nifi.nifi import Nifi\n"
+        "from widgets.api.client import Client\n"
         "\n"
         "def test_x():\n"
-        "    assert Nifi()\n"
+        "    assert Client()\n"
     )
     assert rewrite_importerror_stub_fallback(code) == code
 

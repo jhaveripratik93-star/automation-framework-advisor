@@ -1,13 +1,17 @@
 """Tests for src/analysis/robot_dependency_analyzer.py — static RF analysis.
 
-The Robot-dependent tests skip their assertions when robotframework is not
-installed in the environment (same degrade-don't-crash contract the analyzer
-and tests/test_conversion_compilers.py use). Resolver/helper unit tests that
-do not need the parser always run.
+The parser-backed tests run against a SELF-CONTAINED synthetic Robot suite +
+custom-library tree built under pytest's ``tmp_path`` (see tests/conftest.py),
+so they run everywhere without any external fixture. They use
+``pytest.importorskip("robot")`` so they skip cleanly ONLY when robotframework
+is genuinely not installed. Resolver/helper unit tests that do not need the
+parser always run.
 """
 import sys
 import textwrap
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -30,19 +34,10 @@ def _robot_available() -> bool:
     return True
 
 
-# Real target fixtures (checked into the sibling autotest tree).
-_AUTOTEST_ROOT = (
-    Path(__file__).parent.parent.parent
-    / "autotest_2_extracted" / "autotest"
-)
-_NIFI_ROBOT = _AUTOTEST_ROOT / "core-tests" / "component" / "nifi.robot"
-_COMPONENT_DIR = _AUTOTEST_ROOT / "core-tests" / "component"
-
-
 # ── Pure helper unit tests (no parser needed) ───────────────────────────
 
 def test_split_keyword_prefixed():
-    assert _split_keyword("Nifi.get_flow_status") == ("Nifi", "get_flow_status")
+    assert _split_keyword("Client.get_thing_status") == ("Client", "get_thing_status")
 
 
 def test_split_keyword_bare():
@@ -113,67 +108,62 @@ def test_empty_directory_returns_error_dict(tmp_path):
     assert "error" in result
 
 
-# ── Real-parser-backed tests (skip assertions if robot not installed) ────
+# ── Synthetic-suite parser-backed tests (skip only if robot not installed) ──
 
-def test_nifi_robot_finds_four_test_cases():
-    if not _robot_available() or not _NIFI_ROBOT.is_file():
-        return
-    result = analyze_file(str(_NIFI_ROBOT), source_root=str(_AUTOTEST_ROOT))
+def test_suite_finds_four_test_cases(make_robot_suite):
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
+    result = analyze_file(str(suite.suite), source_root=str(suite.source_root))
     assert result.get("error") is None
     names = {tc["name"] for tc in result["test_cases"]}
     assert names == {
-        "Can Get Flow Status",
-        "Can Get Flow About Dialog Information",
-        "Can Get Flow Process Groups",
-        "Restarting Nifi Pod And Validating Templates And Configuration",
+        "Can Get Thing Status",
+        "Can Get Thing About",
+        "Can Get Thing Groups",
+        "Restarting The App And Validating Configuration",
     }
 
 
-def test_nifi_robot_detects_two_custom_library_imports_with_aliases():
-    if not _robot_available() or not _NIFI_ROBOT.is_file():
-        return
-    result = analyze_file(str(_NIFI_ROBOT), source_root=str(_AUTOTEST_ROOT))
+def test_suite_detects_two_custom_library_imports_with_aliases(make_robot_suite):
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
+    result = analyze_file(str(suite.suite), source_root=str(suite.source_root))
     libs = result["settings"]["libraries"]
     aliases = {lib["alias"] for lib in libs}
-    assert aliases == {"Nifi", "NifiController"}
+    assert aliases == {"Client", "Controller"}
     assert all(lib["kind"] == "custom" for lib in libs)
-    # The controller import carries the positional ctor arg "nifi".
-    controller = next(lib for lib in libs if lib["alias"] == "NifiController")
-    assert "nifi" in controller["args"]
+    # The controller import carries the positional ctor arg "widgets".
+    controller = next(lib for lib in libs if lib["alias"] == "Controller")
+    assert "widgets" in controller["args"]
 
 
-def test_nifi_robot_resolves_clamps_nifi_on_disk():
-    if not _robot_available() or not _NIFI_ROBOT.is_file():
-        return
-    result = analyze_file(str(_NIFI_ROBOT), source_root=str(_AUTOTEST_ROOT))
-    nifi = next(
+def test_suite_resolves_custom_library_on_disk(make_robot_suite):
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
+    result = analyze_file(str(suite.suite), source_root=str(suite.source_root))
+    client = next(
         lib for lib in result["settings"]["libraries"]
-        if lib["raw_module"] == "clamps.nifi.nifi.Nifi"
+        if lib["raw_module"] == "widgets.api.client.Client"
     )
-    expected = (_AUTOTEST_ROOT / "clamps" / "nifi" / "nifi.py")
-    if expected.is_file():
-        assert nifi["exists"] is True
-        assert Path(nifi["resolved_path"]) == expected.resolve()
-    else:
-        # Correct result when the file is absent: blocked downstream.
-        assert nifi["exists"] is False
+    assert client["exists"] is True
+    assert Path(client["resolved_path"]) == suite.client_py.resolve()
 
 
-def test_nifi_robot_keyword_classification():
-    if not _robot_available() or not _NIFI_ROBOT.is_file():
-        return
-    result = analyze_file(str(_NIFI_ROBOT), source_root=str(_AUTOTEST_ROOT))
+def test_suite_keyword_classification(make_robot_suite):
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
+    result = analyze_file(str(suite.suite), source_root=str(suite.source_root))
     tc = next(
-        t for t in result["test_cases"] if t["name"] == "Can Get Flow Status"
+        t for t in result["test_cases"] if t["name"] == "Can Get Thing Status"
     )
     kws = {ku["raw"]: ku for ku in tc["keywords_used"]}
-    # Custom keyword maps to the Nifi import.
-    assert kws["Nifi.get_flow_status"]["classification"] == "custom"
-    assert kws["Nifi.get_flow_status"]["maps_to_import"] == "clamps.nifi.nifi.Nifi"
+    # Custom keyword maps to the Client import.
+    assert kws["Client.get_thing_status"]["classification"] == "custom"
+    assert kws["Client.get_thing_status"]["maps_to_import"] == "widgets.api.client.Client"
     # Bare BuiltIn keyword.
     assert kws["Should Contain"]["classification"] == "builtin"
     # And the custom lib is listed under the test case's dependencies.
-    assert "clamps.nifi.nifi.Nifi" in tc["dependencies"]["custom_libraries"]
+    assert "widgets.api.client.Client" in tc["dependencies"]["custom_libraries"]
 
 
 def test_self_contained_suite(tmp_path):
@@ -285,10 +275,10 @@ def test_broken_file_is_per_file_error_not_fatal(tmp_path):
     assert result["total_files"] == 2
 
 
-def test_directory_walk_aggregates_component_dir():
-    if not _robot_available() or not _COMPONENT_DIR.is_dir():
-        return
-    result = analyze_path(str(_COMPONENT_DIR), source_root=str(_AUTOTEST_ROOT))
+def test_directory_walk_aggregates_suite_dir(make_robot_suite):
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
+    result = analyze_path(str(suite.suite.parent), source_root=str(suite.source_root))
     assert result.get("error") is None
     assert result["total_files"] >= 1
     assert "report" in result

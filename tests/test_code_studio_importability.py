@@ -7,18 +7,21 @@ cross-module import, collect + bundle it through the same pure helpers the page
 uses, extract the ZIP, and run `pytest` in a SUBPROCESS from the project root.
 The subprocess import of the cross-referenced submodule must succeed.
 
-A synthetic fixture (not the real nifi.robot) is used for the subprocess import
-proof on purpose: the real `common.rest` / `configs.common_config` pull heavy
-third-party packages that are correctly NOT bundled, so importing them headless
-would fail on the third-party deps rather than on this bug. A second,
-import-free assertion covers the real nifi fixture's collected-set shape when
-robotframework + the fixture are present.
+A synthetic fixture is used for the subprocess import proof on purpose: the
+synthetic custom-library source pulls heavy third-party packages (somepkg,
+fakecloud) that are correctly NOT bundled, so importing them headless would fail
+on the third-party deps rather than on this bug. Each test therefore builds a
+smaller, import-safe synthetic source_root tailored to the exact bundling
+behaviour under proof. A third, import-free assertion covers the full synthetic
+suite's collected-set shape when robotframework is present.
 """
 import io
 import subprocess
 import sys
 import zipfile
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -35,10 +38,6 @@ def _robot_available() -> bool:
     except ImportError:
         return False
     return True
-
-
-_AUTOTEST_ROOT = Path(__file__).parent.parent.parent / "autotest_2_extracted" / "autotest"
-_NIFI_ROBOT = _AUTOTEST_ROOT / "core-tests" / "component" / "nifi.robot"
 
 
 def _write(p: Path, text: str) -> None:
@@ -135,7 +134,7 @@ def test_package_init_sideeffect_import_importable_in_subprocess(tmp_path):
     # leaf.py). Python runs pkg/__init__.py on `import pkg.deep.leaf`, so
     # pkg/sub.py must be bundled or the subprocess import raises
     # ModuleNotFoundError: No module named 'pkg.sub' — the exact class of the
-    # reported clamps.cenxrestapi failure.
+    # reported package-__init__ eager-submodule-import failure.
     source_root = tmp_path / "src"
     _write(source_root / "pkg" / "__init__.py", "from pkg.sub import Thing\n")
     _write(source_root / "pkg" / "sub.py", "class Thing:\n    VALUE = 7\n")
@@ -186,35 +185,41 @@ def test_package_init_sideeffect_import_importable_in_subprocess(tmp_path):
     assert "OK" in proc.stdout
 
 
-def test_real_nifi_zip_no_missing_clamps_submodule_in_subprocess(tmp_path):
-    # The reported regression: `import clamps` failed with
-    # `ModuleNotFoundError: No module named 'clamps.cenxrestapi'` because the
-    # bundled clamps/__init__.py imports submodules that were never bundled.
-    # Build the real ZIP, extract, and `import clamps` in a subprocess. A
-    # ModuleNotFoundError for an uninstalled THIRD-PARTY package (jsonref,
-    # kubernetes, ...) is acceptable noise; a missing clamps.* PROJECT submodule
-    # that resolves on disk under source_root is NOT.
-    if not _robot_available() or not _NIFI_ROBOT.is_file():
-        return
-    from _pages.code_studio import (
-        _collect_third_party_requirements,
-        _collect_unresolved_dependencies,
+def test_package_init_submodule_import_resolvable_in_subprocess(tmp_path):
+    # Mirrors the reported `ModuleNotFoundError: No module named 'pkg.sub'`
+    # regression where a bundled package __init__.py eagerly imports a submodule
+    # that was never bundled. Build a ZIP whose package __init__ imports two
+    # sibling submodules; `import pkg` in a subprocess must succeed (the
+    # submodules resolve and were bundled via the init scan). No third-party
+    # imports here, so the subprocess import is clean.
+    source_root = tmp_path / "src"
+    _write(
+        source_root / "widgets" / "__init__.py",
+        "from widgets.subapi import SubApi\nfrom widgets.extra.helper import MARKER\n",
     )
+    _write(source_root / "widgets" / "subapi.py", "class SubApi:\n    VALUE = 1\n")
+    _write(source_root / "widgets" / "extra" / "__init__.py", "")
+    _write(source_root / "widgets" / "extra" / "helper.py", "MARKER = 'extra'\n")
+    # The directly-imported module is a DIFFERENT, deeper file, so importing it
+    # triggers widgets/__init__.py's eager sibling imports.
+    _write(source_root / "widgets" / "deep" / "__init__.py", "")
+    _write(source_root / "widgets" / "deep" / "leaf.py", "LEAF = 1\n")
 
-    analysis = _analyze_path_for_studio(str(_NIFI_ROBOT), "", str(_AUTOTEST_ROOT))
-    assert "error" not in analysis
-    dependency_files = _collect_dependency_files(analysis)
-    unresolved = _collect_unresolved_dependencies(analysis)
-    third_party = _collect_third_party_requirements(
-        dependency_files, analysis.get("source_root") or ""
+    analysis = _fake_analysis(
+        source_root, source_root / "widgets" / "deep" / "leaf.py", "widgets.deep.leaf"
     )
+    dependency_files = _collect_dependency_files(analysis)
+    dest = {d for d, _ in dependency_files}
+    assert "widgets/deep/leaf.py" in dest
+    assert "widgets/__init__.py" in dest
+    assert "widgets/subapi.py" in dest  # followed only via the __init__.py scan
+    assert "widgets/extra/helper.py" in dest
 
     data = _build_project_zip(
-        [{"file_path": str(_NIFI_ROBOT), "result": _FakeResult("def test_x():\n    assert True\n")}],
+        [{"file_path": "init.robot", "result": _FakeResult("def test_x():\n    assert True\n")}],
         "Playwright",
         dependency_files=dependency_files,
-        unresolved=unresolved,
-        third_party=third_party,
+        unresolved=[],
     )
     extract_dir = tmp_path / "out"
     extract_dir.mkdir()
@@ -222,58 +227,52 @@ def test_real_nifi_zip_no_missing_clamps_submodule_in_subprocess(tmp_path):
         zf.extractall(extract_dir)
     project_root = extract_dir / "converted_project"
 
-    # every clamps.* submodule the init chain resolved to is present in the ZIP
-    assert (project_root / "clamps" / "cenxrestapi" / "__init__.py").is_file()
-    assert (project_root / "clamps" / "cenxrestapi" / "session.py").is_file()
+    # every bundled submodule the init chain resolved to is present in the ZIP
+    assert (project_root / "widgets" / "subapi.py").is_file()
+    assert (project_root / "widgets" / "extra" / "helper.py").is_file()
 
     proc = subprocess.run(
-        [sys.executable, "-c", "import clamps"],
+        [sys.executable, "-c", "import widgets.deep.leaf; import widgets; print('OK')"],
         cwd=str(project_root),
         capture_output=True,
         text=True,
         timeout=60,
     )
-    if proc.returncode != 0:
-        err = proc.stderr
-        # the specific regression string must be GONE
-        assert "No module named 'clamps.cenxrestapi'" not in err, (
-            "the original bundling bug is back:\n" + err
-        )
-        # any residual failure must be a THIRD-PARTY module, never a bundled
-        # clamps.* project submodule that resolves on disk.
-        import re as _re
-
-        m = _re.search(r"No module named '([^']+)'", err)
-        if m is not None:
-            missing = m.group(1)
-            assert not missing.startswith("clamps."), (
-                f"a bundled clamps.* project submodule is missing: {missing}\n{err}"
-            )
+    assert proc.returncode == 0, (
+        f"subprocess import failed (rc={proc.returncode})\n"
+        f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+    )
+    assert "OK" in proc.stdout
 
 
-def test_real_nifi_fixture_collects_top_level_siblings():
-    if not _robot_available() or not _NIFI_ROBOT.is_file():
-        return
-    analysis = _analyze_path_for_studio(str(_NIFI_ROBOT), "", str(_AUTOTEST_ROOT))
+def test_synthetic_suite_collects_top_level_siblings(make_robot_suite):
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
+    analysis = _analyze_path_for_studio(str(suite.suite), "", str(suite.source_root))
     assert "error" not in analysis
     dest = {d for d, _ in _collect_dependency_files(analysis)}
 
-    # The user's failing imports: top-level sibling packages/modules under
-    # source_root that nifi.py imports must all be bundled.
+    # Top-level sibling packages/modules under source_root that the custom
+    # library imports must all be bundled.
     for expected in (
-        "clamps/nifi/nifi.py",
-        "common/rest.py",
-        "common/constants.py",
-        "common/utils.py",
+        suite.client_dest,
+        suite.app_controller_dest,
+        suite.k8s_base_dest,
+        "common_xyz/helper.py",
         "configs/common_config.py",
         "settings.py",
     ):
         assert expected in dest, f"{expected} missing from bundled set"
 
     # package markers for the bundled packages
-    for init in ("clamps/__init__.py", "clamps/nifi/__init__.py", "common/__init__.py", "configs/__init__.py"):
+    for init in (
+        "widgets/__init__.py",
+        "widgets/api/__init__.py",
+        "common_xyz/__init__.py",
+        "configs/__init__.py",
+    ):
         assert init in dest, f"{init} missing from bundled set"
 
     # stdlib / third-party must NOT be bundled
-    assert not any(d.startswith("kubernetes") for d in dest)
-    assert not any(d.startswith("requests") for d in dest)
+    assert not any(d.startswith("fakecloud") for d in dest)
+    assert not any(d.startswith("somepkg") for d in dest)

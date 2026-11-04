@@ -3,10 +3,9 @@ endpoint map from custom-library source so the Robot->Playwright converter can
 translate keyword calls into native Playwright APIRequestContext calls instead
 of importing the legacy client.
 
-The REST-client tests run against the REAL clamps/nifi/nifi.py +
-common/rest.py + configs/common_config.py fixtures on disk; they skip (early
-return) when the fixture tree is absent, matching the degrade-don't-crash
-contract of the other analyzer tests.
+The REST-client tests run against a SELF-CONTAINED synthetic custom-library
+source built under pytest's ``tmp_path`` (see tests/conftest.py), so they run
+everywhere without depending on any external fixture tree.
 """
 import sys
 from pathlib import Path
@@ -18,15 +17,9 @@ from src.analysis.endpoint_extractor import (
     extract_endpoints_from_source,
 )
 
-_AUTOTEST_ROOT = (
-    Path(__file__).parent.parent.parent / "autotest_2_extracted" / "autotest"
-)
-_NIFI_PY = _AUTOTEST_ROOT / "clamps" / "nifi" / "nifi.py"
-_REST_PY = _AUTOTEST_ROOT / "common" / "rest.py"
-
 
 # ──────────────────────────────────────────────────────────────────────
-# extract_endpoints_from_source — synthetic + real nifi source
+# extract_endpoints_from_source — synthetic source
 # ──────────────────────────────────────────────────────────────────────
 
 def test_extract_from_synthetic_rest_client():
@@ -100,67 +93,60 @@ def test_syntax_error_source_returns_empty_not_raise():
     assert not client.is_rest_client
 
 
-def test_extract_from_real_nifi_source():
-    if not _NIFI_PY.is_file():
-        return
-    text = _NIFI_PY.read_text(encoding="utf-8", errors="replace")
-    client = extract_endpoints_from_source(text, service_hint="nifi")
+def test_extract_from_synthetic_client_source(make_robot_suite):
+    """Against the synthetic Client library source on disk, the extractor reads
+    the REAL literal paths (never guessed) and the __init__ base-url defaults."""
+    suite = make_robot_suite()
+    text = suite.client_py.read_text(encoding="utf-8", errors="replace")
+    client = extract_endpoints_from_source(text, service_hint="widgets")
 
     assert client.is_rest_client
-    assert client.class_name == "Nifi"
-    # __init__ defaults: server_port=7777, base_path="/nifi-api"
-    assert client.default_port == "7777"
-    assert client.default_base_path == "/nifi-api"
+    assert client.class_name == "Client"
+    # __init__ defaults: server_port=8080, base_path="/widgets-api"
+    assert client.default_port == "8080"
+    assert client.default_base_path == "/widgets-api"
 
     eps = {e.method_name: (e.http_method, e.path) for e in client.endpoints}
-    # Nifi.get_flow_status -> self.rest.get("flow/status") -> GET flow/status
-    assert eps["get_flow_status"] == ("GET", "flow/status")
-    # a couple more confirm the GET derivation generalizes
-    assert eps["get_flow_about"] == ("GET", "flow/about")
-    via = next(e.via for e in client.endpoints if e.method_name == "get_flow_status")
+    # Client.get_thing_status -> self.rest.get("things/status") -> GET things/status
+    assert eps["get_thing_status"] == ("GET", "things/status")
+    # a second confirms the GET derivation generalizes
+    assert eps["get_thing_about"] == ("GET", "things/about")
+    via = next(e.via for e in client.endpoints if e.method_name == "get_thing_status")
     assert via == "self.rest.get"
 
-    # Defect A: methods whose REAL path is read from source, never guessed.
-    # get_templates -> self.rest.get("flow/templates")
-    assert eps["get_templates"] == ("GET", "flow/templates")
-    # get_nested_process_groups -> self.rest.get("process-groups/{flow_id}/process-groups")
-    assert eps["get_nested_process_groups"] == ("GET", "process-groups/{flow_id}/process-groups")
 
-
-def test_derived_state_keywords_reuse_populating_endpoint():
-    """Defect A regression: get_flow_data / load_flow_process_groups do NOT make
+def test_derived_state_keywords_reuse_populating_endpoint(make_robot_suite):
+    """Defect A regression: load_thing_groups / get_cached_things do NOT make
     their own HTTP call — they return state populated by the
-    `processor_group_flow` property (GET flow/process-groups/{flow_id}). The
-    extractor must classify them as DERIVED and carry the populating endpoint,
-    so the converter reuses it instead of guessing `/nifi-api/flow` (which the
-    user observed 404-ing)."""
-    if not _NIFI_PY.is_file():
-        return
-    text = _NIFI_PY.read_text(encoding="utf-8", errors="replace")
-    client = extract_endpoints_from_source(text, service_hint="nifi")
+    `thing_group_flow` property (GET things/{thing_id}/flow). The extractor must
+    classify them as DERIVED and carry the populating endpoint, so the converter
+    reuses it instead of guessing a new path (which the user observed 404-ing)."""
+    suite = make_robot_suite()
+    text = suite.client_py.read_text(encoding="utf-8", errors="replace")
+    client = extract_endpoints_from_source(text, service_hint="widgets")
     by_name = {e.method_name: e for e in client.endpoints}
 
     # The populating property itself is the real direct HTTP call.
-    assert "processor_group_flow" in by_name
-    assert not by_name["processor_group_flow"].is_derived
-    assert by_name["processor_group_flow"].http_method == "GET"
-    assert by_name["processor_group_flow"].path == "flow/process-groups/{flow_id}"
+    assert "thing_group_flow" in by_name
+    assert not by_name["thing_group_flow"].is_derived
+    assert by_name["thing_group_flow"].http_method == "GET"
+    assert by_name["thing_group_flow"].path == "things/{thing_id}/flow"
 
-    # get_flow_data is DERIVED, referencing the populating member, and carries
-    # that member's REAL endpoint — NOT a guessed /nifi-api/flow.
-    gfd = by_name["get_flow_data"]
-    assert gfd.is_derived
-    assert gfd.derived_from == "processor_group_flow"
-    assert (gfd.http_method, gfd.path) == ("GET", "flow/process-groups/{flow_id}")
+    # get_cached_things is DERIVED, referencing the populating member, and carries
+    # that member's REAL endpoint — NOT a guessed path.
+    gct = by_name["get_cached_things"]
+    assert gct.is_derived
+    assert gct.derived_from == "thing_group_flow"
+    assert (gct.http_method, gct.path) == ("GET", "things/{thing_id}/flow")
 
-    # load_flow_process_groups is likewise derived from the same populating member.
-    lfp = by_name["load_flow_process_groups"]
-    assert lfp.is_derived
-    assert lfp.derived_from == "processor_group_flow"
-    assert (lfp.http_method, lfp.path) == ("GET", "flow/process-groups/{flow_id}")
+    # load_thing_groups is likewise derived from the same populating member.
+    ltg = by_name["load_thing_groups"]
+    assert ltg.is_derived
+    assert ltg.derived_from == "thing_group_flow"
+    assert (ltg.http_method, ltg.path) == ("GET", "things/{thing_id}/flow")
 
-    # Crucially, no endpoint anywhere maps get_flow_data to a bare /flow guess.
-    assert gfd.path != "flow"
+    # Crucially, no derived endpoint collapses to a bare /things guess.
+    assert gct.path != "things"
 
 
 def test_derived_state_classification_synthetic():
@@ -205,21 +191,20 @@ class Svc:
 # build_endpoint_context — consumes an analyzer-shaped analysis dict
 # ──────────────────────────────────────────────────────────────────────
 
-def test_build_context_from_analysis_shape():
-    if not _NIFI_PY.is_file():
-        return
+def test_build_context_from_analysis_shape(make_robot_suite):
+    suite = make_robot_suite()
     analysis = {
-        "source_root": str(_AUTOTEST_ROOT),
+        "source_root": str(suite.source_root),
         "files": [
             {
-                "file_path": "nifi.robot",
+                "file_path": "suite.robot",
                 "settings": {
                     "libraries": [
                         {
-                            "raw_module": "clamps.nifi.nifi.Nifi",
-                            "alias": "Nifi",
-                            "args": ["nifi"],
-                            "resolved_path": str(_NIFI_PY),
+                            "raw_module": "widgets.api.client.Client",
+                            "alias": "Client",
+                            "args": ["widgets"],
+                            "resolved_path": str(suite.client_py),
                             "exists": True,
                             "kind": "custom",
                         }
@@ -229,34 +214,33 @@ def test_build_context_from_analysis_shape():
             }
         ],
     }
-    context = build_endpoint_context(analysis, str(_AUTOTEST_ROOT))
+    context = build_endpoint_context(analysis, str(suite.source_root))
     assert context
     # endpoint map header + native-translation instruction
     assert "endpoint map" in context.lower()
     assert "APIRequestContext" in context
-    # derived flow/status mapping + base-url pieces
-    assert "get_flow_status" in context
-    assert "GET /nifi-api/flow/status" in context
-    assert "port=`7777`" in context
-    assert "service/host=`nifi`" in context
-    # resolved source included verbatim for header/auth reference (the file is
-    # large, so only the capped head is embedded — assert on content known to
-    # be near the top: the class + its __init__ defaults).
+    # derived status mapping + base-url pieces
+    assert "get_thing_status" in context
+    assert "GET /widgets-api/things/status" in context
+    assert "port=`8080`" in context
+    assert "service/host=`widgets`" in context
+    # resolved source included verbatim for header/auth reference — assert on
+    # content known to be near the top: the class + its __init__ defaults.
     assert "Resolved custom-library source" in context
-    assert "class Nifi" in context
-    assert 'base_path="/nifi-api"' in context
+    assert "class Client" in context
+    assert 'base_path="/widgets-api"' in context
 
     # Defect A: the "never guess" rule and the derived-state reuse guidance are
-    # part of the injected map, and get_flow_data points at the REAL populating
-    # endpoint (not a /nifi-api/flow guess).
+    # part of the injected map, and get_cached_things points at the REAL
+    # populating endpoint (not a guessed /things).
     assert "NEVER invent" in context
     assert "DERIVED" in context
-    assert "get_flow_data" in context
-    assert "GET /nifi-api/flow/process-groups/{flow_id}" in context
-    # the process-groups path appears in the DISTILLED map (not only the
-    # verbatim source block), so it survives the prompt's shared-context cap.
+    assert "get_cached_things" in context
+    assert "GET /widgets-api/things/{thing_id}/flow" in context
+    # the derived path appears in the DISTILLED map (not only the verbatim
+    # source block), so it survives the prompt's shared-context cap.
     map_only = context.split("## Resolved custom-library source")[0]
-    assert "flow/process-groups/{flow_id}" in map_only
+    assert "things/{thing_id}/flow" in map_only
 
 
 def test_build_context_empty_when_no_custom_libs():
@@ -273,7 +257,7 @@ def test_build_context_empty_when_library_unresolved():
                 "settings": {
                     "libraries": [
                         {
-                            "raw_module": "clamps.nifi.nifi.Nifi",
+                            "raw_module": "widgets.api.client.Client",
                             "resolved_path": None,
                             "exists": False,
                             "kind": "unresolved",
