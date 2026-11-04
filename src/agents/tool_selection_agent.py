@@ -126,7 +126,7 @@ _TOOL_DEFINITIONS = {
 # ══════════════════════════════════════════════════════════════════════════
 
 _TOOL_SELECTION_SYSTEM_PROMPT = """\
-You are a tool selection agent for an Automation Framework Advisory system.
+You are a tool selection agent for an Test Automation Pilot.
 
 Given the user's query, select the most appropriate tool(s) to call and determine \
 the correct arguments. You may select 1-3 tools if multiple are needed.

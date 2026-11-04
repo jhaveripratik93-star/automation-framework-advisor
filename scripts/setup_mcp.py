@@ -1,4 +1,4 @@
-"""One-shot setup for the Automation Framework Advisor MCP server.
+"""One-shot setup for the Test Automation Pilot MCP server.
 
 Run this ONE script after cloning/unzipping this project. It:
 

@@ -3,7 +3,7 @@
 Uses the LLM to classify user queries into:
    - "tool_call"   : query needs data retrieval / computation
    - "direct"      : query can be answered from context alone
-   - "rejected"    : query is out of scope for the Automation Framework Advisor
+   - "rejected"    : query is out of scope for the Test Automation Pilot
 
 Strategy:
   1. Hard guardrails first (injection detection, length limits) — no LLM needed
@@ -43,7 +43,7 @@ _INJECTION_PATTERNS = [
 ]
 
 _REJECTION_MESSAGE = (
-    "I'm the Automation Framework Advisor — I help engineering teams choose, "
+    "I'm the Test Automation Pilot — I help engineering teams choose, "
     "compare, and migrate between test automation and infrastructure frameworks.\n\n"
     "I can help you with:\n"
     "- **Recommending** frameworks based on your project needs\n"
@@ -72,7 +72,7 @@ _AMBIGUOUS_QUERIES = {
 # ══════════════════════════════════════════════════════════════════════════
 
 _DECISION_SYSTEM_PROMPT = """\
-You are an intent classifier for an Automation Framework Advisory system.
+You are an intent classifier for an Test Automation Pilot system.
 
 Your job: classify the user's message into exactly ONE of these categories:
 

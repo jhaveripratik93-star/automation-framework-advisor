@@ -1,4 +1,4 @@
-# Automation Framework Advisor — MCP Server Setup
+# Test Automation Pilot — MCP Server Setup
 
 This project ships an MCP (Model Context Protocol) server at
 `mcp_server/server.py` that wraps every capability of the Advisor —

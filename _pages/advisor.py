@@ -66,7 +66,7 @@ def render() -> None:
     <div class="page-header">
         <div class="page-header-left">
             <div class="breadcrumb"><span>Home</span><span class="breadcrumb-sep">›</span><span>Advisor</span></div>
-            <div class="page-title">🧭 Framework Advisor</div>
+            <div class="page-title">🧭 Test Pilot</div>
             <div class="page-subtitle">Ask anything about frameworks, migrations, or scoring</div>
         </div>
     </div>

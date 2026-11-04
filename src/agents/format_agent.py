@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = (
-    "You are a formatting agent for an automation framework advisor. "
+    "You are a formatting agent for an Test Automation Pilot. "
     "Reformat the response into clean, compact markdown Output ONLY. "
     "Do NOT explain what you are doing. Do NOT include reasoning, planning, "
     "or meta-commentary like 'We need to...', 'Let me...', 'The original content...'. "

@@ -1,4 +1,4 @@
-"""Centralized logging configuration for the Automation Framework Advisor.
+"""Centralized logging configuration for the Test Automation Pilot.
 
 Call configure_logging() once at app startup. Writes to logs/advisor.log
 (rotating, 5MB max, 3 backups) and to stderr at WARNING+ level.

@@ -117,7 +117,6 @@ def render_settings_dialog() -> None:
             get_groq_client.clear()
             _activate_provider("groq")
             st.success("Groq configured and set as the active provider.")
-            st.rerun(scope="fragment")  # refresh the dialog without closing it
 
     # ── Gemini ──────────────────────────────────────────────────────
     with tab_gemini:
@@ -147,7 +146,6 @@ def render_settings_dialog() -> None:
             get_gemini_client.clear()
             _activate_provider("gemini")
             st.success("Gemini configured and set as the active provider.")
-            st.rerun(scope="fragment")  # refresh the dialog without closing it
 
     # ── Custom / forward-compatible ──────────────────────────────────
     with tab_custom:
@@ -269,7 +267,7 @@ def _render_manage_profile(profiles, profile_ids, by_id, active_id: str) -> None
         if selected != active_id:
             if st.button("⭐ Set as active", key="settings_team_set_active", use_container_width=True):
                 st.session_state["active_team_profile"] = selected
-                st.rerun(scope="fragment")
+                st.success(f"'{profile.display_name}' is now the active profile.")
     with col_export:
         if not profile.is_default:
             from src.team_profiles import export_profile_zip
@@ -314,7 +312,6 @@ def _render_delete_profile(selected: str, profile, active_id: str) -> None:
                 st.session_state["active_team_profile"] = DEFAULT_PROFILE_ID
             st.session_state["_settings_team_pending_select"] = DEFAULT_PROFILE_ID
             st.success(f"Deleted '{profile.display_name}'.")
-            st.rerun(scope="fragment")  # refresh the dialog without closing it
         except ValueError as exc:
             st.error(str(exc))
 
@@ -355,7 +352,6 @@ def _render_create_profile(profile_ids, by_id, active_id: str) -> None:
                         f"'📋 Manage a Profile' to review or edit it — it's "
                         f"already selected there."
                     )
-                    st.rerun(scope="fragment")  # refresh the dialog without closing it
                 except ValueError as exc:
                     st.error(str(exc))
 
@@ -401,7 +397,6 @@ def _render_create_profile(profile_ids, by_id, active_id: str) -> None:
                         f"already selected there."
                     )
                     st.text_area("What was detected", value=report, height=180, disabled=True)
-                    st.rerun(scope="fragment")  # refresh the dialog without closing it
                 except ValueError as exc:
                     st.error(str(exc))
 
@@ -443,7 +438,6 @@ def _render_create_profile(profile_ids, by_id, active_id: str) -> None:
                     f"Imported profile '{created.display_name}' (id: `{created.id}`). "
                     f"Switch to '📋 Manage a Profile' to review it — it's already selected there."
                 )
-                st.rerun(scope="fragment")  # refresh the dialog without closing it
             except ValueError as exc:
                 st.error(str(exc))
 
@@ -459,8 +453,8 @@ def _render_profile_editor(team_id: str) -> None:
     from src.codegen.agent_config import FRAMEWORK_CONTEXT
     from src.codegen.style_profiles import get_framework_context
     from src.conversion.prompts import slugify
-    from src.prompt_sections import migrate_label_lines
-    from src.team_profiles import DEFAULT_PROFILE_ID, codegen_style_dir, conversion_prompts_dir
+    from src.prompt_sections import join_sections, migrate_label_lines
+    from src.team_profiles import DEFAULT_PROFILE_ID, own_codegen_style_dir, own_conversion_prompts_dir
 
     artifact_kind = st.radio(
         "What to edit",
@@ -469,16 +463,29 @@ def _render_profile_editor(team_id: str) -> None:
         key=f"settings_team_artifact_kind_{team_id}",
     )
 
-    prompts_dir = conversion_prompts_dir(team_id)
+    # IMPORTANT: build every edit/write path against this team's OWN
+    # directory, never the read-time resolver that falls back to the
+    # shared default — otherwise a save for one team lands in
+    # config/conversion_prompts/ and "changes" show up for every profile.
+    from src.team_profiles import DEFAULT_CONVERSION_PROMPTS_DIR, read_text_artifact
+
+    prompts_dir = own_conversion_prompts_dir(team_id)
+    # Default source for seeding — when this profile has no own copy of a
+    # file yet, the editor starts from the default's content so edits
+    # diverge from a real baseline rather than a blank template.
+    default_prompts_dir = DEFAULT_CONVERSION_PROMPTS_DIR
     path = None
     section_kind: str
     can_write = True
     exists = True
+    seed_text = ""
 
     if artifact_kind == "Conversion — base system prompt":
         path = prompts_dir / "base_system_prompt.md"
         section_kind = "base_prompt"
         exists = path.is_file()
+        if not exists:
+            seed_text = read_text_artifact(default_prompts_dir / "base_system_prompt.md")
 
     elif artifact_kind == "Conversion — syntax rules (target framework)":
         fw = st.selectbox(
@@ -490,6 +497,8 @@ def _render_profile_editor(team_id: str) -> None:
         path = prompts_dir / "syntax_rules" / f"{slugify(fw)}.md"
         section_kind = "syntax_rules"
         exists = path.is_file()
+        if not exists:
+            seed_text = read_text_artifact(default_prompts_dir / "syntax_rules" / f"{slugify(fw)}.md")
 
     elif artifact_kind == "Conversion — pair rules (from → to)":
         col_from, col_to = st.columns(2)
@@ -503,9 +512,12 @@ def _render_profile_editor(team_id: str) -> None:
                 else f"{f}  🆕 not yet created",
                 key=f"settings_team_pair_to_{team_id}",
             )
+        rel = f"pair_rules/{slugify(from_fw)}__to__{slugify(to_fw)}.md"
         path = prompts_dir / "pair_rules" / f"{slugify(from_fw)}__to__{slugify(to_fw)}.md"
         section_kind = "pair_rules"
         exists = path.is_file()
+        if not exists:
+            seed_text = read_text_artifact(default_prompts_dir / rel)
 
     else:  # Codegen — framework style rules
         fw_key = st.selectbox("Framework key", sorted(FRAMEWORK_CONTEXT.keys()),
@@ -519,9 +531,17 @@ def _render_profile_editor(team_id: str) -> None:
             # an editable, file-backed copy of it.
             can_write = False
         else:
-            style_dir = codegen_style_dir(team_id) or (prompts_dir.parent / "codegen_style")
+            style_dir = own_codegen_style_dir(team_id)
             path = style_dir / f"{fw_key}.md"
             exists = path.is_file()
+            if not exists:
+                # Seed from the built-in default text for this framework
+                # key so a missing file starts from today's defaults, not
+                # a blank template. Pass team_id="default" so we get the
+                # baseline, not this team's (nonexistent) override.
+                seed_text = join_sections(
+                    migrate_label_lines(get_framework_context(fw_key, team_id=DEFAULT_PROFILE_ID))
+                )
 
     if not can_write:
         st.info(
@@ -536,7 +556,9 @@ def _render_profile_editor(team_id: str) -> None:
         _render_readonly_sections(migrate_label_lines(current_text), team_id, artifact_kind)
         return
 
-    _render_section_editor(path, section_kind, exists, key_prefix=f"{team_id}_{artifact_kind}")
+    _render_section_editor(
+        path, section_kind, exists, key_prefix=f"{team_id}_{artifact_kind}", seed_text=seed_text,
+    )
 
 
 def _render_readonly_sections(sections, team_id: str, artifact_kind: str) -> None:
@@ -549,34 +571,36 @@ def _render_readonly_sections(sections, team_id: str, artifact_kind: str) -> Non
             )
 
 
-def _render_section_editor(path, section_kind: str, exists: bool, key_prefix: str) -> None:
+def _render_section_editor(
+    path, section_kind: str, exists: bool, key_prefix: str, seed_text: str = "",
+) -> None:
     """Section-by-section editor for one prompt file.
 
-    If the file doesn't exist yet, starts from a labelled starter
-    template for `section_kind` instead of a blank box — so creating a
-    brand-new syntax/pair/style file means filling in clearly-explained
-    boxes, not writing free text from nothing.
+    `path` is always this team's OWN file — reads and writes both target
+    it, with no fallback to the shared default directory. If the file
+    doesn't exist yet, the editor starts from `seed_text` (the resolved
+    default content, so edits diverge from a real baseline) when one is
+    supplied, otherwise a labelled starter template for `section_kind`.
     """
     from src.prompt_sections import PromptSection, join_sections, section_template, split_sections
     from src.team_profiles import read_text_artifact, write_text_artifact
 
-    state_key = f"settings_team_sections_{key_prefix}_{path.name}"
-
-    # Saving calls st.rerun() immediately after st.success() — on a
-    # fragment rerun the success message would be shown and then wiped
-    # by that SAME rerun before it's ever painted to the browser, making
-    # a working save look like it silently did nothing. Stash the
-    # confirmation and show it on the render that actually survives.
-    just_saved_key = f"{state_key}_just_saved"
-    if st.session_state.pop(just_saved_key, None):
-        st.success(
-            f"Saved `{path.name}`. Takes effect on the next conversion/generation — no restart needed.",
-            icon="💾",
-        )
+    # Key on the full resolved path, not just the filename — two profiles
+    # can each have a `base_system_prompt.md`, and keying on name alone
+    # would let one profile's unsaved edits bleed into another's editor.
+    state_key = f"settings_team_sections_{key_prefix}_{path}"
 
     if state_key not in st.session_state:
         if exists:
             st.session_state[state_key] = split_sections(read_text_artifact(path))
+        elif seed_text.strip():
+            st.info(
+                "This profile doesn't have its own copy of this file yet — "
+                "starting from the default content. Edit and save to create "
+                "a copy that's specific to this profile only.",
+                icon="📄",
+            )
+            st.session_state[state_key] = split_sections(seed_text)
         else:
             st.success(
                 "This file doesn't exist yet for this profile — starting "
@@ -607,14 +631,12 @@ def _render_section_editor(path, section_kind: str, exists: bool, key_prefix: st
             sections[i] = PromptSection(heading=new_heading, body=new_body)
             if st.button("🗑 Remove this section", key=f"{state_key}_remove_{i}"):
                 sections.pop(i)
-                st.rerun(scope="fragment")  # refresh the dialog without closing it
 
     with st.expander("➕ Add new section", expanded=False):
         new_title = st.text_input("New section heading", key=f"{state_key}_new_title")
         if st.button("Add section", key=f"{state_key}_add"):
             if new_title.strip():
                 sections.append(PromptSection(heading=new_title.strip(), body=""))
-                st.rerun(scope="fragment")  # refresh the dialog without closing it
             else:
                 st.error("Enter a heading for the new section first.")
 
@@ -632,8 +654,10 @@ def _render_section_editor(path, section_kind: str, exists: bool, key_prefix: st
             st.session_state.pop(f"{state_key}_heading_{i}", None)
             st.session_state.pop(f"{state_key}_body_{i}", None)
         del st.session_state[state_key]
-        st.session_state[just_saved_key] = True
-        st.rerun(scope="fragment")  # refresh the dialog without closing it
+        st.success(
+            f"Saved `{path.name}`. Takes effect on the next conversion/generation — no restart needed.",
+            icon="💾",
+        )
 
 
 def _render_reference_docs(team_id: str) -> None:
@@ -674,7 +698,6 @@ def _render_reference_docs(team_id: str) -> None:
             with col_del:
                 if st.button("🗑", key=f"settings_team_doc_del_{team_id}_{p.name}"):
                     delete_reference_doc(team_id, p.name)
-                    st.rerun(scope="fragment")  # refresh the dialog without closing it
     else:
         st.caption("No documents attached yet.")
 
@@ -687,6 +710,5 @@ def _render_reference_docs(team_id: str) -> None:
         try:
             path = add_reference_doc(team_id, uploaded.name, uploaded.read())
             st.success(f"Added `{path.name}` — extracted and ready to use.")
-            st.rerun(scope="fragment")  # refresh the dialog without closing it
         except ValueError as exc:
             st.error(str(exc))
