@@ -1,18 +1,14 @@
 """Shared synthetic-fixture builders for the conversion / bundler tests.
 
-Historically several tests pointed at a real Robot suite the user happened to
-extract next to the repo (``autotest_2_extracted/.../nifi.robot`` and its
-``clamps`` custom-library tree). That path does not exist on a clean checkout
-or in CI, so those tests silently skipped and proved nothing.
-
-The ``make_robot_suite`` fixture here builds an equivalent, framework-neutral
-suite under pytest's ``tmp_path`` so the SAME real code paths
-(``analyze_file`` / ``analyze_path`` / ``_analyze_path_for_studio`` /
+The conversion tool is framework-agnostic: it must convert any project,
+framework, or custom library. These fixtures build a fully self-contained,
+framework-neutral Robot suite under pytest's ``tmp_path`` so the SAME real code
+paths (``analyze_file`` / ``analyze_path`` / ``_analyze_path_for_studio`` /
 ``_collect_dependency_files`` / ``build_endpoint_context`` / ``convert``) run
-everywhere, against a fixture the test itself created.
+everywhere, against a fixture the test itself created — no dependency on, and no
+naming after, any single real project or path outside the repo.
 
-The synthetic tree deliberately reproduces every behaviour the old nifi tree
-exercised:
+The synthetic tree deliberately exercises every bundler/analyzer behaviour:
 
   * direct resolved custom-library bundling
       -> ``widgets/api/client.py`` (the ``Client`` library)
@@ -20,9 +16,9 @@ exercised:
       -> ``widgets/infra/k8s/app_controller.py`` (the ``Controller`` library)
   * transitive project-import bundling (``from X import Y`` submodule)
       -> ``client.py`` imports ``common_xyz`` / ``configs.common_config`` / ``settings``
-  * package ``__init__.py`` eager-import scanning (the old ``clamps/__init__`` case)
+  * package ``__init__.py`` eager-import scanning
       -> ``widgets/__init__.py`` eagerly imports ``widgets.subapi`` (a submodule)
-  * deep fallback-only transitive dep (old application_controller -> kubernetes_base)
+  * deep fallback-only transitive dep (app_controller -> k8s_base shape)
       -> ``app_controller.py`` does ``from widgets.infra.k8s.k8s_base import K8sBase``
   * third-party requirement detection, incl. the import!=distribution mapping
       -> real third-party ``import somepkg`` + the ``yaml``->``PyYAML`` mapping
@@ -31,8 +27,8 @@ exercised:
   * a derived-state keyword that must NOT be given a guessed endpoint
       -> ``Client.get_cached_things`` returns cached state from a populating member
 
-Nothing here references ``autotest_2_extracted``, ``nifi.robot``, ``clamps`` or
-any path outside the repo.
+Every name here is generic; nothing references a real project or any path
+outside the repo.
 """
 from __future__ import annotations
 
@@ -137,9 +133,9 @@ class K8sBase:
         return fakecloud.restart(name)
 '''
 
-# A submodule eagerly imported by the package __init__ — the "clamps/__init__"
-# scan case: directly bundling anything under widgets/ pulls in __init__.py,
-# which must be SCANNED so widgets/subapi.py is bundled too.
+# A submodule eagerly imported by the package __init__ — the init-scan case:
+# directly bundling anything under widgets/ pulls in __init__.py, which must be
+# SCANNED so widgets/subapi.py is bundled too.
 _SUBAPI_PY = '''\
 """Eagerly imported by widgets/__init__.py; must be bundled via the init scan."""
 
@@ -198,7 +194,7 @@ Can Get Thing Groups
     Should Not Be Empty  ${data}
 
 Restarting The App And Validating Configuration
-    [Tags]           Implements_TEST-13556   cenx-platform   dont-run
+    [Tags]           Implements_TEST-13556   widgets-platform   dont-run
     ${before}=  Client.get_thing_about
     Controller.restart_app_with_timer   ${5}
     ${after}=  Client.get_thing_about
@@ -251,7 +247,7 @@ def build_synthetic_suite(root: Path) -> SyntheticSuite:
     _write(suite, _SUITE_ROBOT)
 
     # A second, fully self-contained (BuiltIn-only) suite in the same dir so a
-    # directory walk yields more than one file (the old multi-file nifi case).
+    # directory walk yields more than one file (the multi-file suite case).
     _write(root / "tests" / "extra_suite.robot", _EXTRA_SUITE_ROBOT)
 
     # widgets package: __init__ eagerly imports a submodule + a helper so the
