@@ -43,6 +43,13 @@ _PROVIDERS = {
         "default_model": "gemini-2.0-flash",
         "key_placeholder": "AIza...",
     },
+    "openrouter": {
+        "label": "OpenRouter",
+        "key_env": "OPENROUTER_API_KEY",
+        "model_env": "OPENROUTER_MODEL",
+        "default_model": "deepseek/deepseek-chat-v3.1:free",
+        "key_placeholder": "sk-or-...",
+    },
 }
 
 
@@ -91,8 +98,8 @@ def render_settings_dialog() -> None:
         icon="✅",
     )
 
-    tab_groq, tab_gemini, tab_custom, tab_teams = st.tabs(
-        ["Groq", "Gemini", "Other key", "🧩 Team Profiles"]
+    tab_groq, tab_gemini, tab_openrouter, tab_custom, tab_teams = st.tabs(
+        ["Groq", "Gemini", "OpenRouter", "Other key", "🧩 Team Profiles"]
     )
 
     # ── Groq ────────────────────────────────────────────────────────
@@ -146,6 +153,37 @@ def render_settings_dialog() -> None:
             get_gemini_client.clear()
             _activate_provider("gemini")
             st.success("Gemini configured and set as the active provider.")
+
+    # ── OpenRouter ──────────────────────────────────────────────────
+    with tab_openrouter:
+        cfg = _PROVIDERS["openrouter"]
+        st.caption(f"Current key: `{_mask(os.getenv(cfg['key_env'], ''))}`")
+        st.caption(
+            "OpenRouter is an OpenAI-compatible gateway to many models, "
+            "including free, large-context ones. Its larger context "
+            "avoids the '413 payload too large' some other free tiers hit "
+            "on big conversions. Free model ids end in `:free`; "
+            "availability and limits change over time — leave Model blank "
+            f"to use the built-in default (`{cfg['default_model']}`)."
+        )
+        new_key = st.text_input(
+            cfg["key_env"], type="password", key="settings_openrouter_key",
+            placeholder=cfg["key_placeholder"],
+        )
+        new_model = st.text_input(
+            "Model (optional)", key="settings_openrouter_model",
+            value=os.getenv(cfg["model_env"], ""),
+            placeholder=cfg["default_model"],
+        )
+        if st.button("Save & use OpenRouter", key="settings_save_openrouter", use_container_width=True):
+            if new_key:
+                _persist_env_var(cfg["key_env"], new_key)
+            if new_model:
+                _persist_env_var(cfg["model_env"], new_model)
+            from services.app_services import get_openrouter_client
+            get_openrouter_client.clear()
+            _activate_provider("openrouter")
+            st.success("OpenRouter configured and set as the active provider.")
 
     # ── Custom / forward-compatible ──────────────────────────────────
     with tab_custom:

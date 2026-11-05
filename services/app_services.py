@@ -51,6 +51,18 @@ def get_gemini_client():
     return client
 
 
+# ── OpenRouter client ─────────────────────────────────────────────────
+@st.cache_resource
+def get_openrouter_client():
+    from src.bootstrap import build_openrouter_client
+    client = build_openrouter_client()
+    if not client.is_available:
+        logger.warning("OpenRouter: OPENROUTER_API_KEY not set")
+    else:
+        logger.info("OpenRouter: model=%s ready", client.model)
+    return client
+
+
 # ── Active provider dispatch ────────────────────────────────────────
 # NOT cache_resource: it takes no args, so caching it would freeze the
 # first result forever and ignore later provider switches. The actual
@@ -61,6 +73,8 @@ def get_llm_client():
     provider = st.session_state.get("llm_provider", "groq")
     if provider == "gemini":
         return get_gemini_client()
+    if provider == "openrouter":
+        return get_openrouter_client()
     return get_groq_client()
 
 

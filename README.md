@@ -42,10 +42,58 @@ python run.py
 # API docs at http://localhost:8000/docs
 ```
 
-> **Note:** The app uses Groq's cloud API for LLM inference - no local setup required.
-> If Groq is unavailable, the advisor automatically falls back to the rule-based AdvisorChat.
+> **Note:** The app uses a cloud LLM API for inference - no local setup required.
+> If no provider is available, the advisor automatically falls back to the rule-based AdvisorChat.
 >
 > See [docs/QUICK_START.md](docs/QUICK_START.md) for a full first-steps walkthrough.
+
+## LLM providers / configuring an LLM key
+
+The app can use any one of three LLM providers for Advisor chat, Code
+Studio, Test Generator, and Framework Discovery. You pick the active one
+in the ⚙️ **Settings** dialog, or set keys directly in `config/.env`.
+
+| Provider | Key env var | Model env var | Get a key |
+|----------|-------------|---------------|-----------|
+| Groq | `GROQ_API_KEY` | `GROQ_MODEL` | https://console.groq.com/keys |
+| Gemini | `GEMINI_API_KEY` | `GEMINI_MODEL` | https://aistudio.google.com/apikey |
+| OpenRouter | `OPENROUTER_API_KEY` | `OPENROUTER_MODEL` | https://openrouter.ai/keys |
+
+Two ways to add a key for any provider:
+
+1. **In the app UI** — open ⚙️ Settings, pick the provider's tab, paste
+   the key (optionally set a model), and click **Save & use …**. It
+   takes effect immediately (no restart) and is also written to
+   `config/.env`.
+2. **By hand** — edit `config/.env` (see the OpenRouter example below).
+
+`config/.env` is **gitignored** — never commit your keys.
+
+### OpenRouter
+
+[OpenRouter](https://openrouter.ai) is an OpenAI-compatible gateway to
+many models, including free, large-context, code-capable ones. Its
+larger context window avoids the **413 payload too large** error some
+other free tiers return on big conversions, and its free models avoid
+Gemini's **429** free-tier quota limits.
+
+1. Create a free account at https://openrouter.ai and generate an API
+   key on the [Keys page](https://openrouter.ai/keys). The key looks
+   like `sk-or-v1-...`.
+2. Add it either way:
+   - **UI:** ⚙️ Settings → **OpenRouter** tab → paste the key,
+     optionally set a model → **Save & use OpenRouter**.
+   - **config/.env:**
+     ```
+     OPENROUTER_API_KEY='sk-or-v1-...'
+     OPENROUTER_MODEL='deepseek/deepseek-chat-v3.1:free'
+     ```
+
+Free model ids end in `:free`, and their exact ids / availability /
+rate limits change over time — if the default stops working, open the
+OpenRouter models list and pick another `:free` id, then set it in the
+Settings OpenRouter tab or `OPENROUTER_MODEL`. Leaving `OPENROUTER_MODEL`
+blank uses the app's built-in default.
 
 ## Project Structure
 
