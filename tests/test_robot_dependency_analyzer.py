@@ -26,14 +26,6 @@ from src.analysis.robot_dependency_analyzer import (
 )
 
 
-def _robot_available() -> bool:
-    try:
-        import robot.api  # noqa: F401
-    except ImportError:
-        return False
-    return True
-
-
 # ── Pure helper unit tests (no parser needed) ───────────────────────────
 
 def test_split_keyword_prefixed():
@@ -167,8 +159,7 @@ def test_suite_keyword_classification(make_robot_suite):
 
 
 def test_self_contained_suite(tmp_path):
-    if not _robot_available():
-        return
+    pytest.importorskip("robot")
     robot = tmp_path / "pure.robot"
     robot.write_text(textwrap.dedent(
         """\
@@ -184,8 +175,7 @@ def test_self_contained_suite(tmp_path):
 
 
 def test_unresolved_library_blocks_test_case(tmp_path):
-    if not _robot_available():
-        return
+    pytest.importorskip("robot")
     robot = tmp_path / "blocked.robot"
     robot.write_text(textwrap.dedent(
         """\
@@ -206,8 +196,7 @@ def test_unresolved_library_blocks_test_case(tmp_path):
 def test_bare_resource_keyword_classified_custom(tmp_path):
     """A bare (unprefixed) keyword defined in an imported Resource file must
     be classified custom, not assumed BuiltIn (review finding #3)."""
-    if not _robot_available():
-        return
+    pytest.importorskip("robot")
     resource = tmp_path / "common.resource"
     resource.write_text(textwrap.dedent(
         """\
@@ -239,8 +228,7 @@ def test_bare_resource_keyword_classified_custom(tmp_path):
 
 
 def test_directory_walk_skips_skip_dirs(tmp_path):
-    if not _robot_available():
-        return
+    pytest.importorskip("robot")
     real = tmp_path / "real.robot"
     real.write_text(
         "*** Test Cases ***\nT\n    Log    hi\n", encoding="utf-8"
@@ -256,8 +244,7 @@ def test_directory_walk_skips_skip_dirs(tmp_path):
 
 
 def test_broken_file_is_per_file_error_not_fatal(tmp_path):
-    if not _robot_available():
-        return
+    pytest.importorskip("robot")
     good = tmp_path / "good.robot"
     good.write_text("*** Test Cases ***\nT\n    Log    hi\n", encoding="utf-8")
     # A file whose IF block is never closed is a parse/model error.
@@ -303,8 +290,7 @@ def _two_case_result(tmp_path):
 
 
 def test_filter_empty_name_returns_result_unchanged(tmp_path):
-    if not _robot_available():
-        return
+    pytest.importorskip("robot")
     result = _two_case_result(tmp_path)
     assert result["total_test_cases"] == 2
     out = filter_result_by_test_case(result, "")
@@ -313,8 +299,7 @@ def test_filter_empty_name_returns_result_unchanged(tmp_path):
 
 
 def test_filter_substring_matches_single_case_case_insensitively(tmp_path):
-    if not _robot_available():
-        return
+    pytest.importorskip("robot")
     result = _two_case_result(tmp_path)
     out = filter_result_by_test_case(result, "alpha")
     assert out["total_test_cases"] == 1
@@ -327,8 +312,7 @@ def test_filter_substring_matches_single_case_case_insensitively(tmp_path):
 
 
 def test_filter_non_matching_name_yields_empty(tmp_path):
-    if not _robot_available():
-        return
+    pytest.importorskip("robot")
     result = _two_case_result(tmp_path)
     out = filter_result_by_test_case(result, "no-such-case")
     assert out["total_test_cases"] == 0
