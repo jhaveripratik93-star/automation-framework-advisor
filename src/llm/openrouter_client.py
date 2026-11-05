@@ -70,7 +70,11 @@ class OpenRouterClient:
         api_key: str | None = None,
         model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: int = 8000,
+        # Converted test files + bundled-context conversions can be long; an
+        # 8000-token cap truncated output mid-file, so generated code failed to
+        # compile/validate. OpenRouter free models here have large context
+        # windows, so allow a much bigger completion budget.
+        max_tokens: int = 32000,
     ) -> None:
 
         self._api_key_override = api_key
@@ -171,6 +175,14 @@ class OpenRouterClient:
         if response_format:
             payload["response_format"] = response_format
 
+        # Reasoning models (e.g. cohere/north-mini-code:free) spend output
+        # tokens on internal step-by-step thinking, which can crowd out — or
+        # truncate — the actual answer (producing empty/incomplete code). For
+        # code conversion we only want the final answer, so ask OpenRouter to
+        # EXCLUDE reasoning from the output; all of max_tokens then goes to the
+        # real content. Harmless for non-reasoning models (ignored).
+        payload["reasoning"] = {"exclude": True}
+
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
@@ -251,7 +263,26 @@ class OpenRouterClient:
                 agent_label, self.model, prompt_tokens, completion_tokens, total_tokens,
             )
 
-            content = (data["choices"][0]["message"].get("content") or "").strip()
+            message = data["choices"][0].get("message", {}) or {}
+            content = (message.get("content") or "").strip()
+
+            # Fallback for reasoning models: if `content` is empty but the
+            # model emitted reasoning (some models place the full answer in
+            # reasoning when `content` is suppressed), recover it rather than
+            # returning an empty string that fails downstream validation.
+            if not content:
+                reasoning = message.get("reasoning")
+                if isinstance(reasoning, str) and reasoning.strip():
+                    content = reasoning.strip()
+                else:
+                    details = message.get("reasoning_details") or []
+                    if isinstance(details, list):
+                        parts = [
+                            d.get("text", "")
+                            for d in details
+                            if isinstance(d, dict) and d.get("text")
+                        ]
+                        content = "\n".join(parts).strip()
 
             logger.debug(
                 "OpenRouter response: model=%s response_len=%d",
