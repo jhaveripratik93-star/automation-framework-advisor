@@ -10,7 +10,6 @@ from src.conversion.postprocess import (
     strip_unused_browser_fixture,
 )
 
-
 # (a) unused page removed, other params kept ------------------------------
 
 def test_removes_unused_page_keeps_other_param():

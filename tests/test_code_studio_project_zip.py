@@ -29,7 +29,6 @@ from _pages.code_studio import (
     _safe_test_filename,
 )
 
-
 VALID_PLAYWRIGHT_OUTPUT = """from playwright.sync_api import sync_playwright
 
 

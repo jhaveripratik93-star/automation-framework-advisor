@@ -17,7 +17,6 @@ from src.analysis.endpoint_extractor import (
     extract_endpoints_from_source,
 )
 
-
 # ──────────────────────────────────────────────────────────────────────
 # extract_endpoints_from_source — synthetic source
 # ──────────────────────────────────────────────────────────────────────

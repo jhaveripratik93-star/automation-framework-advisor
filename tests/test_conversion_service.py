@@ -416,7 +416,7 @@ def test_convert_playwright_runs_both_postprocess_guards():
 # (otherwise the converter loses the real paths and guesses). _cap_shared_context
 # keeps the full map and truncates only the reference source.
 
-from src.conversion.service import _cap_shared_context, _SHARED_CONTEXT_CAP
+from src.conversion.service import _SHARED_CONTEXT_CAP, _cap_shared_context
 
 
 def test_cap_shared_context_preserves_full_map_truncates_source():
