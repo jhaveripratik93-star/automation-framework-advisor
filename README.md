@@ -95,6 +95,27 @@ OpenRouter models list and pick another `:free` id, then set it in the
 Settings OpenRouter tab or `OPENROUTER_MODEL`. Leaving `OPENROUTER_MODEL`
 blank uses the app's built-in default.
 
+## Dependency bundling & Python compatibility
+
+When converting a test, the tool bundles the test's custom-library
+dependencies into the downloadable project verbatim (copied byte-for-byte,
+never sent through the LLM) so their behaviour is preserved exactly. Bundled
+dependency `.py` source is automatically run through a safe, mechanical
+Python 3.10/3.11 compatibility pass so legacy-but-still-Python-3 code imports
+cleanly on a modern interpreter. The pass is behaviour-preserving (it never
+changes program logic) and currently covers:
+
+- `from collections import Iterable` (and the other ABCs moved in 3.10) →
+  `from collections.abc import Iterable`, splitting mixed imports so names
+  like `OrderedDict` stay on `collections`;
+- `collections.Mapping`-style attribute access → `collections.abc.Mapping`;
+- `inspect.getargspec(` → `inspect.getfullargspec(` and
+  `time.clock(` → `time.perf_counter(`.
+
+It only rewrites genuine imports/attribute accesses/calls — never text inside
+strings, comments or docstrings — is idempotent, and falls back to bundling a
+file verbatim if it cannot be safely transformed.
+
 ## Project Structure
 
 ```

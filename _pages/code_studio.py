@@ -25,6 +25,7 @@ from pathlib import Path
 
 import streamlit as st
 
+from src.conversion.pycompat import modernize_python_source
 from ui.components import render_thinking
 
 logger = logging.getLogger(__name__)
@@ -727,6 +728,28 @@ def _merge_requirements(req: str, third_party: list[str]) -> str:
     return req.rstrip("\n") + "\n" + "\n".join(additions) + "\n"
 
 
+def _modernize_dependency_bytes(dest_rel: str, data: bytes) -> bytes:
+    """Apply the safe Python 3.10/3.11 compatibility pass to a bundled
+    dependency file's bytes, returning the (possibly modernized) bytes.
+
+    Only ``.py`` source is considered; non-Python files are returned unchanged.
+    The pass is best-effort: if the bytes are not UTF-8 decodable, the original
+    bytes are returned verbatim (modernization never corrupts or drops a file).
+    ``modernize_python_source`` itself is idempotent and falls back to the input
+    text on any parse/transform error, so clean files round-trip byte-for-byte.
+    """
+    if not dest_rel.endswith(".py"):
+        return data
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data
+    modernized = modernize_python_source(text)
+    if modernized == text:
+        return data
+    return modernized.encode("utf-8")
+
+
 def _build_project_zip(
     file_results: list[dict],
     to_fw: str,
@@ -781,6 +804,12 @@ def _build_project_zip(
 
         # Bundle resolved dependency source verbatim (Option A). Each read is
         # guarded so one unreadable dependency does not abort the whole ZIP.
+        # Bundled dependency .py source additionally passes through a SAFE,
+        # mechanical Python 3.10/3.11 compatibility pass (modernize_python_source)
+        # so legacy-but-still-Python-3 imports like ``from collections import
+        # Iterable`` do not break import on a modern interpreter. The pass is
+        # behaviour-preserving, idempotent, and best-effort: on any decode or
+        # transform failure the file is bundled verbatim (byte-for-byte).
         for dest_rel, abs_src in dependency_files:
             if abs_src is None:
                 zf.writestr(f"{_PROJECT_ROOT}/{dest_rel}", b"")
@@ -790,6 +819,7 @@ def _build_project_zip(
             except OSError:
                 failed_reads.append(dest_rel)
                 continue
+            data = _modernize_dependency_bytes(dest_rel, data)
             zf.writestr(f"{_PROJECT_ROOT}/{dest_rel}", data)
             if not dest_rel.endswith("__init__.py"):
                 bundled_sources.append(dest_rel)
