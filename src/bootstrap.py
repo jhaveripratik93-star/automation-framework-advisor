@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from src.knowledge_base.loader import KnowledgeBase
     from src.llm.gemini_client import GeminiClient
     from src.llm.groq_client import GroqClient
+    from src.llm.openrouter_client import OpenRouterClient
 
 DEFAULT_DATA_DIR = "data/frameworks"
 DEFAULT_GRAPH_PATH = "data/knowledge_graph.json"
@@ -81,6 +82,14 @@ def build_gemini_client() -> GeminiClient:
     from src.llm.gemini_client import GeminiClient
 
     return GeminiClient()
+
+
+def build_openrouter_client() -> OpenRouterClient:
+    """Construct the OpenRouter LLM client. OPENROUTER_API_KEY is optional —
+    callers should check `.is_available` before relying on it for LLM calls."""
+    from src.llm.openrouter_client import OpenRouterClient
+
+    return OpenRouterClient()
 
 
 def build_scanner(

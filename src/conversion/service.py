@@ -21,6 +21,10 @@ Pipeline per conversion:
      ask for a fix (bounded retries) — this is the self-repair loop that
      makes output "compilable and accurate" (point 5) rather than
      one-shot and hope.
+  6b. For Python pytest-playwright targets, run the deterministic
+     browser-fixture guard (src/conversion/postprocess.py) that strips a
+     provably-unused `page: Page` fixture from non-UI tests, so a REST/API
+     Robot test never ships pulling in an unused browser.
   7. Run the cross-repo parity check (src/conversion/parity.py) comparing
      the ORIGINAL source against the FINAL converted code using the same
      repo-comparator engine behind the standalone "Cross-Repo Test
@@ -43,6 +47,7 @@ from typing import Protocol
 from src.conversion.compilers import CompileResult, compile_check
 from src.conversion.language import resolve_target_language
 from src.conversion.parity import check_parity
+from src.conversion.postprocess import rewrite_importerror_stub_fallback, strip_unused_browser_fixture
 from src.conversion.prompts import load_prompt_profile
 from src.tools.assertion_counter import compare as compare_assertions
 from src.tools.conversion_validator import ConversionValidation, validate_single_file_conversion
@@ -149,6 +154,40 @@ class ConversionResult:
         return "\n".join(lines)
 
 
+# Marker that separates the COMPACT structured endpoint map (which must always
+# reach the model) from the verbose verbatim library source (reference-only,
+# safe to truncate) in a Robot->Playwright shared context — see
+# src/analysis/endpoint_extractor.build_endpoint_context.
+_ENDPOINT_SOURCE_MARKER = "## Resolved custom-library source"
+# Overall budget for the shared context appended to the user prompt.
+_SHARED_CONTEXT_CAP = 2000
+
+
+def _cap_shared_context(ctx: str) -> str:
+    """Cap the shared project context for the prompt WITHOUT ever dropping the
+    structured endpoint map.
+
+    The endpoint extractor emits a compact ``keyword -> HTTP endpoint`` MAP
+    followed by a large verbatim ``## Resolved custom-library source`` block.
+    A naive ``ctx[:2000]`` slice discarded whatever fell past 2000 chars — in
+    practice the verbose source, but on a bigger map it could lop off real
+    endpoints and reintroduce guessing. So keep the MAP in full and spend the
+    REMAINING budget on the (reference-only) source block, truncating just
+    that. Plain contexts with no such marker fall back to the simple cap.
+    """
+    marker = ctx.find(_ENDPOINT_SOURCE_MARKER)
+    if marker == -1:
+        return ctx[:_SHARED_CONTEXT_CAP]
+    endpoint_map = ctx[:marker].rstrip()
+    source_block = ctx[marker:]
+    remaining = _SHARED_CONTEXT_CAP - len(endpoint_map)
+    if remaining <= 0:
+        # The map alone already exceeds the budget — keep the full map
+        # (endpoints must never be guessed) and drop the reference source.
+        return endpoint_map
+    return endpoint_map + "\n\n" + source_block[:remaining]
+
+
 def _strip_cicd_trailer(code: str) -> str:
     """Second-guard against a leaked CI/CD block (point 1) — the prompt
     already forbids it, this catches an LLM that ignores the instruction."""
@@ -216,7 +255,7 @@ def convert(request: ConversionRequest, *, to_fw_data: object | None = None) -> 
         f"```\n{request.source_code}\n```"
     )
     if request.shared_context:
-        user_prompt += f"\n\nShared project context:\n{request.shared_context[:2000]}"
+        user_prompt += f"\n\nShared project context:\n{_cap_shared_context(request.shared_context)}"
 
     for attempt_number in range(1, MAX_REPAIR_ATTEMPTS + 2):  # 1 initial + N repairs
         raw = request.llm_call(system_prompt, user_prompt)
@@ -249,6 +288,24 @@ def convert(request: ConversionRequest, *, to_fw_data: object | None = None) -> 
 
     final = attempts[-1]
     is_valid = (not final.compile_result.checked or final.compile_result.ok) and final.validation.is_valid
+
+    # Deterministic post-process guards. For Python pytest-playwright targets,
+    # BOTH guards in src/conversion/postprocess.py run, keeping their guarantees
+    # independent of which LLM backend produced the code:
+    #   1. strip_unused_browser_fixture — removes a provably-unused `page: Page`
+    #      browser fixture the LLM injected into a non-UI test (browser-free
+    #      API/REST tests).
+    #   2. rewrite_importerror_stub_fallback — rewrites a try/except ImportError
+    #      NotImplementedError TODO-stub into a direct import so a bundled
+    #      dependency is imported for real instead of being silently shadowed by
+    #      a stub.
+    # They touch disjoint constructs (signatures/imports vs. try/except import
+    # fallbacks), so order does not matter; both only transform shipped code and
+    # leave assertion/parity counts unchanged. They run before
+    # compare_assertions/check_parity so those reflect the shipped code.
+    if target_lang == "python" and "playwright" in to_name.lower():
+        code = strip_unused_browser_fixture(code)
+        code = rewrite_importerror_stub_fallback(code)
 
     assertion_report = compare_assertions(request.source_code, code, from_name, to_name)
 

@@ -1,0 +1,233 @@
+"""Tests for the path-mode pure helpers on the Framework Migration page.
+
+Exercises the Streamlit-free logic factored out of _pages/code_studio.py:
+  - _analyze_path_for_studio (analyze_path + filter_result_by_test_case)
+  - _convert_matched_files   (per-file disk read + convert loop)
+
+with a scripted stub llm_call — the same (system_prompt, user_prompt) -> str
+contract production's llm_call uses — so the analysis chaining, filtering, the
+per-file read/convert loop, per-file error isolation, and result assembly are
+covered WITHOUT a running Streamlit server or a live LLM backend. Parser-backed
+tests run against a SELF-CONTAINED synthetic Robot suite built under pytest's
+``tmp_path`` (see tests/conftest.py) and use ``pytest.importorskip("robot")`` so
+they skip cleanly ONLY when robotframework is genuinely not installed.
+"""
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from _pages.code_studio import _analyze_path_for_studio, _convert_matched_files
+
+
+def _robot_available() -> bool:
+    try:
+        import robot.api  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+# A valid Playwright-py snippet the stub returns for every conversion call.
+VALID_PLAYWRIGHT_OUTPUT = """from playwright.sync_api import sync_playwright
+
+
+def test_converted():
+    assert True
+"""
+
+
+class _ScriptedLLM:
+    """Returns the same canned valid snippet for every call; counts calls so
+    tests can assert the LLM was (or was not) invoked."""
+
+    def __init__(self, output: str = VALID_PLAYWRIGHT_OUTPUT):
+        self._output = output
+        self.call_count = 0
+
+    def __call__(self, system_prompt: str, user_prompt: str) -> str:
+        self.call_count += 1
+        return self._output
+
+
+class _CapturingLLM:
+    """Records every (system_prompt, user_prompt) pair it is called with so a
+    test can assert the injected custom-library endpoint context reached the
+    prompt. Returns a canned valid snippet."""
+
+    def __init__(self, output: str = VALID_PLAYWRIGHT_OUTPUT):
+        self._output = output
+        self.calls: list[tuple[str, str]] = []
+
+    def __call__(self, system_prompt: str, user_prompt: str) -> str:
+        self.calls.append((system_prompt, user_prompt))
+        return self._output
+
+
+def test_endpoint_context_injected_into_prompt_for_robot_to_playwright(make_robot_suite):
+    """A path-based Robot->Playwright conversion of the synthetic suite feeds
+    the resolved custom-library endpoint map / source into the conversion
+    context, so the derived GET things/status mapping is present in the user
+    prompt the (stubbed) llm_call receives. No live LLM involved."""
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
+    analysis = _analyze_path_for_studio(str(suite.suite), "", str(suite.source_root))
+    assert "error" not in analysis
+
+    llm = _CapturingLLM()
+    results = _convert_matched_files(
+        analysis, "Robot Framework", "Playwright", llm, to_fw_data=None
+    )
+    assert results and any("result" in fr for fr in results)
+    assert llm.calls, "expected at least one conversion call"
+
+    # The endpoint map (derived from widgets/api/client.py) must be in the prompt.
+    all_prompts = "\n".join(sys_p + "\n" + usr_p for sys_p, usr_p in llm.calls)
+    assert "get_thing_status" in all_prompts
+    assert "GET /widgets-api/things/status" in all_prompts
+    # and the native-translation instruction travels with it
+    assert "APIRequestContext" in all_prompts
+
+
+def test_endpoint_context_not_injected_for_non_playwright_target():
+    """The endpoint context is Robot->Playwright specific — a different target
+    gets an empty shared_context (conversion unchanged)."""
+    from _pages.code_studio import _build_endpoint_context_for
+
+    analysis = {"source_root": "", "files": []}
+    assert _build_endpoint_context_for(analysis, "Robot Framework", "Cypress") == ""
+
+
+def test_analyze_single_file_returns_populated_dict(make_robot_suite):
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
+    result = _analyze_path_for_studio(str(suite.suite), "", str(suite.source_root))
+    assert "error" not in result
+    assert result["total_test_cases"] >= 1
+    assert result["files"], "expected at least one file report"
+
+
+def test_analyze_with_matching_name_narrows_results(make_robot_suite):
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
+    full = _analyze_path_for_studio(str(suite.suite), "", str(suite.source_root))
+    assert "error" not in full and full["total_test_cases"] >= 1
+    # Pick a real test-case name and filter on a substring of it.
+    first_name = full["files"][0]["test_cases"][0]["name"]
+    needle = first_name.split()[0] if first_name.split() else first_name
+    filtered = _analyze_path_for_studio(str(suite.suite), needle, str(suite.source_root))
+    assert "error" not in filtered
+    assert 1 <= filtered["total_test_cases"] <= full["total_test_cases"]
+
+
+def test_analyze_name_matching_nothing_yields_zero(make_robot_suite):
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
+    result = _analyze_path_for_studio(
+        str(suite.suite), "this-name-matches-no-test-case-xyz", str(suite.source_root)
+    )
+    assert "error" not in result
+    assert result["total_test_cases"] == 0
+
+
+def test_analyze_bad_path_returns_error():
+    pytest.importorskip("robot")
+    result = _analyze_path_for_studio(r"C:\no\such\dir\nope.robot", "", "")
+    assert isinstance(result, dict)
+    assert "error" in result
+
+
+def test_convert_matched_files_directory_converts_each_file(make_robot_suite):
+    pytest.importorskip("robot")
+    suite = make_robot_suite()
+    analysis = _analyze_path_for_studio(str(suite.suite.parent), "", str(suite.source_root))
+    assert "error" not in analysis
+    n_files = len([f for f in analysis["files"] if not f.get("error")])
+    assert n_files > 1, "directory should yield multiple file reports"
+
+    llm = _ScriptedLLM()
+    results = _convert_matched_files(
+        analysis, "Robot Framework", "Playwright", llm, to_fw_data=None
+    )
+    assert len(results) == n_files
+    for fr in results:
+        assert "result" in fr, f"unexpected error entry: {fr.get('error')}"
+        assert fr["result"].code.strip(), "expected non-empty converted code"
+    assert llm.call_count >= n_files
+
+
+def test_convert_matched_files_per_file_error_isolation(monkeypatch):
+    """One file whose read raises yields a {"file_path", "error"} entry while
+    the others still convert."""
+    fake_analysis = {
+        "files": [
+            {"file_path": r"C:\fixtures\a.robot", "test_cases": []},
+            {"file_path": r"C:\fixtures\b.robot", "test_cases": []},
+            {"file_path": r"C:\fixtures\c.robot", "test_cases": []},
+        ],
+    }
+
+    def fake_read_text(self, *args, **kwargs):
+        if self.name == "b.robot":
+            raise OSError("simulated read failure")
+        return "*** Test Cases ***\nT1\n    Log    hi\n"
+
+    monkeypatch.setattr(Path, "read_text", fake_read_text)
+
+    # Convert must not touch the LLM for the failing file; stub a convert that
+    # just echoes a canned result so the test needs no live pipeline.
+    import _pages.code_studio as mod
+
+    class _FakeResult:
+        code = VALID_PLAYWRIGHT_OUTPUT
+
+    def fake_convert(request, to_fw_data=None):
+        assert request.source_code.strip()
+        return _FakeResult()
+
+    import src.conversion.service as svc
+    monkeypatch.setattr(svc, "convert", fake_convert)
+
+    llm = _ScriptedLLM()
+    results = mod._convert_matched_files(
+        fake_analysis, "Robot Framework", "Playwright", llm, to_fw_data=None
+    )
+
+    assert len(results) == 3
+    errored = [f for f in results if "error" in f]
+    ok = [f for f in results if "result" in f]
+    assert len(errored) == 1
+    assert errored[0]["file_path"].endswith("b.robot")
+    assert len(ok) == 2
+
+
+def test_convert_matched_files_skips_error_and_duplicate_entries(monkeypatch):
+    """File reports carrying a parse error, or a duplicate file_path, are not
+    read or converted twice."""
+    fake_analysis = {
+        "files": [
+            {"file_path": r"C:\fixtures\dup.robot", "test_cases": []},
+            {"file_path": r"C:\fixtures\dup.robot", "test_cases": []},  # duplicate
+            {"file_path": r"C:\fixtures\bad.robot", "error": "parse error"},
+        ],
+    }
+
+    monkeypatch.setattr(
+        Path, "read_text", lambda self, *a, **k: "*** Test Cases ***\nT1\n    Log    hi\n"
+    )
+
+    class _FakeResult:
+        code = VALID_PLAYWRIGHT_OUTPUT
+
+    import src.conversion.service as svc
+    monkeypatch.setattr(svc, "convert", lambda request, to_fw_data=None: _FakeResult())
+
+    import _pages.code_studio as mod
+    llm = _ScriptedLLM()
+    results = mod._convert_matched_files(
+        fake_analysis, "Robot Framework", "Playwright", llm, to_fw_data=None
+    )
+    assert len(results) == 1
+    assert results[0]["file_path"].endswith("dup.robot")

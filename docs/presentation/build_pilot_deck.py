@@ -18,8 +18,7 @@ from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
-from pptx.oxml.ns import qn
-from pptx.util import Emu, Inches, Pt
+from pptx.util import Inches, Pt
 
 # ── Palette (matched to the reference deck) ─────────────────────────
 INK = RGBColor(0x18, 0x18, 0x18)      # near-black title/body-strong

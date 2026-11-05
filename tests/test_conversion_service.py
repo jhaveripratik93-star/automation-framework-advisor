@@ -273,3 +273,226 @@ def test_parity_report_in_to_dict_is_json_serializable():
     payload = result.to_dict()
     assert "parity_report" in payload
     json.dumps(payload)
+
+
+# ── Browser-free guard wired into convert() for Playwright targets ──────
+# Proves the deterministic postprocess guard (src/conversion/postprocess.py)
+# runs inside convert() so a REST/API Robot test never ships an unused
+# pytest-playwright browser fixture, regardless of what the LLM returns.
+
+WIDGETS_ROBOT_SOURCE = """*** Settings ***
+Library      widgets.api.client.Client  WITH NAME  Client
+Force Tags   widgets
+
+*** Test Cases ***
+Can Get Thing Status
+    ${status}=  Client.get_status
+    Should Contain  ${status}  serviceStatus
+
+Can Get Thing About Dialog Information
+    ${about_dialog}=  Client.get_about
+    Should Contain  ${about_dialog}  about
+"""
+
+# What a non-deterministic LLM wrongly produced: every test gets page: Page
+# though no test ever touches a browser.
+BROWSER_FIXTURED_PYTEST = """from playwright.sync_api import Page
+import pytest
+from widgets.api.client import Client
+
+
+@pytest.fixture
+def client() -> Client:
+    return Client()
+
+
+@pytest.mark.widgets
+def test_can_get_status(page: Page, client: Client):
+    status = client.get_status()
+    assert "serviceStatus" in status
+
+
+@pytest.mark.widgets
+def test_can_get_about(page: Page, client: Client):
+    about = client.get_about()
+    assert "about" in about
+"""
+
+# A genuine UI conversion that really drives a browser.
+REAL_UI_PYTEST = """from playwright.sync_api import Page, expect
+
+
+def test_homepage_loads(page: Page):
+    page.goto("https://example.com")
+    expect(page.get_by_role("heading")).to_be_visible()
+"""
+
+
+def test_convert_playwright_strips_unused_browser_fixture():
+    llm = _ScriptedLLM([BROWSER_FIXTURED_PYTEST])
+    result = convert(ConversionRequest(
+        source_code=WIDGETS_ROBOT_SOURCE,
+        from_framework="Robot Framework",
+        to_framework="Playwright",
+        llm_call=llm,
+    ))
+    assert result.target_language == "python"
+    # No test signature keeps a page parameter.
+    assert "page: Page" not in result.code
+    assert "def test_can_get_status(client: Client):" in result.code
+    assert "def test_can_get_about(client: Client):" in result.code
+    # Browser Page import gone; custom client + assertions preserved.
+    assert "from playwright.sync_api import Page" not in result.code
+    assert "from widgets.api.client import Client" in result.code
+    assert result.code.count("assert ") == BROWSER_FIXTURED_PYTEST.count("assert ")
+
+
+def test_convert_playwright_keeps_real_ui_page_fixture():
+    llm = _ScriptedLLM([REAL_UI_PYTEST])
+    result = convert(ConversionRequest(
+        source_code="*** Test Cases ***\nOpen\n    Log    ui",
+        from_framework="Robot Framework",
+        to_framework="Playwright",
+        llm_call=llm,
+    ))
+    # Genuine browser usage -> guard leaves page intact.
+    assert "def test_homepage_loads(page: Page):" in result.code
+    assert "from playwright.sync_api import Page, expect" in result.code
+
+
+# ── BOTH guards wired into convert(): browser-free AND honest imports ───
+# A non-deterministic LLM wrongly produced code that is BOTH browser-fixtured
+# (unused page: Page) AND wrapped its bundled-dependency import in a
+# try/except ImportError NotImplementedError TODO stub. convert() must ship
+# code that is browser-free AND uses a direct import with no stub.
+
+BROWSER_AND_STUB_PYTEST = """from playwright.sync_api import Page
+import pytest
+
+try:
+    from widgets.api.client import Client
+except ImportError:
+    class Client:
+        def get_status(self):
+            raise NotImplementedError("TODO: Implement widgets.api.client.Client")
+
+
+@pytest.fixture
+def client() -> Client:
+    return Client()
+
+
+@pytest.mark.widgets
+def test_can_get_status(page: Page, client: Client):
+    status = client.get_status()
+    assert "serviceStatus" in status
+"""
+
+
+def test_convert_playwright_runs_both_postprocess_guards():
+    llm = _ScriptedLLM([BROWSER_AND_STUB_PYTEST])
+    result = convert(ConversionRequest(
+        source_code=WIDGETS_ROBOT_SOURCE,
+        from_framework="Robot Framework",
+        to_framework="Playwright",
+        llm_call=llm,
+    ))
+    code = result.code
+    # Browser-free: no page param, no browser Page import.
+    assert "page: Page" not in code
+    assert "from playwright.sync_api import Page" not in code
+    assert "def test_can_get_status(client: Client):" in code
+    # Honest import: direct import, no try/except stub, no NotImplementedError.
+    assert "from widgets.api.client import Client" in code
+    assert "except ImportError" not in code
+    assert "NotImplementedError" not in code
+    # Assertion preserved.
+    assert 'assert "serviceStatus" in status' in code
+
+
+# ── Defect A: the structured endpoint map survives the shared-context cap ──
+# The user prompt caps shared_context so a huge verbatim-source block can't
+# blow the token budget. The compact endpoint MAP must ALWAYS reach the model
+# (otherwise the converter loses the real paths and guesses). _cap_shared_context
+# keeps the full map and truncates only the reference source.
+
+from src.conversion.service import _SHARED_CONTEXT_CAP, _cap_shared_context
+
+
+def test_cap_shared_context_preserves_full_map_truncates_source():
+    endpoint_map = (
+        "## Custom-library endpoint map (for NATIVE API translation)\n\n"
+        "- `get_things` -> DERIVED reuse `GET /widget-api/things/{thing_id}/flow`\n"
+        "- `get_status` -> `GET /widget-api/status`\n"
+    )
+    big_source = "## Resolved custom-library source\n\n```python\n" + ("x" * 50000) + "\n```"
+    ctx = endpoint_map + "\n\n" + big_source
+
+    capped = _cap_shared_context(ctx)
+    # The full map (every endpoint) survives verbatim.
+    assert endpoint_map.rstrip() in capped
+    assert "get_things" in capped
+    assert "GET /widget-api/things/{thing_id}/flow" in capped
+    assert "get_status" in capped
+    # The verbose source is truncated — the whole thing didn't survive.
+    assert len(capped) < len(ctx)
+    assert capped.count("x") < 50000
+
+
+def test_cap_shared_context_plain_text_simple_cap():
+    plain = "y" * 5000
+    capped = _cap_shared_context(plain)
+    assert capped == plain[:_SHARED_CONTEXT_CAP]
+
+
+def test_cap_shared_context_keeps_whole_map_even_when_over_budget():
+    # A map alone larger than the cap must NOT be sliced (losing real endpoints
+    # would reintroduce guessing); the reference source is dropped instead.
+    big_map = (
+        "## Custom-library endpoint map (for NATIVE API translation)\n\n"
+        + "\n".join(f"- `kw{i}` -> `GET /api/kw{i}`" for i in range(400))
+    )
+    ctx = big_map + "\n\n## Resolved custom-library source\n\n```python\nSRC\n```"
+    assert len(big_map) > _SHARED_CONTEXT_CAP  # precondition
+    capped = _cap_shared_context(ctx)
+    assert capped == big_map.rstrip()
+    assert "kw399" in capped
+    assert "Resolved custom-library source" not in capped
+
+
+def test_endpoint_map_reaches_llm_prompt_uncut():
+    """End-to-end with a capturing stub: a realistic endpoint map + large source
+    is passed as shared_context; the converted user prompt still contains the
+    full derived-state mapping (process-groups path), proving the map is not
+    truncated away by the 2000-char cap."""
+    endpoint_map = (
+        "## Custom-library endpoint map (for NATIVE API translation)\n\n"
+        "USE ONLY the paths shown here. NEVER invent a \"likely\" endpoint.\n\n"
+        "- `get_status` -> `GET /widget-api/status`\n"
+        "- `get_things` -> DERIVED from `thing_group_flow`: "
+        "`GET /widget-api/things/{thing_id}/flow`\n"
+    )
+    source_block = "## Resolved custom-library source\n\n```python\n" + ("s" * 40000) + "\n```"
+    ctx = endpoint_map + "\n\n" + source_block
+
+    captured: list[str] = []
+
+    class _Capturing:
+        def __call__(self, system_prompt: str, user_prompt: str) -> str:
+            captured.append(user_prompt)
+            return VALID_ROBOT_OUTPUT
+
+    convert(ConversionRequest(
+        source_code=K6_SOURCE_WITH_ASSERTION,
+        from_framework="K6",
+        to_framework="Robot Framework",
+        llm_call=_Capturing(),
+        shared_context=ctx,
+    ))
+    assert captured
+    prompt = captured[0]
+    assert "get_status" in prompt
+    assert "GET /widget-api/status" in prompt
+    # The derived-state mapping with the REAL process-groups path survives.
+    assert "GET /widget-api/things/{thing_id}/flow" in prompt
+    assert "NEVER invent" in prompt

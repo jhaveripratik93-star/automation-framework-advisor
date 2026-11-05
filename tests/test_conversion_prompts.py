@@ -37,6 +37,98 @@ def test_render_system_prompt_includes_all_sections():
     assert "orphan keywords" in rendered.lower()  # from syntax_rules (now a readable `## ` section heading)
 
 
+def test_robot_to_playwright_profile_has_browser_free_api_rule():
+    """The Robot->Playwright pair file and the Playwright syntax file carry the
+    browser-free API-test rule, and the pair file is one of the loaded sources."""
+    set_prompts_root(None)
+    profile = load_prompt_profile("Robot Framework", "Playwright")
+    assert profile.pair_rules
+    assert any("robot_framework__to__playwright.md" in s for s in profile.sources)
+    assert len(profile.sources) == 3  # base + playwright syntax + pair rules
+
+    rendered = profile.render_system_prompt("Robot Framework", "Playwright").lower()
+    # the conditional-browser rule must be present
+    assert "page: page" in rendered
+    assert "api" in rendered
+    # browser-free guidance mentions not injecting a page for non-UI tests
+    assert "must not" in rendered and "browser" in rendered
+
+
+def test_robot_to_playwright_profile_has_native_api_strategy():
+    """The Robot->Playwright rules carry the ORDERED strategy (native-API
+    translation preferred, bundling fallback), the APIRequestContext +
+    skip-on-unreachable guidance, and a worked native-translation example.
+
+    Asserted framework-neutrally: we verify the STRATEGY and SEMANTICS are
+    present, not the project name used in the shipped worked example, so this
+    test proves the generic conversion behaviour rather than any single suite."""
+    set_prompts_root(None)
+    profile = load_prompt_profile("Robot Framework", "Playwright")
+    rendered = profile.render_system_prompt("Robot Framework", "Playwright")
+    low = rendered.lower()
+
+    # Ordered strategy: step 1 native-first, step 2 bundle fallback.
+    assert "step 1" in low and "step 2" in low
+    assert "native" in low
+    assert "fallback" in low or "fall back" in low
+    assert "prefer" in low  # native translation preferred
+
+    # APIRequestContext + skip-on-unreachable semantics.
+    assert "apirequestcontext" in low
+    assert "new_context" in low
+    assert "skip" in low and "unreachable" in low
+    assert "backendunavailable" in low
+    assert "resolve_setting" in low
+
+    # Self-contained requirement (no legacy client import / no bundling).
+    assert "self-contained" in low
+    assert "must not import" in low
+
+    # A worked native-translation example is present: a keyword-call comment
+    # paired with a concrete GET endpoint the test asserts on.
+    assert "request.get(" in low
+    assert "base_url" in low
+
+    # Bundling fallback path is still described (kept working).
+    assert "bundl" in low
+
+
+def test_robot_to_playwright_profile_forbids_guessing_endpoints():
+    """Defect A: the pair + syntax rules forbid inventing endpoints, require
+    reusing the populating endpoint for derived-state keywords, and require a
+    skip-with-reason when the real endpoint is unknown.
+
+    Asserted framework-neutrally: we verify the RULES (never-guess, derived
+    reuse, skip-with-reason) are present in both the pair and syntax files,
+    not the project name in the shipped worked example."""
+    set_prompts_root(None)
+    profile = load_prompt_profile("Robot Framework", "Playwright")
+    rendered = profile.render_system_prompt("Robot Framework", "Playwright")
+    low = rendered.lower()
+
+    # never-guess rule (present in BOTH the pair file and the syntax file).
+    assert "never guess an endpoint" in low
+    assert "never invent" in low or 'never a "likely"' in low or "do not invent" in low
+
+    # derived-state keywords reuse the populating endpoint, not a new path.
+    assert "derived" in low
+    assert "populating endpoint" in low or "populating method" in low
+
+    # skip-with-reason when the real endpoint cannot be determined.
+    assert "pytest.skip" in low
+    assert "backendunavailable" in low
+
+    # a worked derived-state example reuses a populating endpoint rather than
+    # inventing a new path.
+    assert "reuse" in low or "reuses" in low
+
+    # the SYNTAX file (playwright.md) carries the rule too, independently.
+    assert profile.syntax_rules
+    syn = profile.syntax_rules.lower()
+    assert "never guess an endpoint" in syn
+    assert "derived" in syn and "pytest.skip" in syn
+
+
 def test_missing_pair_rules_degrades_gracefully():
     set_prompts_root(None)
     profile = load_prompt_profile("Selenium", "K6")  # no pair file for this combo
